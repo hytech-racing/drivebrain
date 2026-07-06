@@ -13,7 +13,7 @@ This is an active rewrite of an older iteration of Drivebrain, which you can fin
 
 # Development
 
-This guide explains how to build the DriveBrain Software 2026 using the provided Docker cross-compilation environment.
+This guide explains how to build the DriveBrain using the provided Docker cross-compilation environment.
 
 ## Prerequisites
 
