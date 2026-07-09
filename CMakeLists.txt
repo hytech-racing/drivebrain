@@ -13,7 +13,6 @@ add_subdirectory(drivebrain_core)
 add_subdirectory(drivebrain_comms)
 add_subdirectory(drivebrain_control)
 add_subdirectory(drivebrain_estimation)
-add_subdirectory(drivebrain_hardware)
 
 #################################
 # Find packages
@@ -83,8 +82,6 @@ target_include_directories(drivebrain PUBLIC drivebrain_app/include)
 if(HOOTL)
     target_compile_definitions(drivebrain PRIVATE HOOTL_ENABLED)
     target_compile_definitions(drivebrain_core PRIVATE HOOTL_ENABLED)
-    target_compile_definitions(drivebrain_hardware PRIVATE HOOTL_ENABLED)
-    target_link_libraries(drivebrain_hardware PRIVATE cppzmq)
     target_link_libraries(drivebrain PRIVATE cppzmq)
 
 endif()
@@ -100,7 +97,6 @@ target_link_libraries(drivebrain PUBLIC
     drivebrain_core
     drivebrain_comms
     drivebrain_control
-    drivebrain_hardware
     drivebrain_estimation
     matlab_model
     simulink_automation_msgs_proto_cpp
