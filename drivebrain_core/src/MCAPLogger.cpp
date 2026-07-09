@@ -30,7 +30,7 @@ static std::string get_logfile_name(const std::string& dir_path) {
     }
   }  catch (const std::filesystem::filesystem_error& e) {
     spdlog::error("Filesystem error");
-    return "sdfsdf";
+    return "sdfsdf.mcap";
   } 
 
   return std::to_string(max_file_number + 1) + ".mcap";
@@ -73,10 +73,6 @@ static std::string serialize_fd_set(const google::protobuf::Descriptor *toplevel
         }
     }
     return fdSet.SerializeAsString();
-}
-
-static std::string create_log_name() {
-    
 }
 
 std::tuple<std::string, bool> core::MCAPLogger::status() {

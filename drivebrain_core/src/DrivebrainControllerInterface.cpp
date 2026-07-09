@@ -37,7 +37,10 @@ core::DrivebrainControllerInterface::DrivebrainControllerInterface() {
 
 /* Private Methods */
 void core::DrivebrainControllerInterface::_handle_parameter_updates(const std::unordered_map<std::string, core::DBParam> &new_params) {
+
+    spdlog::info("Entering drivebrain controller interface parameter updates.");
     
+    // TODO update this
     if (auto pval = std::get_if<bool>(&new_params.at("drivebraincontrollerinterface/should_log"))) {
         bool should_log = *pval;
         if (should_log) {
@@ -51,6 +54,8 @@ void core::DrivebrainControllerInterface::_handle_parameter_updates(const std::u
         int controller_index = *pval;
         _request_controller_change(controller_index);
     }
+
+    spdlog::info("Exiting drivebrain controller interface parameter updates.");
 
 }
 
@@ -93,7 +98,10 @@ void core::DrivebrainControllerInterface::_request_controller_change(int control
     if (!switched) {
         spdlog::warn("Controller switch rejected for index {}", controller_index);
     }
+
 }
+
+
 
 
 

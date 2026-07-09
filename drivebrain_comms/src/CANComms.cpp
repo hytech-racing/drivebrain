@@ -40,11 +40,24 @@ void comms::CANComms::send_message(std::shared_ptr<google::protobuf::Message> me
     can_frame frame{};
     int return_code = _encode_can_frame(message, &frame);
     if (return_code < 0) {
-        std::cout << "Failed to create CAN message from protobuf" << std::endl;
+        spdlog::error("[{}] Failed to encode CAN frame", _device_name);
         return;
     }
 
-    int nbytes = write(_socket, &frame, sizeof(struct can_frame));
+    ssize_t nbytes = write(_socket, &frame, sizeof(struct can_frame));
+    if (nbytes < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            uint64_t drops = _tx_drop_count.fetch_add(1, std::memory_order_relaxed) + 1;
+            if ((drops & 0xFF) == 0) {  
+                spdlog::warn("[{}] CAN TX queue full, total drops: {}", _device_name, drops);
+            }
+        } else {
+            _tx_error_count.fetch_add(1, std::memory_order_relaxed);
+            spdlog::error("[{}] CAN write failed: {}", _device_name, strerror(errno));
+        }
+    } else if (static_cast<size_t>(nbytes) != sizeof(struct can_frame)) {
+        spdlog::warn("[{}] Partial CAN write: {} of {} bytes", _device_name, nbytes, sizeof(struct can_frame));
+    }
 }
 
 /****************************************************************
@@ -74,6 +87,14 @@ int comms::CANComms::_init( const std::string &dbc_file_path) {
 
     if (bind(_socket, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         std::cerr << "Failed to bind CAN socket: " << strerror(errno) << std::endl;
+        close(_socket);
+        return -1;
+    }
+
+    // Make socket non-blocking
+    int flags = fcntl(_socket, F_GETFL, 0);
+    if (flags < 0 || fcntl(_socket, F_SETFL, flags | O_NONBLOCK) < 0) {
+        std::cerr << "Failed to set CAN socket non-blocking: " << strerror(errno) << std::endl;
         close(_socket);
         return -1;
     }
@@ -114,11 +135,17 @@ void comms::CANComms::_receive_handler() {
         nbytes = read(_socket, &_frame, sizeof(can_frame));
 
         if (nbytes < 0) {
-                std::cout << "Error reading from can socket." << std::endl;
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                continue;
+            }
+            std::cout << "Error reading from can socket." << std::endl;
+            continue;
         }
 
-        if (nbytes < sizeof(struct can_frame)) {
-                std::cout << "Error reading from can socket. Incomplete CAN frame." << std::endl;
+        if (nbytes < (ssize_t)sizeof(struct can_frame)) {
+            std::cout << "Error reading from can socket. Incomplete CAN frame." << std::endl;
+            continue;
         }
 
         auto dmsg = _decode_can_frame(_frame);

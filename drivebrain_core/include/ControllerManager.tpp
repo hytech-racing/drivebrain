@@ -162,8 +162,7 @@ bool core::ControllerManager<ControllerType, NumControllers>::swap_active_contro
     
     status_type can_switch_controller = _can_switch_controller(
         input, 
-        // {_controllers[_current_controller_index]->step_controller(input).current_controller_output}, 
-        _current_ctr_manager_state.current_controller_output,
+        _controllers[_current_controller_index]->step_controller(input), 
         next_output
     );
     

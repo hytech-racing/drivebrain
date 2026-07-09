@@ -11,6 +11,8 @@
 #include <linux/can.h>
 #include <linux/can/raw.h>
 #include <errno.h>
+#include <atomic> 
+#include <fcntl.h>
 
 #include "hytech.pb.h"
 #include "hytech_msgs.pb.h"
@@ -42,6 +44,10 @@ class CANComms {
         void send_message(std::shared_ptr<google::protobuf::Message> message);
 
     private: 
+
+        /* Atomics */
+        std::atomic<uint64_t> _tx_drop_count{0};
+        std::atomic<uint64_t> _tx_error_count{0};
 
         /**
          * Receives and unpacks a can frame. 

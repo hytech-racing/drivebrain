@@ -2,50 +2,69 @@
 #include "SimplePowerLimiter.hpp"
 #include <variant>
 #include <spdlog/spdlog.h>
+#include <algorithm>
 
 void control::LoadCellTorqueController::_handle_param_updates(const std::unordered_map<std::string, DBParam> &new_param_map) {
 
+    spdlog::info("Entering load cell torque controller parameter updates.");
 
-    if (auto pval = std::get_if<float>(&new_param_map.at("loadcelltorquecontroller/max_torque"))) {
-        std::unique_lock lk(_config_mutex);
-        _config.max_torque = *pval;
+    if (auto it = new_param_map.find("loadcelltorquecontroller/max_torque"); it != new_param_map.end()) {
+        if (auto pval = std::get_if<float>(&it->second)) {
+            std::unique_lock lk(_config_mutex);
+            _config.max_torque = *pval;
+        }
     }
 
-    if (auto pval = std::get_if<float>(&new_param_map.at("loadcelltorquecontroller/max_regen_torque"))) {
-        std::unique_lock lk(_config_mutex);
-        _config.max_regen_torque = *pval;
+    if (auto it = new_param_map.find("loadcelltorquecontroller/max_regen_torque"); it != new_param_map.end()) {
+        if (auto pval = std::get_if<float>(&it->second)) {
+            std::unique_lock lk(_config_mutex);
+            _config.max_regen_torque = *pval;
+        }
     }
 
-    if (auto pval = std::get_if<float>(&new_param_map.at("loadcelltorquecontroller/rear_torque_scale"))) {
-        std::unique_lock lk(_config_mutex);
-        _config.rear_torque_scale = *pval;
+    if (auto it = new_param_map.find("loadcelltorquecontroller/rear_torque_scale"); it != new_param_map.end()) {
+        if (auto pval = std::get_if<float>(&it->second)) {
+            std::unique_lock lk(_config_mutex);
+            _config.rear_torque_scale = *pval;
+        }
     }
 
-    if (auto pval = std::get_if<float>(&new_param_map.at("loadcelltorquecontroller/regen_torque_scale"))) {
-        std::unique_lock lk(_config_mutex);
-        _config.regen_torque_scale = *pval;
+    if (auto it = new_param_map.find("loadcelltorquecontroller/regen_torque_scale"); it != new_param_map.end()) {
+        if (auto pval = std::get_if<float>(&it->second)) {
+            std::unique_lock lk(_config_mutex);
+            _config.regen_torque_scale = *pval;
+        }
     }
 
-    if (auto pval = std::get_if<float>(&new_param_map.at("loadcelltorquecontroller/positive_speed_set"))) {
-        std::unique_lock lk(_config_mutex);
-        _config.positive_speed_set = *pval;
+    if (auto it = new_param_map.find("loadcelltorquecontroller/positive_speed_set"); it != new_param_map.end()) {
+        if (auto pval = std::get_if<float>(&it->second)) {
+            std::unique_lock lk(_config_mutex);
+            _config.positive_speed_set = *pval;
+        }
     }
 
-    if (auto pval = std::get_if<float>(&new_param_map.at("loadcelltorquecontroller/max_power_kw"))) {
-        std::unique_lock lk(_config_mutex);
-        _config.max_power_kw = *pval;
+    if (auto it = new_param_map.find("loadcelltorquecontroller/max_power_kw"); it != new_param_map.end()) {
+        if (auto pval = std::get_if<float>(&it->second)) {
+            std::unique_lock lk(_config_mutex);
+            _config.max_power_kw = *pval;
+        }
     }
 
-    if (auto pval = std::get_if<float>(&new_param_map.at("loadcelltorquecontroller/dt_rate_hz"))) {
-        std::unique_lock lk(_config_mutex);
-        _config.dt_rate_hz = *pval;
+    if (auto it = new_param_map.find("loadcelltorquecontroller/dt_rate_hz"); it != new_param_map.end()) {
+        if (auto pval = std::get_if<float>(&it->second)) {
+            std::unique_lock lk(_config_mutex);
+            _config.dt_rate_hz = *pval;
+        }
     }
 
-    if (auto pval = std::get_if<float>(&new_param_map.at("loadcelltorquecontroller/apply_vectoring_in_regen"))) {
-        std::unique_lock lk(_config_mutex);
-        _config.apply_vectoring_in_regen = *pval;
+    if (auto it = new_param_map.find("loadcelltorquecontroller/apply_vectoring_in_regen"); it != new_param_map.end()) {
+        if (auto pval = std::get_if<float>(&it->second)) {
+            std::unique_lock lk(_config_mutex);
+            _config.apply_vectoring_in_regen = *pval;
+        }
     }
-    
+
+    spdlog::info("Exiting load cell torque controller parameter updates.");
 }
 
 bool control::LoadCellTorqueController::init()
@@ -108,8 +127,7 @@ ControllerOutput control::LoadCellTorqueController::step_controller(const Vehicl
     cmd_out.out = type_set;
     auto& speed_out = std::get<SpeedControlOut>(cmd_out.out);
     speed_out = {};
-    speed_out.mcu_recv_millis = in.prev_MCU_recv_millis; // heartbeat TODO this isnt needed any more, prob should remove
-    
+    speed_out.mcu_recv_millis = in.prev_MCU_recv_millis; // heartbeat TODO this isnt needed any more, prob should remove    
     
     float sum_normal = in.loadcells.FL + in.loadcells.FR + in.loadcells.RL+ in.loadcells.RR;
     if (accelRequest >= 0.0)
@@ -121,37 +139,41 @@ ControllerOutput control::LoadCellTorqueController::step_controller(const Vehicl
         
         
         auto max_rpm = cur_config.positive_speed_set * constants::METERS_PER_SECOND_TO_RPM;
-        speed_out.desired_rpms.FL = max_rpm;
-        speed_out.desired_rpms.FR = max_rpm;
-        speed_out.desired_rpms.RL = max_rpm;
-        speed_out.desired_rpms.RR = max_rpm;
+        speed_out.desired_rpms.FL = 20000;
+        speed_out.desired_rpms.FR = 20000;
+        speed_out.desired_rpms.RL = 20000;
+        speed_out.desired_rpms.RR = 20000;
 
         speed_out.torque_lim_nm.FL = ((2.0 - cur_config.rear_torque_scale) * accel_torque_pool * (in.loadcells.FL / sum_normal) );
         speed_out.torque_lim_nm.FR = ((2.0 - cur_config.rear_torque_scale) * accel_torque_pool * (in.loadcells.FR / sum_normal) );
         speed_out.torque_lim_nm.RL = (cur_config.rear_torque_scale * accel_torque_pool * (in.loadcells.RL / sum_normal) );
         speed_out.torque_lim_nm.RR = (cur_config.rear_torque_scale * accel_torque_pool * (in.loadcells.RR / sum_normal) );
-        cmd_out.out = control::apply_power_limit(speed_out, in.current_rpms, cur_config.max_power_kw);
+
+        // cmd_out.out = control::apply_power_limit(speed_out, in.current_rpms, cur_config.max_power_kw);
+
+        // spdlog::info("Ticked torque controller mode, {} {} {}", torqueRequest, sum_normal, max_rpm);
     }
     else
     {
         // Negative torque request
         
-        float regen_torque_pool = accelRequest * cur_config.max_regen_torque * 4 * -1.0; 
+        float regen_torque_pool = accelRequest * cur_config.max_regen_torque * 4; 
         
         speed_out.desired_rpms.FL = 0;
         speed_out.desired_rpms.FR = 0;
         speed_out.desired_rpms.RL = 0;
         speed_out.desired_rpms.RR = 0;
         
-        if(cur_config.apply_vectoring_in_regen)
-        {
+        if (cur_config.apply_vectoring_in_regen) {
             speed_out.torque_lim_nm.FL = (regen_torque_pool * (in.loadcells.FL / sum_normal) * (2.0 - cur_config.rear_torque_scale));
             speed_out.torque_lim_nm.FR = (regen_torque_pool * (in.loadcells.FR / sum_normal) * (2.0 - cur_config.rear_torque_scale));
             speed_out.torque_lim_nm.RL = (regen_torque_pool * (in.loadcells.RL / sum_normal) * cur_config.rear_torque_scale);
             speed_out.torque_lim_nm.RR = (regen_torque_pool * (in.loadcells.RR / sum_normal) * cur_config.rear_torque_scale);
             cmd_out.out = speed_out; // no need to apply power limit for regen request
+
+            std::cout << "Neg regen limits: " << speed_out.torque_lim_nm.FL << " " << speed_out.torque_lim_nm.RL << std::endl;
         } else {
-            float reg_torq = -1.0 * accelRequest * cur_config.max_regen_torque;
+            float reg_torq = accelRequest * cur_config.max_regen_torque;
             speed_out.torque_lim_nm.FL = ( reg_torq * ( 2.0 - cur_config.rear_torque_scale) );
             speed_out.torque_lim_nm.FR = ( reg_torq * ( 2.0 - cur_config.rear_torque_scale) );
             speed_out.torque_lim_nm.RL = ( reg_torq * cur_config.rear_torque_scale);

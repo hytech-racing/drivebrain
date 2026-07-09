@@ -107,7 +107,16 @@ void DrivebrainApp::run() {
     }
   });
 
-  _loop_thread = std::thread([this]() { _loop(); });
+  _loop_thread = std::thread([this]() {
+    try {
+      _loop();
+    } catch (const std::exception& e) {
+      spdlog::error("_loop threw: {}", e.what());
+    } catch (...) {
+      spdlog::error("_loop threw unknown exception");
+    }
+    spdlog::error("_loop thread exiting, running={}", running.load());
+  });
   spdlog::info("Spawned threads");
 
   if(_loop_thread.joinable()) _loop_thread.join();
@@ -126,34 +135,52 @@ void DrivebrainApp::_loop() {
   auto desired_torque_msg = std::make_shared<hytech::drivebrain_desired_torque_input>();
 
   while(running) {
+
+    // spdlog::info("tick: start");
+    
     next_tick += loop_time_ms;
 
+    // spdlog::info("tick: get_state");
+
     auto state_and_validity = core::StateTracker::instance().get_latest_state_and_validity();
+
+    // spdlog::info("tick: evaluate_estimators");
+
     _estim_manager->evaluate_all_estimators(state_and_validity.first);
 
-    auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, num_controllers>::instance();
+    // spdlog::info("tick: step_controller");
+
+    auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, 1 + matlab_model_gen::num_controllers>::instance();
     auto out_struct = controller_manager.step_active_controller(state_and_validity.first);
+
+    // spdlog::info("tick: variant_branch");
 
     std::variant<core::SpeedControlOut, core::TorqueControlOut, std::monostate> cmd_out = out_struct.out;
     core::StateTracker::instance().set_previous_control_output(out_struct);
 
-    if (state_and_validity.second) {
-      if (const core::SpeedControlOut* sc = std::get_if<core::SpeedControlOut>(&cmd_out)) {
-        desired_rpm_msg->set_drivebrain_set_rpm_fl(sc->desired_rpms.FL);
-        desired_rpm_msg->set_drivebrain_set_rpm_fr(sc->desired_rpms.FR);
-        desired_rpm_msg->set_drivebrain_set_rpm_rl(sc->desired_rpms.RL);
-        desired_rpm_msg->set_drivebrain_set_rpm_rr(sc->desired_rpms.RR);
+    bool state_is_valid = state_and_validity.second;
+
+    // spdlog::info("tick: enter_send_if");
+
+    if (state_is_valid) {
 
         torque_limit_msg->set_drivebrain_torque_fl(::abs(sc->torque_lim_nm.FL));
         torque_limit_msg->set_drivebrain_torque_fr(::abs(sc->torque_lim_nm.FR));
         torque_limit_msg->set_drivebrain_torque_rl(::abs(sc->torque_lim_nm.RL));
         torque_limit_msg->set_drivebrain_torque_rr(::abs(sc->torque_lim_nm.RR));
 
-        core::log(desired_rpm_msg);
-        core::log(torque_limit_msg);
+            // same with torque limits
+            torque_limit_msg->set_drivebrain_torque_fl(speedControl->torque_lim_nm.FL);
+            torque_limit_msg->set_drivebrain_torque_fr(speedControl->torque_lim_nm.FR);
+            torque_limit_msg->set_drivebrain_torque_rl(speedControl->torque_lim_nm.RL);
+            torque_limit_msg->set_drivebrain_torque_rr(speedControl->torque_lim_nm.RR);
 
-        _inverter->send_rpm(*desired_rpm_msg);
-        _inverter->send_torque_limit(*torque_limit_msg);
+            // spdlog::info("tick: send_telem_speed");
+
+            _telem_can->send_message(desired_rpm_msg);
+            _telem_can->send_message(torque_limit_msg);
+            
+            // // spdlog::info("tick: send_aux_speed");
 
       } else if (const core::TorqueControlOut* tc = std::get_if<core::TorqueControlOut>(&cmd_out)) {
         // desired_torque_msg->set_drivebrain_torque_fl(tc->desired_torques_nm.FL);
@@ -161,29 +188,32 @@ void DrivebrainApp::_loop() {
         // desired_torque_msg->set_drivebrain_torque_rl(tc->desired_torques_nm.RL);
         // desired_torque_msg->set_drivebrain_torque_rr(tc->desired_torques_nm.RR);
 
-        desired_torque_msg->set_drivebrain_torque_fl(0.2);
-        desired_torque_msg->set_drivebrain_torque_fr(0.2);
-        desired_torque_msg->set_drivebrain_torque_rl(0.2);
-        desired_torque_msg->set_drivebrain_torque_rr(0.2);
+            // spdlog::info("tick: log_speed");
 
-        core::log(desired_torque_msg);
+            core::log(desired_rpm_msg);
+            core::log(torque_limit_msg);
 
-        _inverter->send_torque(*desired_torque_msg);
-      }
+        } else if (const core::TorqueControlOut* torqueControl = std::get_if<core::TorqueControlOut>(&cmd_out)){ // if it is a torque controller:
+            // set desired torque
 
-      // TODO remove later im too fucking lazy to care about this right now
-      desired_torque_msg->set_drivebrain_torque_fl(0.1);
-      desired_torque_msg->set_drivebrain_torque_fr(0.1);
-      desired_torque_msg->set_drivebrain_torque_rl(015);
-      desired_torque_msg->set_drivebrain_torque_rr(0.1);
-      core::log(desired_torque_msg);
-      _inverter->send_torque(*desired_torque_msg);
+            desired_torque_msg->set_drivebrain_torque_fl(torqueControl->desired_torques_nm.FL);
+            desired_torque_msg->set_drivebrain_torque_fr(torqueControl->desired_torques_nm.FR);
+            desired_torque_msg->set_drivebrain_torque_rl(torqueControl->desired_torques_nm.RL);
+            desired_torque_msg->set_drivebrain_torque_rr(torqueControl->desired_torques_nm.RR);
 
-      if (_steering) {
-        hytech_msgs::DBSteeringCommand steer_cmd;
-        steer_cmd.set_desired_steering_angle_deg(-5.0f);
-        _steering->send_steering(steer_cmd);
-      }
+            // spdlog::info("tick: send_telem_torque");
+            
+            _telem_can->send_message(desired_torque_msg);
+
+            // spdlog::info("tick: send_aux_torque");
+
+             _aux_can->send_message(desired_torque_msg);
+
+            // spdlog::info("tick: log_aux_torque");
+
+           core::log(desired_torque_msg);
+            
+        }
     }
 
     std::tuple<std::string, bool> mcap_status = core::MCAPLogger::instance().status();
@@ -198,5 +228,7 @@ void DrivebrainApp::_loop() {
     }
 
     std::this_thread::sleep_until(next_tick);
+
+    // spdlog::info("tick: stop");
   }
 }

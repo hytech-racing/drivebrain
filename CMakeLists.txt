@@ -55,14 +55,14 @@ FetchContent_MakeAvailable(HT_CAN)
 
 FetchContent_Declare(
     simulink_automation_msgs_cpp
-    URL "https://github.com/hytech-racing/drivebrain_simulink_models/releases/download/rel50/proto_outputs.tar.gz"
+    URL "https://github.com/hytech-racing/drivebrain_simulink_models/releases/download/rel57/proto_outputs.tar.gz"
 )
 
 FetchContent_MakeAvailable(simulink_automation_msgs_cpp)
 
 FetchContent_Declare(
     drivebrain_simulink_models
-    URL "https://github.com/hytech-racing/drivebrain_simulink_models/releases/download/rel50/codegen_outputs.tar.gz"
+    URL "https://github.com/hytech-racing/drivebrain_simulink_models/releases/download/rel57/codegen_outputs.tar.gz"
 )
 FetchContent_MakeAvailable(drivebrain_simulink_models)
 
