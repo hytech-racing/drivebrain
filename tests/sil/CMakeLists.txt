@@ -12,7 +12,7 @@ add_executable(drivebrain_test
 target_link_libraries(drivebrain_test PUBLIC
     foxglove-websocket::foxglove-websocket
     mcap::mcap
-    drivebrain_core
+    core
     GTest::gtest
 )
 
@@ -41,7 +41,7 @@ foreach(SCRIPT_PATH ${SCRIPT_SOURCES})
     #     PRIVATE
     #     foxglove-websocket::foxglove-websocket
     #     mcap::mcap
-    #     drivebrain_core
-    #     drivebrain_comms
+    #     core
+    #     comms
     # )
 endforeach()

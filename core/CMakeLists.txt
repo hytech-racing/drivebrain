@@ -31,18 +31,18 @@ target_include_directories(foxglove_protos PUBLIC $<BUILD_INTERFACE:${FOXGLOVE_P
 target_link_libraries(foxglove_protos PUBLIC protobuf::libprotobuf)
 
 #################################
-# drivebrain_core
+# core
 #################################
-add_library(drivebrain_core
+add_library(core
     src/FoxgloveServer.cpp
     src/MCAPLogger.cpp
     src/StateTracker.cpp
     src/DrivebrainControllerInterface.cpp
 )
 
-target_include_directories(drivebrain_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_include_directories(core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
-target_link_libraries(drivebrain_core PUBLIC
+target_link_libraries(core PUBLIC
     spdlog::spdlog
     boost::boost
     nlohmann_json::nlohmann_json
@@ -53,4 +53,6 @@ target_link_libraries(drivebrain_core PUBLIC
     hytech_can_msgs_cpp_lib
     foxglove_protos
     Eigen3::Eigen
+    matlab_model
+    simulink_automation_msgs_proto_cpp
 )

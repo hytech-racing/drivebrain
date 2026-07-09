@@ -21,12 +21,12 @@ if(HOOTL)
     )
 endif()
 
-add_library(drivebrain_comms ${DRIVEBRAIN_COMMS_SRCS})
+add_library(comms ${DRIVEBRAIN_COMMS_SRCS})
 
-target_include_directories(drivebrain_comms PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_include_directories(comms PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
-target_link_libraries(drivebrain_comms PUBLIC 
-    drivebrain_core
+target_link_libraries(comms PUBLIC 
+    core
     spdlog::spdlog
     nlohmann_json::nlohmann_json
     boost::boost
@@ -38,7 +38,7 @@ target_link_libraries(drivebrain_comms PUBLIC
 )
 
 if(HOOTL)
-    target_link_libraries(drivebrain_comms
+    target_link_libraries(comms
         PUBLIC
             cppzmq
     )

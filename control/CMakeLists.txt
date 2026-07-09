@@ -7,15 +7,15 @@ find_package(foxglove-websocket REQUIRED)
 find_package(Protobuf REQUIRED CONFIG)
 find_package(dbcppp REQUIRED)
 
-add_library(drivebrain_control
+add_library(control
     src/LoadCellTorqueController.cpp
     src/SimplePowerLimiter.cpp
 )
 
-target_include_directories(drivebrain_control PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_include_directories(control PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
-target_link_libraries(drivebrain_control PUBLIC 
-    drivebrain_core
+target_link_libraries(control PUBLIC 
+    core
     spdlog::spdlog
     nlohmann_json::nlohmann_json
     boost::boost

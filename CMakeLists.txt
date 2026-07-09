@@ -14,10 +14,14 @@ option(HOOTL "Build with HOOTL sim interface" OFF)
 #################################
 # Custom libs
 #################################
-add_subdirectory(drivebrain_core)
-add_subdirectory(drivebrain_comms)
-add_subdirectory(drivebrain_control)
-add_subdirectory(drivebrain_estimation)
+add_subdirectory(core)
+add_subdirectory(comms)
+add_subdirectory(control)
+add_subdirectory(estimation)
+
+# Aliases so external FetchContent deps (mostly db simulink models) that link against the old target names still resolve. 
+# TODO fix matlab simulink models to account for new names
+add_library(drivebrain_core ALIAS core)
 
 #################################
 # Find packages
@@ -29,11 +33,6 @@ find_package(spdlog REQUIRED)
 find_package(mcap REQUIRED)
 find_package(dbcppp REQUIRED)
 find_package(GTSAM REQUIRED)
-
-option(HOOTL "Build with HOOTL sim interface" OFF)
-if(HOOTL)
-    find_package(cppzmq REQUIRED)
-endif()
 
 if (HOOTL)
     find_package(cppzmq REQUIRED)
@@ -74,24 +73,20 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(drivebrain_simulink_models)
 
-target_include_directories(drivebrain_core PRIVATE
-    $<TARGET_PROPERTY:matlab_model,INTERFACE_INCLUDE_DIRECTORIES>
-)
-
 #################################
 # Linking to main app
 #################################
 add_executable(drivebrain
-    drivebrain_app/src/main.cpp
-    drivebrain_app/src/drivebrain_app.cpp
+    app/src/main.cpp
+    app/src/drivebrain_app.cpp
 )
 
-target_include_directories(drivebrain PUBLIC drivebrain_app/include)
+target_include_directories(drivebrain PUBLIC app/include)
 
 if(HOOTL)
     target_compile_definitions(drivebrain PRIVATE HOOTL_ENABLED)
-    target_compile_definitions(drivebrain_core PRIVATE HOOTL_ENABLED)
-    target_compile_definitions(drivebrain_comms PRIVATE HOOTL_ENABLED)
+    target_compile_definitions(core PRIVATE HOOTL_ENABLED)
+    target_compile_definitions(comms PRIVATE HOOTL_ENABLED)
     target_link_libraries(drivebrain PRIVATE cppzmq)
 endif()
 
@@ -103,10 +98,10 @@ target_link_libraries(drivebrain PUBLIC
     gtsam
     hytech_msgs_cpp_lib
     hytech_can_msgs_cpp_lib
-    drivebrain_core
-    drivebrain_comms
-    drivebrain_control
-    drivebrain_estimation
+    core
+    comms
+    control
+    estimation
     matlab_model
     simulink_automation_msgs_proto_cpp
 )

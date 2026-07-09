@@ -1,16 +1,13 @@
 #include "drivebrain_app.hpp"
 #include "ETHRecvComms.hpp"
 #include "FoxgloveServer.hpp"
-#include "InveterInterface.hpp"
-#include "LidarInterface.hpp"
-#include "SteeringInterface.hpp"
 #include "MCAPLogger.hpp"
+#include "MatlabModelAddHelper.hpp"
 #include "hytech_msgs.pb.h"
 #include "Telemetry.hpp"
 #include "ControllerManager.hpp"
 #include "DrivebrainControllerInterface.hpp"
-#include "StateTracker.hpp"
-
+#include <StateTracker.hpp>
 #include <atomic>
 #include <chrono>
 #include <mcap/writer.hpp>
@@ -21,8 +18,6 @@
 #include <stdexcept>
 
 std::atomic<bool> running{true};
-
-static constexpr size_t num_controllers = 1;
 
 void sig_handler(int signal) {
     if(signal == SIGINT) {
@@ -45,8 +40,8 @@ DrivebrainApp::~DrivebrainApp() {
 
 void DrivebrainApp::run() {
   std::signal(SIGINT, sig_handler);
-  core::MCAPLogger::create("recordings/", mcap::McapWriterOptions(""), _json_params_path);
 
+  core::MCAPLogger::create("recordings/", mcap::McapWriterOptions(""), _json_params_path);
   core::FoxgloveServer::create(_json_params_path);
   core::StateTracker::create();
 
@@ -55,12 +50,10 @@ void DrivebrainApp::run() {
 
   spdlog::info("Constructed logging singletons");
 
-  core::DrivebrainControllerInterface::create();
+  core::DrivebrainControllerInterface::create(); 
 
   spdlog::info("Constructed drivebrain controller interface");
 
-// TODO: i really hate how this ifdef is fat smacked in the middle of the app
-#ifndef HOOTL_ENABLED
   _acu_core_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::ACUCoreData>>(_io_context, 7777);
   _acu_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::ACUAllData>>(_io_context, 7766);
   _vcr_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::VCRData_s>>(_io_context, 9999);
@@ -78,39 +71,47 @@ void DrivebrainApp::run() {
   }
 
   spdlog::info("Initialized ethernet drivers");
-#endif
 
-  _inverter = InverterInterface::create(_dbc_path);
-  _steering = SteeringInterface::create();
-  _lidar = LidarInterface::create();
-  _lidar->start();
-  _sim_state_receiver = std::make_unique<SimStateReceiver>();
-  _sim_state_receiver->start();
+  // CAN device names are defined in the drivebrain JSON config
+  _telem_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("telem_can_device").value(), _dbc_path);
+  _aux_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("aux_can_device").value(), _dbc_path);
+  spdlog::info("Initialized CAN drivers");
 
-  _mode1 = std::make_shared<control::LoadCellTorqueController>();
+  // Initialize controllers
+  const size_t num_controllers = 1 + matlab_model_gen::num_controllers;
+    _mode1 = std::make_shared<control::LoadCellTorqueController>(); 
   if (!_mode1->init()) {
     spdlog::error("Failed to initialize mode 1");
   }
 
+  // Estimator Manager
   _estim_manager = std::make_shared<estimation::EstimatorManager>();
+  _estim_manager->handle_inits();
+  spdlog::info("Constructed estimator manager");
 
   std::array<std::shared_ptr<control::Controller<core::ControllerOutput, core::VehicleState>>, num_controllers> controllers{_mode1};
-
+  auto _gend_controllers =  matlab_model_gen::create_controllers(_estim_manager);
+  if (_gend_controllers.size() + 1 != controllers.size()) {
+    throw std::runtime_error("Failed to initialize matlab generated controllers! Wrong vector size!");
+  }
+  std::copy(_gend_controllers.begin(), _gend_controllers.end(), controllers.begin() + 1);
+  
+  // Create controller manager instance
   ControllerManager<control::Controller<ControllerOutput, VehicleState>, num_controllers>::create(controllers);
-  if (!ControllerManager<control::Controller<ControllerOutput, VehicleState>, num_controllers>::instance().init()) {
+  if(!ControllerManager<control::Controller<ControllerOutput, VehicleState>, num_controllers>::instance().init()) {
     throw std::runtime_error("Failed to initialize controller manager");
   }
 
   spdlog::info("Constructed controller manager");
 
-  running = true;
+  running = true; 
   _io_context_thread = std::thread([this]() {
     try {
       _io_context.run();
     } catch (const std::exception& e) {
       spdlog::error("io_context error: {}", e.what());
     }
-  });
+   });
 
   _loop_thread = std::thread([this]() {
     try {
@@ -123,11 +124,13 @@ void DrivebrainApp::run() {
     spdlog::error("_loop thread exiting, running={}", running.load());
   });
   spdlog::info("Spawned threads");
-
+  
+  // Join threads when loop thread finishes
   if(_loop_thread.joinable()) _loop_thread.join();
   _io_context.stop();
   if(_io_context_thread.joinable()) _io_context_thread.join();
   spdlog::info("Joined all threads");
+
 }
 
 void DrivebrainApp::_loop() {
@@ -136,7 +139,7 @@ void DrivebrainApp::_loop() {
   auto next_tick = std::chrono::steady_clock::now();
 
   auto desired_rpm_msg = std::make_shared<hytech::drivebrain_speed_set_input>();
-  auto torque_limit_msg  = std::make_shared<hytech::drivebrain_torque_lim_input>();
+  auto torque_limit_msg = std::make_shared<hytech::drivebrain_torque_lim_input>();
   auto desired_torque_msg = std::make_shared<hytech::drivebrain_desired_torque_input>();
 
   while(running) {
@@ -169,10 +172,12 @@ void DrivebrainApp::_loop() {
 
     if (state_is_valid) {
 
-        torque_limit_msg->set_drivebrain_torque_fl(::abs(sc->torque_lim_nm.FL));
-        torque_limit_msg->set_drivebrain_torque_fr(::abs(sc->torque_lim_nm.FR));
-        torque_limit_msg->set_drivebrain_torque_rl(::abs(sc->torque_lim_nm.RL));
-        torque_limit_msg->set_drivebrain_torque_rr(::abs(sc->torque_lim_nm.RR));
+        if (const core::SpeedControlOut* speedControl = std::get_if<core::SpeedControlOut>(&cmd_out)) { // speed controller, set RPM
+       
+            desired_rpm_msg->set_drivebrain_set_rpm_fl(speedControl->desired_rpms.FL);
+            desired_rpm_msg->set_drivebrain_set_rpm_fr(speedControl->desired_rpms.FR);
+            desired_rpm_msg->set_drivebrain_set_rpm_rl(speedControl->desired_rpms.RL);
+            desired_rpm_msg->set_drivebrain_set_rpm_rr(speedControl->desired_rpms.RR);
 
             // same with torque limits
             torque_limit_msg->set_drivebrain_torque_fl(speedControl->torque_lim_nm.FL);
@@ -187,11 +192,8 @@ void DrivebrainApp::_loop() {
             
             // // spdlog::info("tick: send_aux_speed");
 
-      } else if (const core::TorqueControlOut* tc = std::get_if<core::TorqueControlOut>(&cmd_out)) {
-        // desired_torque_msg->set_drivebrain_torque_fl(tc->desired_torques_nm.FL);
-        // desired_torque_msg->set_drivebrain_torque_fr(tc->desired_torques_nm.FR);
-        // desired_torque_msg->set_drivebrain_torque_rl(tc->desired_torques_nm.RL);
-        // desired_torque_msg->set_drivebrain_torque_rr(tc->desired_torques_nm.RR);
+            _aux_can->send_message(desired_rpm_msg);
+            _aux_can->send_message(torque_limit_msg);
 
             // spdlog::info("tick: log_speed");
 
@@ -221,9 +223,13 @@ void DrivebrainApp::_loop() {
         }
     }
 
+
     std::tuple<std::string, bool> mcap_status = core::MCAPLogger::instance().status();
-    auto mcap_info = std::make_shared<hytech_msgs::McapInfo>();
-    mcap_info->set_current_mcap(std::get<0>(mcap_status));
+    std::string logile_name = std::get<0>(mcap_status);
+
+    std::shared_ptr<hytech_msgs::McapInfo> mcap_info = std::make_shared<hytech_msgs::McapInfo>();
+    mcap_info->set_current_mcap(logile_name);
+
     core::log(mcap_info);
 
     auto now = std::chrono::steady_clock::now();
@@ -236,4 +242,5 @@ void DrivebrainApp::_loop() {
 
     // spdlog::info("tick: stop");
   }
+
 }
