@@ -31,12 +31,17 @@ static std::shared_ptr<google::protobuf::Message> get_proto_message_from_name(co
  * PUBLIC CLASS METHOD IMPLEMENTATIONS
  ****************************************************************/
 comms::CANComms::CANComms(const std::string &device_name, const std::string &dbc_file_path) : _device_name(device_name) {
+#if !HOOTL_ENABLED
     if (_init( dbc_file_path) < 0) {
         throw std::runtime_error("Failed to initialize CAN communications");
     }
+#endif
 }
 
 void comms::CANComms::send_message(std::shared_ptr<google::protobuf::Message> message) {
+#if HOOTL_ENABLED
+    comms::SimComms::instance().send_message(message);
+#else
     can_frame frame{};
     int return_code = _encode_can_frame(message, &frame);
     if (return_code < 0) {
@@ -58,6 +63,7 @@ void comms::CANComms::send_message(std::shared_ptr<google::protobuf::Message> me
     } else if (static_cast<size_t>(nbytes) != sizeof(struct can_frame)) {
         spdlog::warn("[{}] Partial CAN write: {} of {} bytes", _device_name, nbytes, sizeof(struct can_frame));
     }
+#endif
 }
 
 /****************************************************************

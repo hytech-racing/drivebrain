@@ -18,6 +18,7 @@
 #include "hytech_msgs.pb.h"
 
 #include <dbcppp/Network.h>
+#include "SimComms.hpp"
 #include <FoxgloveServer.hpp>
 #include <MCAPLogger.hpp>
 

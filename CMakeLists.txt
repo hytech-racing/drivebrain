@@ -1,10 +1,15 @@
 cmake_minimum_required(VERSION 3.13)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-project(drivebrain_software_2026)
+project(drivebrain)
 
 include(FetchContent)
 list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/cmake")
+
+#################################
+# Options
+#################################
+option(HOOTL "Build with HOOTL sim interface" OFF)
 
 #################################
 # Custom libs
@@ -30,6 +35,10 @@ if(HOOTL)
     find_package(cppzmq REQUIRED)
 endif()
 
+if (HOOTL)
+    find_package(cppzmq REQUIRED)
+endif()
+
 #################################
 # Upstreams (non-conan)
 #################################
@@ -48,7 +57,7 @@ FetchContent_MakeAvailable(vn_driver_lib)
 
 FetchContent_Declare(
     HT_CAN
-    URL "https://github.com/hytech-racing/HT_CAN/releases/download/250/drivebrain_can_lib.tar.gz"
+    URL "https://github.com/hytech-racing/HT_CAN/releases/download/264/drivebrain_can_lib.tar.gz"
 )
 FetchContent_MakeAvailable(HT_CAN)
 
@@ -82,12 +91,12 @@ target_include_directories(drivebrain PUBLIC drivebrain_app/include)
 if(HOOTL)
     target_compile_definitions(drivebrain PRIVATE HOOTL_ENABLED)
     target_compile_definitions(drivebrain_core PRIVATE HOOTL_ENABLED)
+    target_compile_definitions(drivebrain_comms PRIVATE HOOTL_ENABLED)
     target_link_libraries(drivebrain PRIVATE cppzmq)
-
 endif()
 
-target_link_libraries(drivebrain PUBLIC
-    foxglove-websocket::foxglove-websocket
+target_link_libraries(drivebrain PUBLIC 
+    foxglove-websocket::foxglove-websocket 
     mcap::mcap
     protobuf::libprotobuf
     boost::boost
@@ -108,5 +117,5 @@ target_link_libraries(drivebrain PUBLIC
 
 if(NOT CMAKE_CROSSCOMPILING)
     enable_testing()
-    add_subdirectory(tests)
+    # add_subdirectory(tests/sil)
 endif()

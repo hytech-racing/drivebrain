@@ -170,8 +170,6 @@ ControllerOutput control::LoadCellTorqueController::step_controller(const Vehicl
             speed_out.torque_lim_nm.RL = (regen_torque_pool * (in.loadcells.RL / sum_normal) * cur_config.rear_torque_scale);
             speed_out.torque_lim_nm.RR = (regen_torque_pool * (in.loadcells.RR / sum_normal) * cur_config.rear_torque_scale);
             cmd_out.out = speed_out; // no need to apply power limit for regen request
-
-            std::cout << "Neg regen limits: " << speed_out.torque_lim_nm.FL << " " << speed_out.torque_lim_nm.RL << std::endl;
         } else {
             float reg_torq = accelRequest * cur_config.max_regen_torque;
             speed_out.torque_lim_nm.FL = ( reg_torq * ( 2.0 - cur_config.rear_torque_scale) );

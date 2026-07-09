@@ -109,6 +109,7 @@ namespace core {
                 if (auto pval = std::get_if<param_type>(&_foxglove_params_map[param_name])) {
                     return *pval;
                 } else {
+                    spdlog::warn("Param has incorrect type maybe: " + param_name);
                     return std::nullopt;
                 }
             }

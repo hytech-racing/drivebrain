@@ -1,0 +1,11 @@
+{
+ "enable_logging": true,
+ "rpm_limit": 10000,
+ "kP": 15000,
+ "test": "yes",
+ "level_1" : {
+  "name": "Warren",
+  "kI": 2,
+  "is_based": true
+ }
+}

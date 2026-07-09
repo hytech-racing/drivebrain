@@ -1,0 +1,3 @@
+# Overview
+
+Replay serves as a simple way to simulate sending a test session's worth of data through Drivebrain. The utility of replay is limited to things that are being computed or estimated; it is NOT reactive, meaning that altering your torque request will not change the vehicle's "replayed" behavior. This makes sense because it's just looping through an MCAP and sending messages on virtual CAN and Ethernet buses. Although this may not seem immediately useful, it allows us to test computation and estimations on real data in real time. 

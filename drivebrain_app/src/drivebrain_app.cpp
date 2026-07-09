@@ -66,6 +66,11 @@ void DrivebrainApp::run() {
   _vcr_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::VCRData_s>>(_io_context, 9999);
   _vcf_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::VCFData_s>>(_io_context, 4444);
 
+#if HOOTL_ENABLED
+  comms::SimComms::create(); 
+  comms::SimComms::instance().start();
+#endif
+
   bool vn_init_not_successful;
   _vn_driver = std::make_unique<comms::VNDriver>(_io_context, vn_init_not_successful);
   if (vn_init_not_successful) {
