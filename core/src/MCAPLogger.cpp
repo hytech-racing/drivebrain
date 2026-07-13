@@ -144,7 +144,7 @@ int core::MCAPLogger::open_new_mcap() {
         return -1;
     }
 
-    std::vector<std::string> proto_names = {"hytech_msgs.proto", "hytech.proto", "sim_msgs.proto", "foxglove/PointCloud.proto", "foxglove/FrameTransform.proto"};
+    std::vector<std::string> proto_names = {"hytech_msgs.proto", "hytech.proto", "dv_msgs.proto"};
     proto_names.insert(
         proto_names.end(),
         matlab_model_gen::matlab_model_gend_protos.begin(),

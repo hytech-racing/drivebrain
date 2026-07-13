@@ -223,7 +223,6 @@ void DrivebrainApp::_loop() {
         }
     }
 
-
     std::tuple<std::string, bool> mcap_status = core::MCAPLogger::instance().status();
     std::string logile_name = std::get<0>(mcap_status);
 

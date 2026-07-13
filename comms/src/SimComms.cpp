@@ -1,4 +1,5 @@
 #include <SimComms.hpp>
+#include "dv_msgs.pb.h"
 
 namespace comms {
 
@@ -50,16 +51,17 @@ void SimComms::destroy() {
 }
 
 bool SimComms::start() {
-    // TODO setup the other sockets
     _veh_recv_thread = std::thread(&SimComms::_veh_recv_loop, this);
-
+    _lidar_recv_thread = std::thread(&SimComms::_lidar_recv_loop, this);
     return true;
 }
 
 bool SimComms::close() {
-    if (!_running.exchange(false)) return false; 
+    if (!_running.exchange(false)) return false;
     if (_veh_recv_thread.joinable()) _veh_recv_thread.join();
+    if (_lidar_recv_thread.joinable()) _lidar_recv_thread.join();
     _veh_data_recv_socket.close();
+    _lidar_socket.close();
     return true;
 }
 
@@ -73,9 +75,19 @@ bool SimComms::send_message(std::shared_ptr<google::protobuf::Message> message) 
  ****************************************************************/
 SimComms::SimComms() {
     _running = true;
-    if (!_setup_recv_socket(_veh_data_recv_socket, 6767)) {
+    if (!_setup_recv_socket(_veh_data_recv_socket, _recv_socket_port)) {
         _running = false;
         throw std::runtime_error("SimComms: failed to bind recv socket");
+    }
+    try {
+        _lidar_socket = zmq::socket_t(_ctx, zmq::socket_type::pull);
+        _lidar_socket.set(zmq::sockopt::rcvhwm, 2);
+        _lidar_socket.set(zmq::sockopt::rcvtimeo, 100);
+        _lidar_socket.connect(endpoint(_lidar_socket_port));
+    } catch (const zmq::error_t& e) {
+        spdlog::error("SimComms: failed to connect lidar socket: {}", e.what());
+        _running = false;
+        throw std::runtime_error("SimComms: failed to connect lidar socket");
     }
 }
 
@@ -115,6 +127,28 @@ void SimComms::_veh_recv_loop() {
             core::log(msg); 
             core::StateTracker::instance().handle_receive_protobuf_message(msg); 
         }
+    }
+}
+
+void SimComms::_lidar_recv_loop() {
+    while (_running) {
+        zmq::message_t frame;
+        try {
+            auto res = _lidar_socket.recv(frame);
+            if (!res) continue;
+        } catch (const zmq::error_t& e) {
+            if (e.num() == ETERM) break;
+            spdlog::error("SimComms lidar recv error: {}", e.what());
+            continue;
+        }
+
+        auto pc = std::make_shared<dv_msgs::PointCloud>();
+        if (!pc->ParseFromArray(frame.data(), static_cast<int>(frame.size()))) {
+            spdlog::error("SimComms: failed to parse dv_msgs::PointCloud");
+            continue;
+        }
+
+        core::log(pc);
     }
 }
 

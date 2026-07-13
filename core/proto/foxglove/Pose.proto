@@ -1,8 +1,0 @@
-syntax = "proto3";
-package foxglove;
-import "foxglove/Vector3.proto";
-import "foxglove/Quaternion.proto";
-message Pose {
-  foxglove.Vector3 position = 1;
-  foxglove.Quaternion orientation = 2;
-}

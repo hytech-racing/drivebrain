@@ -43,7 +43,6 @@ private:
   std::thread _loop_thread;
   std::thread _io_context_thread;
 
-
   /* Config paths */
   const std::string _json_params_path;
   const std::string _dbc_path;
