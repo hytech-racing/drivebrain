@@ -262,6 +262,8 @@ namespace core {
         ControllerOutput current_controller_output;
     };
 
+    
+
     /**
      * Allows different communications interfaces
      * to update the internal state of drivebrain in a thread-safe manner

@@ -44,19 +44,23 @@ class SimComms {
 
         void _veh_recv_loop();
         void _lidar_recv_loop();
+        void _cones_recv_loop();
 
         static constexpr char _endpoint_prefix[] = "ipc:///tmp/drivebrain_sim_";
         static constexpr uint16_t _recv_socket_port = 6767;
         static constexpr uint16_t _send_socket_port = 5940;
         static constexpr uint16_t _lidar_socket_port = 1155;
+        static constexpr uint16_t _cones_socket_port = 1156;
 
         zmq::context_t _ctx;
         zmq::socket_t _lidar_socket;
+        zmq::socket_t _cones_socket;
         zmq::socket_t _veh_data_send_socket;
         zmq::socket_t _veh_data_recv_socket;
 
         std::thread _veh_recv_thread;
         std::thread _lidar_recv_thread;
+        std::thread _cones_recv_thread;
         std::atomic<bool> _running{false};
 };
 }

@@ -19,6 +19,7 @@ class DrivebrainSoftware(ConanFile):
 
     def requirements(self): 
         self.requires("foxglove-websocket/1.4.0", transitive_headers=True)
+        self.requires("foxglove-schemas-protobuf/0.25.1", transitive_headers=True)
         self.requires("protobuf/5.29.3", transitive_headers=True)
         self.requires("boost/1.84.0", override=True)
         self.requires("spdlog/1.15.3")

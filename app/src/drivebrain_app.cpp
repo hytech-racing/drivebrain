@@ -3,6 +3,7 @@
 #include "FoxgloveServer.hpp"
 #include "MCAPLogger.hpp"
 #include "MatlabModelAddHelper.hpp"
+#include "dv_msgs.pb.h"
 #include "hytech_msgs.pb.h"
 #include "Telemetry.hpp"
 #include "ControllerManager.hpp"
@@ -158,10 +159,18 @@ void DrivebrainApp::_loop() {
 
     // spdlog::info("tick: step_controller");
 
+    /**
+    Tentatively, the main loop should look something like:
+    
+    dv_msgs::PointCloud filtered_cloud = perception::filter_cloud(*scan);
+    Cone[] known_cones = perception::classify_cones(*filtered_cloud);
+    GraphSlam::update(known_cones);
+    auto plan = Planner::plan(known_cones, StateTacker.pose())
+    cmd_out = pure puresuit on planned path
+    **/
+
     auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, 1 + matlab_model_gen::num_controllers>::instance();
     auto out_struct = controller_manager.step_active_controller(state_and_validity.first);
-
-    // spdlog::info("tick: variant_branch");
 
     std::variant<core::SpeedControlOut, core::TorqueControlOut, std::monostate> cmd_out = out_struct.out;
     core::StateTracker::instance().set_previous_control_output(out_struct);

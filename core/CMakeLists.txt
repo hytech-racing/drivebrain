@@ -4,6 +4,7 @@ find_package(spdlog REQUIRED)
 find_package(Boost REQUIRED)
 find_package(nlohmann_json REQUIRED)
 find_package(foxglove-websocket REQUIRED)
+find_package(foxglove-schemas-protobuf REQUIRED)
 find_package(Protobuf REQUIRED CONFIG)
 find_package(mcap REQUIRED)
 find_package(Eigen3 REQUIRED)
@@ -25,6 +26,7 @@ target_link_libraries(core PUBLIC
     boost::boost
     nlohmann_json::nlohmann_json
     foxglove-websocket::foxglove-websocket
+    foxglove-schemas-protobuf::foxglove-schemas-protobuf
     mcap::mcap
     protobuf::libprotobuf
     hytech_msgs_cpp_lib

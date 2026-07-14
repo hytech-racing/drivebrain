@@ -173,7 +173,7 @@ core::FoxgloveServer::FoxgloveServer(std::string file_name) {
         _server->publishParameterValues(clientHandle, foxglove_params, request_id);
     };
 
-    std::vector<std::string> proto_names = {"hytech_msgs.proto", "hytech.proto", "dv_msgs.proto"};
+    std::vector<std::string> proto_names = {"hytech_msgs.proto", "hytech.proto", "dv_msgs.proto", "foxglove/PointCloud.proto"};
     proto_names.insert(
         proto_names.end(),
         matlab_model_gen::matlab_model_gend_protos.begin(),
@@ -193,16 +193,6 @@ core::FoxgloveServer::FoxgloveServer(std::string file_name) {
             server_channel.schemaName = message_descriptor->full_name();
 
             auto fdset_str = SerializeFdSet(message_descriptor);
-            if (server_channel.schemaName == "dv_msgs.PointCloud") {
-                server_channel.schemaName = "foxglove.PointCloud";
-                google::protobuf::FileDescriptorSet fdSet;
-                fdSet.ParseFromString(fdset_str);
-                for (auto &fd : *fdSet.mutable_file()) {
-                    if (fd.package() == "dv_msgs") fd.set_package("foxglove");
-                }
-                fdset_str = fdSet.SerializeAsString();
-            }
-
             server_channel.schema = foxglove::base64Encode(fdset_str);
             _name_to_id_map[server_channel.topic] = running_index;
             channels.push_back(server_channel);

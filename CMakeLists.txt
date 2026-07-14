@@ -103,7 +103,6 @@ target_link_libraries(drivebrain PUBLIC
     core
     comms
     control
-    estimation
     matlab_model
     simulink_automation_msgs_proto_cpp
 )
