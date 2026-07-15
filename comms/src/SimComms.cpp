@@ -1,5 +1,6 @@
 #include <SimComms.hpp>
 #include <foxglove/PointCloud.pb.h>
+#include <foxglove/FrameTransform.pb.h>
 #include "dv_msgs.pb.h"
 
 namespace comms {
@@ -54,7 +55,6 @@ void SimComms::destroy() {
 bool SimComms::start() {
     _veh_recv_thread = std::thread(&SimComms::_veh_recv_loop, this);
     _lidar_recv_thread = std::thread(&SimComms::_lidar_recv_loop, this);
-    _cones_recv_thread = std::thread(&SimComms::_cones_recv_loop, this);
     return true;
 }
 
@@ -62,10 +62,8 @@ bool SimComms::close() {
     if (!_running.exchange(false)) return false;
     if (_veh_recv_thread.joinable()) _veh_recv_thread.join();
     if (_lidar_recv_thread.joinable()) _lidar_recv_thread.join();
-    if (_cones_recv_thread.joinable()) _cones_recv_thread.join();
     _veh_data_recv_socket.close();
     _lidar_socket.close();
-    _cones_socket.close();
     return true;
 }
 
@@ -93,16 +91,6 @@ SimComms::SimComms() {
         _running = false;
         throw std::runtime_error("SimComms: failed to connect lidar socket");
     }
-    try {
-        _cones_socket = zmq::socket_t(_ctx, zmq::socket_type::pull);
-        _cones_socket.set(zmq::sockopt::rcvhwm, 2);
-        _cones_socket.set(zmq::sockopt::rcvtimeo, 100);
-        _cones_socket.connect(endpoint(_cones_socket_port));
-    } catch (const zmq::error_t& e) {
-        spdlog::error("SimComms: failed to connect cones socket: {}", e.what());
-        _running = false;
-        throw std::runtime_error("SimComms: failed to connect cones socket");
-    }
 }
 
 bool SimComms::_setup_recv_socket(zmq::socket_t& s, uint16_t port) {
@@ -110,10 +98,10 @@ bool SimComms::_setup_recv_socket(zmq::socket_t& s, uint16_t port) {
     s = zmq::socket_t(_ctx, zmq::socket_type::pull);
     s.set(zmq::sockopt::rcvhwm, 10000);
     s.set(zmq::sockopt::rcvtimeo, 100);
-    s.bind(endpoint(port));
+    s.connect(endpoint(port));
   } catch (const zmq::error_t& e) {
-    spdlog::error("replay bind failed on port {}: {}", port, e.what());
-    _running = false; 
+    spdlog::error("SimComms: connect failed on port {}: {}", port, e.what());
+    _running = false;
     return false;
   }
   return true;
@@ -135,11 +123,21 @@ void SimComms::_veh_recv_loop() {
 
         std::shared_ptr<google::protobuf::Message> msg(parse_by_name(type_name, body.data(), body.size()));
 
-        spdlog::info("{}", type_name);
+        if (!msg) {
+            spdlog::error("SimComms: unknown message type '{}'", type_name);
+            continue;
+        }
 
-        if (msg) {
-            core::log(msg); 
-            core::StateTracker::instance().handle_receive_protobuf_message(msg); 
+        auto desc = msg->GetDescriptor();
+        if (desc == dv_msgs::Cones::descriptor()) {
+            core::render_cones(std::static_pointer_cast<dv_msgs::Cones>(msg), "ground_truth_cones");
+        } else if (desc == hytech_msgs::pose::descriptor()) {
+            core::render_pose(std::static_pointer_cast<hytech_msgs::pose>(msg), "ground_truth_pose");
+        } else if (desc == foxglove::FrameTransform::descriptor()) {
+            core::log(msg);
+        } else {
+            core::log(msg);
+            core::StateTracker::instance().handle_receive_protobuf_message(msg);
         }
     }
 }
@@ -163,28 +161,6 @@ void SimComms::_lidar_recv_loop() {
         }
 
         core::log(pc);
-    }
-}
-
-void SimComms::_cones_recv_loop() {
-    while (_running) {
-        zmq::message_t frame;
-        try {
-            auto res = _cones_socket.recv(frame);
-            if (!res) continue;
-        } catch (const zmq::error_t& e) {
-            if (e.num() == ETERM) break;
-            spdlog::error("SimComms cones recv error: {}", e.what());
-            continue;
-        }
-
-        auto cones = std::make_shared<dv_msgs::Cones>();
-        if (!cones->ParseFromArray(frame.data(), static_cast<int>(frame.size()))) {
-            spdlog::error("SimComms: failed to parse dv_msgs::Cones");
-            continue;
-        }
-
-        core::log(cones);
     }
 }
 
