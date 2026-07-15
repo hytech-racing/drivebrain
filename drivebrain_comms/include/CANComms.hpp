@@ -18,7 +18,11 @@
 #include "hytech_msgs.pb.h"
 
 #include <dbcppp/Network.h>
-#include "SimComms.hpp"
+
+#if HOOTL_ENABLED
+# include "SimComms.hpp"
+#endif
+
 #include <FoxgloveServer.hpp>
 #include <MCAPLogger.hpp>
 
