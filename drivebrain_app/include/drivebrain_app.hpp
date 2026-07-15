@@ -1,6 +1,8 @@
 #include "ETHRecvComms.hpp"
 #include "CANComms.hpp"
-#include "SimComms.hpp"
+#if HOOTL_ENABLED
+# include "SimComms.hpp"
+#endif
 #include <MCAPLogger.hpp>
 #include <boost/asio.hpp>
 #include <memory>
