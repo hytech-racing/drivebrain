@@ -17,6 +17,8 @@
 #include <filesystem>
 #include <stdexcept>
 
+#include <ouster/client.h>
+
 std::atomic<bool> running{true};
 
 void sig_handler(int signal) {
@@ -50,7 +52,7 @@ void DrivebrainApp::run() {
 
   spdlog::info("Constructed logging singletons");
 
-  core::DrivebrainControllerInterface::create(); 
+  // core::DrivebrainControllerInterface::create(); 
 
   spdlog::info("Constructed drivebrain controller interface");
 
@@ -79,17 +81,17 @@ void DrivebrainApp::run() {
 
   // Initialize controllers
   const size_t num_controllers = 1 + matlab_model_gen::num_controllers;
-    _mode1 = std::make_shared<control::LoadCellTorqueController>(); 
-  if (!_mode1->init()) {
-    spdlog::error("Failed to initialize mode 1");
-  }
+  //   _mode1 = std::make_shared<control::LoadCellTorqueController>(); 
+  // if (!_mode1->init()) {
+  //   spdlog::error("Failed to initialize mode 1");
+  // }
 
   // Estimator Manager
   _estim_manager = std::make_shared<estimation::EstimatorManager>();
   _estim_manager->handle_inits();
   spdlog::info("Constructed estimator manager");
 
-  std::array<std::shared_ptr<control::Controller<core::ControllerOutput, core::VehicleState>>, num_controllers> controllers{_mode1};
+  std::array<std::shared_ptr<control::Controller<core::ControllerOutput, core::VehicleState>>, num_controllers> controllers{};
   auto _gend_controllers =  matlab_model_gen::create_controllers(_estim_manager);
   if (_gend_controllers.size() + 1 != controllers.size()) {
     throw std::runtime_error("Failed to initialize matlab generated controllers! Wrong vector size!");
