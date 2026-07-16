@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+#include <foxglove/PointCloud.pb.h>
 #include <foxglove/websocket/base64.hpp>
 #include <foxglove/websocket/websocket_notls.hpp>
 #include <foxglove/websocket/websocket_server.hpp>
@@ -14,13 +16,12 @@
 
 #include "hytech_msgs.pb.h"
 #include "hytech.pb.h"
+#include "dv_msgs.pb.h"
 
 /**
- * The state tracker acts 
- * as a thread-safe translation unit
- * between our comms interfaces and 
- * the rest of the program. It keeps track 
- * of current internal state. 
+ * The state tracker acts as a thread-safe translation unit
+ * between our comms interfaces and the rest of the program. It keeps track 
+ * of current internal vehicle state, and observed external state.
  */
 namespace core {
 
@@ -262,7 +263,27 @@ namespace core {
         ControllerOutput current_controller_output;
     };
 
-    
+    struct LidarPoint { float x, y, z; uint8_t r, g, b, a; };
+    static_assert(sizeof(LidarPoint) == 16);
+    inline const LidarPoint* points(const foxglove::PointCloud& pc) { return reinterpret_cast<const LidarPoint*>(pc.data().data()); }
+    inline uint64_t num_points(const foxglove::PointCloud& pc) { return pc.data().size() / sizeof(LidarPoint); }
+
+
+    /**
+     * @struct Contains driverless data representing the entire internal
+     * and external state of the vehicle
+     */
+    struct DriverlessState {
+        std::shared_ptr<const foxglove::PointCloud> lidar_cloud;
+        bool lidar_is_valid;
+        std::shared_ptr<const dv_msgs::Cones> cone_observations;
+        std::shared_ptr<const std::vector<xyz_vec<float>>> path;
+
+        /* Returns the latest LiDAR point cloud in a clean struct */
+        const LidarPoint* points() const { return lidar_cloud ? core::points(*lidar_cloud) : nullptr; }
+        uint64_t num_points() const { return lidar_cloud ? core::num_points(*lidar_cloud) : 0; }
+    };
+
 
     /**
      * Allows different communications interfaces
@@ -309,14 +330,36 @@ namespace core {
             void set_previous_control_output(ControllerOutput &previous_control_output);
             
             /**
-             * Returns a pair of the current vehicle state and whether or not it's valid
+             * Returns a pair of the current vehicle state and whether or not it's valid given the timestamps
              * 
              * @return the vehicle state and whether or not its valid. 
              */
-            std::pair<core::VehicleState, bool> get_latest_state_and_validity();
+            std::pair<core::VehicleState, bool> vehicle_state();
 
-            
-        private: 
+            /**
+             * Returns the current driverless state. Consumers judge freshness themselves off
+             * the recv times in the struct, since each one wants its own staleness threshold.
+             *
+             * @return the driverless state.
+             */
+            DriverlessState dv_state();
+
+            /**
+             * Sets the latest planned path produced by the autonomy stack.
+             *
+             * @param path the planned path, map frame
+             */
+            void set_dv_path(std::shared_ptr<const std::vector<xyz_vec<float>>> path);
+
+            /**
+             * Sets the latest cone observations produced by perception.
+             *
+             * @param cones the observed cones, vehicle frame
+             */
+            void set_cone_observations(std::shared_ptr<const dv_msgs::Cones> cones);
+
+
+        private:
 
             template <size_t index, typename inverter_dynamics_message>
             void _handle_set_inverter_dynamics(std::shared_ptr<google::protobuf::Message> msg);
@@ -335,6 +378,9 @@ namespace core {
             RawInputData _raw_input_data = { };
             std::mutex _state_mutex;
             std::array<std::chrono::microseconds, 4> _timestamp_array;
+
+            DriverlessState _dv_state = { };
+            std::mutex _dv_state_mutex;
             
             /* Private constructor called by the init method */
             StateTracker() {}; 

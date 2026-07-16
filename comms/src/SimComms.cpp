@@ -1,6 +1,7 @@
 #include <SimComms.hpp>
 #include <foxglove/PointCloud.pb.h>
 #include <foxglove/FrameTransform.pb.h>
+#include "StateTracker.hpp"
 #include "dv_msgs.pb.h"
 
 namespace comms {
@@ -128,6 +129,7 @@ void SimComms::_veh_recv_loop() {
             continue;
         }
 
+        /* Sim message parsing */
         auto desc = msg->GetDescriptor();
         if (desc == dv_msgs::Cones::descriptor()) {
             core::render_cones(std::static_pointer_cast<dv_msgs::Cones>(msg), "ground_truth_cones");
@@ -160,6 +162,7 @@ void SimComms::_lidar_recv_loop() {
             continue;
         }
 
+        core::StateTracker::instance().handle_receive_protobuf_message(pc);
         core::log(pc);
     }
 }

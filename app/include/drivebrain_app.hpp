@@ -9,7 +9,10 @@
 #include "SimComms.hpp"
 #include "LoadCellTorqueController.hpp"
 #include "VNComms.hpp"
+#include "Autonomy.hpp"
 #include "hytech_msgs.pb.h"
+
+enum class DrivingMode { DRIVERED, DRIVERLESS };
 
 class DrivebrainApp {
 public:
@@ -57,7 +60,6 @@ private:
   std::unique_ptr<comms::ETHRecvComms<hytech_msgs::VCRData_s>> _vcr_eth_driver;
   std::unique_ptr<comms::ETHRecvComms<hytech_msgs::VCFData_s>> _vcf_eth_driver;
 
-
   /* Controllers */
   std::shared_ptr<control::LoadCellTorqueController> _mode1;
   std::vector<std::shared_ptr<MatlabModel>> _gend_controllers;
@@ -67,4 +69,8 @@ private:
 
   /* Estimator Manager */
   std::shared_ptr<estimation::EstimatorManager> _estim_manager;
+
+  /* Driverless autonomy stack */
+  core::Autonomy _autonomy;
+  DrivingMode _driving_mode = DrivingMode::DRIVERLESS;
 };

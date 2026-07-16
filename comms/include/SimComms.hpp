@@ -10,6 +10,7 @@
 #include "Telemetry.hpp"
 
 namespace comms {
+
 class SimComms {
     public:
         /**

@@ -81,6 +81,7 @@ FetchContent_MakeAvailable(drivebrain_simulink_models)
 add_executable(drivebrain
     app/src/main.cpp
     app/src/drivebrain_app.cpp
+    app/src/Autonomy.cpp
 )
 
 target_include_directories(drivebrain PUBLIC app/include)
@@ -103,6 +104,9 @@ target_link_libraries(drivebrain PUBLIC
     core
     comms
     control
+    planning
+    perception
+    slam
     matlab_model
     simulink_automation_msgs_proto_cpp
 )

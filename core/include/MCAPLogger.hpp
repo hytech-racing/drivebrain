@@ -22,7 +22,7 @@ namespace core {
         mcap::Timestamp log_time;
     };
 
-    using MsgType = std::shared_ptr<google::protobuf::Message>;
+    using MsgType = std::shared_ptr<const google::protobuf::Message>;
 
     class MCAPLogger {
         public: 

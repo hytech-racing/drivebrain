@@ -13,7 +13,10 @@ namespace core {
  *
  * @msg The protobuf message to log and stream.
 */
-inline void log(std::shared_ptr<google::protobuf::Message> msg) {
+inline void log(std::shared_ptr<const google::protobuf::Message> msg) {
+    if (!msg) {
+        return;
+    }
     MCAPLogger::instance().log_msg(msg);
     FoxgloveServer::instance().send_live_telem_msg(msg);
 }
@@ -92,6 +95,38 @@ inline void render_pose(std::shared_ptr<hytech_msgs::pose> pose, std::string id,
     color->set_g(0.2);
     color->set_b(0.2);
     color->set_a(0.3);
+
+    log(scene);
+}
+
+/**
+ * Renders a planned path in Foxglove's 3D panel as a line
+ *
+ * @param path the path points to render, in order
+ * @param id The identifier of the path (used to distinguish e.g. a midline from a raceline)
+ * @param frame_id The frame the path points are expressed in.
+ */
+inline void render_path(const std::vector<xyz_vec<float>>& path, std::string id, std::string frame_id = "map") {
+    auto scene = std::make_shared<foxglove::SceneUpdate>();
+    auto* entity = scene->add_entities();
+    entity->set_frame_id(frame_id);
+    entity->set_id(id);
+
+    auto* line = entity->add_lines();
+    line->set_type(foxglove::LinePrimitive::LINE_STRIP);
+    line->mutable_pose()->mutable_orientation()->set_w(1.0);
+    line->set_thickness(0.1);
+    for (const auto& point : path) {
+        auto* p = line->add_points();
+        p->set_x(point.x);
+        p->set_y(point.y);
+        p->set_z(point.z);
+    }
+    auto* color = line->mutable_color();
+    color->set_r(0.0);
+    color->set_g(0.9);
+    color->set_b(0.5);
+    color->set_a(1.0);
 
     log(scene);
 }

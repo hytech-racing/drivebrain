@@ -288,7 +288,7 @@ core::DBParam core::FoxgloveServer::_get_db_param(foxglove::Parameter param) {
     }
 }
 
-void core::FoxgloveServer::send_live_telem_msg(std::shared_ptr<google::protobuf::Message> msg) {
+void core::FoxgloveServer::send_live_telem_msg(std::shared_ptr<const google::protobuf::Message> msg) {
     /* find() is a non-mutating lookup — safe for concurrent callers (main loop, eth,
        sim state/lidar threads). operator[] would insert-on-miss and race a rehash. */
     auto it = _name_to_id_map.find(msg->GetDescriptor()->name());

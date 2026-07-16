@@ -1,13 +1,3 @@
-#include "drivebrain_app.hpp"
-#include "ETHRecvComms.hpp"
-#include "FoxgloveServer.hpp"
-#include "MCAPLogger.hpp"
-#include "MatlabModelAddHelper.hpp"
-#include "dv_msgs.pb.h"
-#include "hytech_msgs.pb.h"
-#include "Telemetry.hpp"
-#include "ControllerManager.hpp"
-#include "DrivebrainControllerInterface.hpp"
 #include <StateTracker.hpp>
 #include <atomic>
 #include <chrono>
@@ -17,6 +7,19 @@
 #include <spdlog/spdlog.h>
 #include <filesystem>
 #include <stdexcept>
+
+#include "drivebrain_app.hpp"
+#include "ETHRecvComms.hpp"
+#include "FoxgloveServer.hpp"
+#include "MCAPLogger.hpp"
+#include "MatlabModelAddHelper.hpp"
+#include "Telemetry.hpp"
+#include "ControllerManager.hpp"
+#include "DrivebrainControllerInterface.hpp"
+#include "PathPlanner.hpp"
+
+#include "dv_msgs.pb.h"
+#include "hytech_msgs.pb.h"
 
 std::atomic<bool> running{true};
 
@@ -60,6 +63,8 @@ void DrivebrainApp::run() {
   _vcr_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::VCRData_s>>(_io_context, 9999);
   _vcf_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::VCFData_s>>(_io_context, 4444);
 
+  spdlog::info("Initialized ethernet drivers");
+
 #if HOOTL_ENABLED
   comms::SimComms::create(); 
   comms::SimComms::instance().start();
@@ -70,8 +75,6 @@ void DrivebrainApp::run() {
   if (vn_init_not_successful) {
     spdlog::error("Failed to initialize vectornav driver");
   }
-
-  spdlog::info("Initialized ethernet drivers");
 
   // CAN device names are defined in the drivebrain JSON config
   _telem_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("telem_can_device").value(), _dbc_path);
@@ -105,7 +108,10 @@ void DrivebrainApp::run() {
 
   spdlog::info("Constructed controller manager");
 
-  running = true; 
+  // Start the autonomy stack
+  _autonomy.start();
+
+  running = true;
   _io_context_thread = std::thread([this]() {
     try {
       _io_context.run();
@@ -128,6 +134,7 @@ void DrivebrainApp::run() {
   
   // Join threads when loop thread finishes
   if(_loop_thread.joinable()) _loop_thread.join();
+  _autonomy.stop();
   _io_context.stop();
   if(_io_context_thread.joinable()) _io_context_thread.join();
   spdlog::info("Joined all threads");
@@ -151,33 +158,24 @@ void DrivebrainApp::_loop() {
 
     // spdlog::info("tick: get_state");
 
-    auto state_and_validity = core::StateTracker::instance().get_latest_state_and_validity();
+    auto state_and_validity = core::StateTracker::instance().vehicle_state();
 
     // spdlog::info("tick: evaluate_estimators");
 
     _estim_manager->evaluate_all_estimators(state_and_validity.first);
 
-    // spdlog::info("tick: step_controller");
-
-    /**
-    Tentatively, the main loop should look something like:
-    
-    dv_msgs::PointCloud filtered_cloud = perception::filter_cloud(*scan);
-    Cone[] known_cones = perception::classify_cones(*filtered_cloud);
-    GraphSlam::update(known_cones);
-    auto plan = Planner::plan(known_cones, StateTacker.pose())
-    cmd_out = pure puresuit on planned path
-    **/
-
-    auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, 1 + matlab_model_gen::num_controllers>::instance();
-    auto out_struct = controller_manager.step_active_controller(state_and_validity.first);
+    core::ControllerOutput out_struct;
+    if (_driving_mode == DrivingMode::DRIVERLESS) {
+      out_struct = _autonomy.command(state_and_validity.first);
+    } else {
+      auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, 1 + matlab_model_gen::num_controllers>::instance();
+      out_struct = controller_manager.step_active_controller(state_and_validity.first);
+    }
 
     std::variant<core::SpeedControlOut, core::TorqueControlOut, std::monostate> cmd_out = out_struct.out;
     core::StateTracker::instance().set_previous_control_output(out_struct);
 
     bool state_is_valid = state_and_validity.second;
-
-    // spdlog::info("tick: enter_send_if");
 
     if (state_is_valid) {
 

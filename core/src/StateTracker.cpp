@@ -1,4 +1,6 @@
 #include <StateTracker.hpp>
+#include <foxglove/PointCloud.pb.h>
+#include <foxglove/websocket/parameter.hpp>
 
 using namespace core; 
 
@@ -32,8 +34,15 @@ void StateTracker::set_previous_control_output(core::ControllerOutput &prev_cont
     _vehicle_state.prev_controller_output = prev_controller_output;
 }
 
+// TODO: we should rename this to like update_state
 void StateTracker::handle_receive_protobuf_message(std::shared_ptr<google::protobuf::Message> msg) {
-    if (msg->GetDescriptor() == hytech_msgs::VNData::descriptor()) {
+    if (msg->GetDescriptor() == foxglove::PointCloud::descriptor()) {
+        auto in_msg = std::static_pointer_cast<const foxglove::PointCloud>(msg);
+        {
+            std::unique_lock lk(_dv_state_mutex);
+            _dv_state.lidar_cloud = in_msg;
+        }
+    } else if (msg->GetDescriptor() == hytech_msgs::VNData::descriptor()) {
         auto in_msg = std::static_pointer_cast<hytech_msgs::VNData>(msg);
         xyz_vec<float> body_vel_ms = {(in_msg->vn_vel_m_s().x()), (in_msg->vn_vel_m_s().y()),
                                       (in_msg->vn_vel_m_s().z())};
@@ -74,13 +83,14 @@ void StateTracker::handle_receive_protobuf_message(std::shared_ptr<google::proto
             std::unique_lock lk(_state_mutex);
             _vehicle_state.acc_data.min_cell_voltage = in_msg->core_data().min_cell_voltage();
         }
-    }
-    else {
+    } else if (msg->GetDescriptor() == foxglove::PointCloud::descriptor()) {
+        // UPDATE driverless vehicle state
+    } else {
         _receive_low_level_state(msg);
     }
 }
 
-std::pair<core::VehicleState, bool> StateTracker::get_latest_state_and_validity() {
+std::pair<core::VehicleState, bool> StateTracker::vehicle_state() {
     auto state_is_valid = _validate_timestamps(_timestamp_array);
 
     VehicleState current_state  = { };
@@ -92,6 +102,39 @@ std::pair<core::VehicleState, bool> StateTracker::get_latest_state_and_validity(
     }
 
     return {current_state, state_is_valid};
+}
+
+/* 3 scan periods at 20hz: long enough to ride out a dropped scan, short enough to catch a dead sensor */
+static constexpr std::chrono::milliseconds LIDAR_TIMEOUT(150);
+
+core::DriverlessState StateTracker::dv_state() {
+    DriverlessState current_state;
+
+    {
+        /* Copying DriverlessState is a shared_ptr refcount bump, not a point-data copy. */
+        std::unique_lock lk(_dv_state_mutex);
+        current_state = _dv_state;
+    }
+
+    current_state.lidar_is_valid = false;
+    if (current_state.lidar_cloud) {
+        auto scan_time_ns = google::protobuf::util::TimeUtil::TimestampToNanoseconds(current_state.lidar_cloud->timestamp());
+        auto curr_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+        current_state.lidar_is_valid = (curr_time_ns - scan_time_ns) < std::chrono::nanoseconds(LIDAR_TIMEOUT).count();
+    }
+
+    return current_state;
+}
+
+void StateTracker::set_dv_path(std::shared_ptr<const std::vector<xyz_vec<float>>> path) {
+    std::unique_lock lk(_dv_state_mutex);
+    _dv_state.path = std::move(path);
+}
+
+void StateTracker::set_cone_observations(std::shared_ptr<const dv_msgs::Cones> cones) {
+    std::unique_lock lk(_dv_state_mutex);
+    _dv_state.cone_observations = std::move(cones);
 }
 
 /****************************************************************

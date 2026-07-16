@@ -92,8 +92,8 @@ void core::DrivebrainControllerInterface::_request_controller_change(int control
         return;
     }
 
-    const auto state_and_validity = core::StateTracker::instance().get_latest_state_and_validity();
-    const bool switched = controller_manager.swap_active_controller(static_cast<size_t>(controller_index), state_and_validity.first);
+    const auto state = core::StateTracker::instance().vehicle_state();
+    const bool switched = controller_manager.swap_active_controller(static_cast<size_t>(controller_index), state.first);
 
     if (!switched) {
         spdlog::warn("Controller switch rejected for index {}", controller_index);
