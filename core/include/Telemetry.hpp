@@ -112,6 +112,14 @@ inline void render_path(const std::vector<xyz_vec<float>>& path, std::string id,
     entity->set_frame_id(frame_id);
     entity->set_id(id);
 
+    /* Foxglove resolves frame_id through the transform tree at this timestamp, so an
+       unset one lands at 1970 and renders at the origin. frame_locked keeps the entity
+       following its frame as the car moves instead of snapshotting where it was. */
+    auto now = std::chrono::system_clock::now().time_since_epoch();
+    entity->mutable_timestamp()->set_seconds(std::chrono::duration_cast<std::chrono::seconds>(now).count());
+    entity->mutable_timestamp()->set_nanos(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count() % 1000000000);
+    entity->set_frame_locked(true);
+
     auto* line = entity->add_lines();
     line->set_type(foxglove::LinePrimitive::LINE_STRIP);
     line->mutable_pose()->mutable_orientation()->set_w(1.0);

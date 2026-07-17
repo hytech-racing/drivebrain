@@ -56,6 +56,8 @@ class SimComms {
         zmq::socket_t _veh_data_send_socket;
         zmq::socket_t _veh_data_recv_socket;
 
+        std::mutex _send_mutex;
+
         std::thread _veh_recv_thread;
         std::thread _lidar_recv_thread;
         std::atomic<bool> _running{false};

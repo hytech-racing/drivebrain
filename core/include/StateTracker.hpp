@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <foxglove/PointCloud.pb.h>
 #include <foxglove/websocket/base64.hpp>
 #include <foxglove/websocket/websocket_notls.hpp>
@@ -107,6 +108,16 @@ namespace core {
     };
 
     /**
+     * @struct A teleop command from the Foxglove teleop panel, as a Twist.
+     * Forward speed and yaw rate get mapped to torque and steering by the app.
+     */
+    struct TeleopCommand {
+        float linear_x;
+        float angular_z;
+        std::chrono::steady_clock::time_point recv_time;
+    };
+
+    /**
      * @struct Contains requested pedals information
      */
     struct DriverInput {
@@ -181,10 +192,14 @@ namespace core {
 
 
     /**
-     * @struct A controller output 
+     * @struct A controller output
      */
     struct ControllerOutput {
         std::variant<SpeedControlOut, TorqueControlOut, std::monostate> out;
+
+        /* Only set by driverless controllers. A human turns the wheel themselves, so
+           controllers in driver mode leave this empty and no steering is commanded. */
+        std::optional<float> desired_steering_deg;
     };
 
     /**
@@ -358,6 +373,20 @@ namespace core {
              */
             void set_cone_observations(std::shared_ptr<const dv_msgs::Cones> cones);
 
+            /**
+             * Sets the latest teleop command received from the Foxglove teleop panel.
+             *
+             * @param command the teleop command
+             */
+            void set_teleop_command(const TeleopCommand& command);
+
+            /**
+             * Returns the latest teleop command.
+             *
+             * @return the teleop command, and whether it is recent enough to act on
+             */
+            std::pair<TeleopCommand, bool> teleop_command();
+
 
         private:
 
@@ -381,6 +410,9 @@ namespace core {
 
             DriverlessState _dv_state = { };
             std::mutex _dv_state_mutex;
+
+            TeleopCommand _teleop_command = { };
+            std::mutex _teleop_mutex;
             
             /* Private constructor called by the init method */
             StateTracker() {}; 

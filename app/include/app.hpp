@@ -9,10 +9,10 @@
 #include "SimComms.hpp"
 #include "LoadCellTorqueController.hpp"
 #include "VNComms.hpp"
-#include "Autonomy.hpp"
+#include "autonomy.hpp"
 #include "hytech_msgs.pb.h"
 
-enum class DrivingMode { DRIVERED, DRIVERLESS };
+enum class DrivingMode { DRIVERED, DRIVERLESS, TELEOP };
 
 class DrivebrainApp {
 public:
@@ -38,6 +38,22 @@ private:
    * Processes one loop iteration of Drivebrain
   */
   void _loop();
+
+  /**
+   * Sends a controller output to the inverters and steering over both CAN buses,
+   * and logs what was sent.
+   *
+   * @param out the controller output to command
+  */
+  void _actuate(const core::ControllerOutput& out);
+
+  /**
+   * Maps a teleop twist onto torque and steering.
+   *
+   * @param command the latest teleop command
+   * @return the controller output to send
+  */
+  core::ControllerOutput _teleop_command(const core::TeleopCommand& command);
 
 private:
   boost::asio::io_context _io_context;
@@ -72,5 +88,5 @@ private:
 
   /* Driverless autonomy stack */
   core::Autonomy _autonomy;
-  DrivingMode _driving_mode = DrivingMode::DRIVERLESS;
+  DrivingMode _driving_mode = DrivingMode::TELEOP;
 };

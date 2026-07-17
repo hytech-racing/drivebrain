@@ -1,4 +1,5 @@
 #include <FoxgloveServer.hpp>
+#include <StateTracker.hpp>
 #include <foxglove/websocket/parameter.hpp>
 #include <nlohmann/detail/value_t.hpp>
 #include <fstream>
@@ -124,6 +125,13 @@ core::FoxgloveServer::FoxgloveServer(std::string file_name) {
     };
 
     _server_options.capabilities.push_back("parameters");
+
+    /* The teleop panel publishes geometry_msgs/Twist. It is a ROS type with no protobuf
+       equivalent, so over a websocket connection the client encodes it as JSON */
+    _server_options.capabilities.push_back(foxglove::CAPABILITY_CLIENT_PUBLISH);
+    _server_options.supportedEncodings.push_back("json");
+    /* An empty whitelist rejects every client advertisement, so allow any topic */
+    _server_options.clientTopicWhitelistPatterns = {std::regex(".*")};
     _server = foxglove::ServerFactory::createServer<websocketpp::connection_hdl>("HTX_Foxglove", logHandler, _server_options);
 
     foxglove::ServerHandlers<foxglove::ConnHandle> hdlrs;
@@ -138,7 +146,34 @@ core::FoxgloveServer::FoxgloveServer(std::string file_name) {
         spdlog::info("Client {} unsubscribed from {}", clientStr, chanId);
     };
 
-    hdlrs.parameterChangeHandler = [&](const std::vector<foxglove::Parameter> &params, const std::optional<std::string> &request_id, foxglove::ConnHandle clientHandle) 
+    hdlrs.clientAdvertiseHandler = [&](const foxglove::ClientAdvertisement &advertisement, foxglove::ConnHandle clientHandle) {
+        spdlog::info("Client advertised {} as {} ({})", advertisement.topic, advertisement.schemaName, advertisement.encoding);
+    };
+
+    hdlrs.clientUnadvertiseHandler = [&](foxglove::ClientChannelId channelId, foxglove::ConnHandle clientHandle) {
+        spdlog::info("Client unadvertised channel {}", channelId);
+    };
+
+    hdlrs.clientMessageHandler = [&](const foxglove::ClientMessage &msg, foxglove::ConnHandle clientHandle) {
+        if (msg.advertisement.encoding != "json") {
+            spdlog::warn("Ignoring client message with unsupported encoding {}", msg.advertisement.encoding);
+            return;
+        }
+
+        try {
+            /* msg.data is the raw frame, so skip the opcode and channel id header */
+            auto twist = nlohmann::json::parse(msg.getData(), msg.getData() + msg.getLength());
+            core::TeleopCommand command;
+            command.linear_x = twist.value("linear", nlohmann::json::object()).value("x", 0.0f);
+            command.angular_z = twist.value("angular", nlohmann::json::object()).value("z", 0.0f);
+            command.recv_time = std::chrono::steady_clock::now();
+            StateTracker::instance().set_teleop_command(command);
+        } catch (const nlohmann::json::exception &e) {
+            spdlog::warn("Failed to parse teleop message: {}", e.what());
+        }
+    };
+
+    hdlrs.parameterChangeHandler = [&](const std::vector<foxglove::Parameter> &params, const std::optional<std::string> &request_id, foxglove::ConnHandle clientHandle)
     {
         std::unordered_map<std::string, DBParam> param_copy;
         {

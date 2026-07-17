@@ -137,6 +137,26 @@ void StateTracker::set_cone_observations(std::shared_ptr<const dv_msgs::Cones> c
     _dv_state.cone_observations = std::move(cones);
 }
 
+static constexpr std::chrono::milliseconds TELEOP_TIMEOUT(500);
+
+void StateTracker::set_teleop_command(const TeleopCommand& command) {
+    std::unique_lock lk(_teleop_mutex);
+    _teleop_command = command;
+}
+
+std::pair<core::TeleopCommand, bool> StateTracker::teleop_command() {
+    TeleopCommand current_command;
+    {
+        std::unique_lock lk(_teleop_mutex);
+        current_command = _teleop_command;
+    }
+
+    bool is_valid = current_command.recv_time.time_since_epoch().count() > 0 &&
+                    (std::chrono::steady_clock::now() - current_command.recv_time) < TELEOP_TIMEOUT;
+
+    return {current_command, is_valid};
+}
+
 /****************************************************************
  * Private class methods
  ****************************************************************/

@@ -24,7 +24,7 @@ namespace planning {
 
     return {
       {0.0f, 0.0f, 0.0f},
-      {3.0f, 0.0f, 0.0f},
+      {3.0f, lateral(rng), 0.0f},
       {6.0f, lateral(rng), 0.0f},
       {9.0f, lateral(rng), 0.0f}
     };

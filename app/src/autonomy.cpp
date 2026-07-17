@@ -1,6 +1,7 @@
-#include "Autonomy.hpp"
+#include "autonomy.hpp"
 
 #include <memory>
+#include <variant>
 #include <vector>
 
 #include <spdlog/spdlog.h>
@@ -35,10 +36,21 @@ void Autonomy::stop() {
   spdlog::info("Autonomy stack stopped");
 }
 
-// TODO: Pure pursuit impl should be invoked here
+bool Autonomy::is_valid() {
+  auto dv = StateTracker::instance().dv_state();
+  return dv.lidar_is_valid && dv.path && !dv.path->empty();
+}
+
+// TODO: Pure pursuit impl should be invoked here. Hardcoded for now to verify the
+// command path from drivebrain through to the sim's vehicle dynamics.
 ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
+  // TorqueControlOut torque;
+  // torque.desired_torques_nm = {2.0f, 2.0f, 2.0f, 2.0f};
+
   ControllerOutput out;
   out.out = std::monostate{};
+  // out.out = torque;
+  // out.desired_steering_deg = 10.0f;
   return out;
 }
 
@@ -59,7 +71,7 @@ void Autonomy::_run() {
       StateTracker::instance().set_cone_observations(observed_cones);
 
       auto path = planning::plan_path(*observed_cones);
-      render_path(path, "planned_path", "map");
+      render_path(path, "planned_path", "lidar");
       StateTracker::instance().set_dv_path(
           std::make_shared<const std::vector<xyz_vec<float>>>(std::move(path)));
     }

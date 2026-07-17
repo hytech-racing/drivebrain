@@ -21,7 +21,7 @@ add_subdirectory(planning)
 add_subdirectory(perception)
 add_subdirectory(slam)
 
-# Aliases so external FetchContent deps (mostly db simulink models) that link against the old target names still resolve. 
+# Aliases so external FetchContent deps (mostly db simulink models) that link against the old target names still resolve
 # TODO fix matlab simulink models to account for new names
 add_library(drivebrain_core ALIAS core)
 
@@ -58,7 +58,7 @@ FetchContent_MakeAvailable(vn_driver_lib)
 
 FetchContent_Declare(
     HT_CAN
-    URL "https://github.com/hytech-racing/HT_CAN/releases/download/264/drivebrain_can_lib.tar.gz"
+    URL "https://github.com/hytech-racing/HT_CAN/releases/download/268/drivebrain_can_lib.tar.gz"
 )
 FetchContent_MakeAvailable(HT_CAN)
 
@@ -80,8 +80,8 @@ FetchContent_MakeAvailable(drivebrain_simulink_models)
 #################################
 add_executable(drivebrain
     app/src/main.cpp
-    app/src/drivebrain_app.cpp
-    app/src/Autonomy.cpp
+    app/src/app.cpp
+    app/src/autonomy.cpp
 )
 
 target_include_directories(drivebrain PUBLIC app/include)

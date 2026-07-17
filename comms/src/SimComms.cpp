@@ -69,8 +69,22 @@ bool SimComms::close() {
 }
 
 bool SimComms::send_message(std::shared_ptr<google::protobuf::Message> message) {
-    // TODO send over the veh data send socket
-    return true;
+    zmq::multipart_t m;
+    m.addstr(message->GetDescriptor()->full_name());
+    std::string body = message->SerializeAsString();
+    m.addmem(body.data(), body.size());
+
+    try {
+        /* Both CAN drivers route here in HOOTL, so the sim sees each message twice.
+           Commands are latest-wins so it costs nothing but the bytes. */
+        std::unique_lock lk(_send_mutex);
+        return m.send(_veh_data_send_socket, static_cast<int>(zmq::send_flags::dontwait));
+    } catch (const zmq::error_t& e) {
+        if (e.num() != EAGAIN && e.num() != ETERM) {
+            spdlog::error("SimComms send error: {}", e.what());
+        }
+        return false;
+    }
 }
 
 /****************************************************************
@@ -81,6 +95,15 @@ SimComms::SimComms() {
     if (!_setup_recv_socket(_veh_data_recv_socket, _recv_socket_port)) {
         _running = false;
         throw std::runtime_error("SimComms: failed to bind recv socket");
+    }
+    try {
+        _veh_data_send_socket = zmq::socket_t(_ctx, zmq::socket_type::push);
+        _veh_data_send_socket.set(zmq::sockopt::sndhwm, 10);
+        _veh_data_send_socket.connect(endpoint(_send_socket_port));
+    } catch (const zmq::error_t& e) {
+        spdlog::error("SimComms: failed to connect send socket: {}", e.what());
+        _running = false;
+        throw std::runtime_error("SimComms: failed to connect send socket");
     }
     try {
         _lidar_socket = zmq::socket_t(_ctx, zmq::socket_type::pull);

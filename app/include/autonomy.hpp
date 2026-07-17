@@ -11,10 +11,7 @@ namespace core {
 
 /**
  * The autonomy stack. 
- * Runs the driverless perception, mapping and planning stack on its own thread,
- * decoupled from the control loop. Wakes on a fixed clock and does work only
- * when a new LiDAR scan has arrived, then publishes the resulting path back into
- * the StateTracker. 
+ * Runs the driverless perception, mapping and planning stack on its own thread
  */
 class Autonomy {
 public:
@@ -39,10 +36,16 @@ public:
    */
   ControllerOutput command(const VehicleState& vehicle_state);
 
-private:
   /**
-   * filter -> classify -> SLAM -> plan
+   * Whether the stack is producing usable output. The control loop gates driverless
+   * commands on this the same way driver mode gates on the driver input timestamps.
+   *
+   * @return whether the car can be commanded from the autonomy stack
    */
+  bool is_valid();
+
+private:
+  // filter -> classify -> SLAM -> plan
   void _run();
 
   std::thread _thread;
