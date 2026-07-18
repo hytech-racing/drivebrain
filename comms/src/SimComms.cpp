@@ -1,6 +1,7 @@
 #include <SimComms.hpp>
 #include <foxglove/PointCloud.pb.h>
 #include <foxglove/FrameTransform.pb.h>
+#include <memory>
 #include "StateTracker.hpp"
 #include "dv_msgs.pb.h"
 
@@ -156,6 +157,8 @@ void SimComms::_veh_recv_loop() {
         auto desc = msg->GetDescriptor();
         if (desc == dv_msgs::Cones::descriptor()) {
             core::render_cones(std::static_pointer_cast<dv_msgs::Cones>(msg), "ground_truth_cones");
+            // Right now for testing purposes, we assume that all cones of the track are visible
+            core::StateTracker::instance().set_cone_observations(std::static_pointer_cast<dv_msgs::Cones>(msg));
         } else if (desc == hytech_msgs::pose::descriptor()) {
             core::render_pose(std::static_pointer_cast<hytech_msgs::pose>(msg), "ground_truth_pose");
         } else if (desc == foxglove::FrameTransform::descriptor()) {
