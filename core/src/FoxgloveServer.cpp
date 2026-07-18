@@ -130,7 +130,6 @@ core::FoxgloveServer::FoxgloveServer(std::string file_name) {
        equivalent, so over a websocket connection the client encodes it as JSON */
     _server_options.capabilities.push_back(foxglove::CAPABILITY_CLIENT_PUBLISH);
     _server_options.supportedEncodings.push_back("json");
-    /* An empty whitelist rejects every client advertisement, so allow any topic */
     _server_options.clientTopicWhitelistPatterns = {std::regex(".*")};
     _server = foxglove::ServerFactory::createServer<websocketpp::connection_hdl>("HTX_Foxglove", logHandler, _server_options);
 
@@ -161,7 +160,6 @@ core::FoxgloveServer::FoxgloveServer(std::string file_name) {
         }
 
         try {
-            /* msg.data is the raw frame, so skip the opcode and channel id header */
             auto twist = nlohmann::json::parse(msg.getData(), msg.getData() + msg.getLength());
             core::TeleopCommand command;
             command.linear_x = twist.value("linear", nlohmann::json::object()).value("x", 0.0f);
@@ -331,9 +329,6 @@ void core::FoxgloveServer::send_live_telem_msg(std::shared_ptr<const google::pro
         return;
     }
 
-    /* Serialize on the calling thread (CPU only, never blocks), then hand off to the
-       sender thread. The actual network send happens in _broadcast_loop so a slow
-       client can never apply backpressure to a producer (e.g. the control loop). */
     OutgoingMsg out;
     out.channel_id = it->second;
     out.timestamp = nanosecondsSinceEpoch();

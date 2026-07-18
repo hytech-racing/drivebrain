@@ -196,9 +196,7 @@ namespace core {
      */
     struct ControllerOutput {
         std::variant<SpeedControlOut, TorqueControlOut, std::monostate> out;
-
-        /* Only set by driverless controllers. A human turns the wheel themselves, so
-           controllers in driver mode leave this empty and no steering is commanded. */
+        // To only be set in a driverless context
         std::optional<float> desired_steering_deg;
     };
 

@@ -67,11 +67,7 @@ namespace core {
             }
 
             /**
-             * Queues a protobuf for broadcast to Foxglove. Non-blocking: the message
-             * is serialized and pushed onto a bounded ring buffer drained by a single
-             * dedicated sender thread. Under load the OLDEST queued message is dropped
-             * rather than blocking the caller — telemetry is lossy so the control loop
-             * and sim receiver threads never stall on a slow/congested client.
+             * Queues a protobuf for broadcast to Foxglove
              *
              * @param msg the message to be sent
              */
@@ -120,8 +116,7 @@ namespace core {
             /* Registers JSON params on init. Recursively called to support multi-level JSON */
             void _init_params(const nlohmann::json &json_obj, const std::string &prefix);
 
-            /* Drains the broadcast queue and sends to clients. Runs on _send_thread —
-               the only thread that touches _server->broadcastMessage(). */
+            /* Drains the broadcast queue and sends to clients. */
             void _broadcast_loop();
 
             /* Singleton move semantics */
