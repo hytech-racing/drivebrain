@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <exception>
 #include <foxglove/websocket/base64.hpp>
 #include <foxglove/websocket/parameter.hpp>
@@ -25,6 +26,12 @@
 #include "hytech_msgs.pb.h"
 
 namespace core {
+
+    struct OutgoingMsg {
+        uint32_t channel_id;
+        uint64_t timestamp;
+        std::string data;
+    };
 
     using DBParam = std::variant<bool, int, float, double, std::string, std::monostate>; 
 
@@ -146,13 +153,7 @@ namespace core {
 
             std::mutex _parameter_mutex;
 
-            /* Async broadcast pipeline — decouples producers from the network. */
-            struct OutgoingMsg {
-                uint32_t channel_id;
-                uint64_t timestamp;
-                std::string data;
-            };
-            static constexpr size_t MAX_SEND_QUEUE = 256; // drop-oldest beyond this
+            static constexpr uint32_t MAX_SEND_QUEUE = 256;
             std::deque<OutgoingMsg> _send_queue;
             std::mutex _send_mutex;
             std::condition_variable _send_cv;

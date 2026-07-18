@@ -1,3 +1,5 @@
+#pragma once
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,7 +22,7 @@
 #include <dbcppp/Network.h>
 
 #if HOOTL_ENABLED
-# include "SimComms.hpp"
+#include "SimComms.hpp"
 #endif
 
 #include <FoxgloveServer.hpp>

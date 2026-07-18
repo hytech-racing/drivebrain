@@ -336,7 +336,7 @@ void core::FoxgloveServer::send_live_telem_msg(std::shared_ptr<const google::pro
     {
         std::unique_lock lock(_send_mutex);
         if (_send_queue.size() >= MAX_SEND_QUEUE) {
-            _send_queue.pop_front(); // drop oldest — keep telemetry fresh under load
+            _send_queue.pop_front();
         }
         _send_queue.push_back(std::move(out));
     }
