@@ -43,9 +43,11 @@ endif()
 #################################
 # Upstreams (non-conan)
 #################################
+# 
 FetchContent_Declare(
-    HT_Proto
-    SOURCE_DIR /home/warren/cars/HT_proto
+    HT_Proto 
+    GIT_REPOSITORY https://github.com/hytech-racing/HT_proto.git
+    GIT_TAG 535746d
 )
 FetchContent_MakeAvailable(HT_Proto)
 
