@@ -17,7 +17,6 @@
 #include <filesystem>
 #include <stdexcept>
 
-#include <ouster/client.h>
 
 std::atomic<bool> running{true};
 

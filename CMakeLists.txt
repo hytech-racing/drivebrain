@@ -68,20 +68,20 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(drivebrain_simulink_models)
 
-
-
-set(BUILD_SENSOR OFF CACHE BOOL "" FORCE)
-set(BUILD_PCAP OFF CACHE BOOL "" FORCE)
-set(BUILD_OSF OFF CACHE BOOL "" FORCE)
-set(BUILD_VIZ OFF CACHE BOOL "" FORCE)
-set(BUILD_MAPPING OFF CACHE BOOL "" FORCE)
-set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(BUILD_PCAP        OFF CACHE BOOL "" FORCE)
+set(BUILD_OSF         OFF CACHE BOOL "" FORCE)
+set(BUILD_VIZ         OFF CACHE BOOL "" FORCE)
+set(BUILD_EXAMPLES    OFF CACHE BOOL "" FORCE)
+set(BUILD_TESTING     OFF CACHE BOOL "" FORCE)
+set(BUILD_SENSOR      ON CACHE BOOL "" FORCE)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "" FORCE)
 
 FetchContent_Declare(
     ouster_sdk
     GIT_REPOSITORY https://github.com/ouster-lidar/ouster-sdk.git
-    GIT_TAG v0.16.2
+    GIT_TAG        v0.16.2
+    GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(ouster_sdk)
 
@@ -117,6 +117,7 @@ target_link_libraries(drivebrain PUBLIC
     simulink_automation_msgs_proto_cpp
     -Wl,--no-whole-archive
     ouster_client
+    ouster_sensor
 )
 
 #################################
