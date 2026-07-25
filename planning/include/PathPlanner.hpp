@@ -5,6 +5,7 @@
 
 #include <StateTracker.hpp>
 #include "dv_msgs.pb.h"
+#include <delaunator.hpp>
 
 namespace planning {
 
@@ -21,6 +22,17 @@ namespace planning {
     */
     static thread_local std::mt19937 rng{std::random_device{}()};
     std::uniform_real_distribution<float> lateral(-3.0f, 3.0f);
+
+
+    /* 
+      1. locate cone coordinates - ideally this is given by the perception algorithm
+      2. form the delaunay triangulation 
+      3. remove exterior triangles 
+      4. find the midpoints of all internal edges (blue to yellow across a path)
+      5. fit a spline through the midpoints 
+      6. smooth the trajectory -  compute curvature, then target speed, 
+    */
+
 
     return {
       {0.0f, 0.0f, 0.0f},
