@@ -7,6 +7,7 @@
 #include <ReferencePath.hpp>
 #include <StateTracker.hpp>
 #include <Telemetry.hpp>
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <optional>
@@ -32,16 +33,29 @@ void Autonomy::start()
         "DriverlessSIL/reference_path_csv");
     auto lookahead_param = FoxgloveServer::instance().get_param<float>(
         "DriverlessSIL/lookahead_m");
+    auto target_speed_param = FoxgloveServer::instance().get_param<float>(
+        "DriverlessSIL/target_speed_mps");
 
     if (!lookahead_param)
     {
         spdlog::error("Missing DriverlessSIL/lookahead_m, defaulting to 3.0 m");
 
-        _lookahead_m = 3.0;
+        _lookahead_m = 3.0f;
     }
     else
     {
         _lookahead_m = *lookahead_param;
+    }
+
+    if (!target_speed_param)
+    {
+        spdlog::error(
+            "Missing DriverlessSIL/target_speed_mps, defaulting to 3.0 m/s");
+        _target_speed_mps = 3.0f;
+    }
+    else
+    {
+        _target_speed_mps = *target_speed_param;
     }
 
     if (!path_param)
@@ -141,7 +155,7 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state)
         return safe_output;
     }
 
-    const float vx_b_target = 5.0f;
+    const float vx_b_target = _target_speed_mps;
 
     const float cy = std::cos(truth.yaw_world_rad);
     const float sy = std::sin(truth.yaw_world_rad);

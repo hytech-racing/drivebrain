@@ -185,7 +185,7 @@
     "use_laptimer": false,
     "DriverlessSIL": {
         "reference_path_csv": "config/sil/fsg_track.csv",
-        "target_speed_mps": 2.0,
+        "target_speed_mps": 5.0,
         "lookahead_m": 4.0
     }
 

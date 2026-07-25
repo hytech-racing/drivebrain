@@ -62,6 +62,7 @@ class Autonomy
     std::chrono::steady_clock::time_point _last_sil_path_publish{};
     std::vector<xyz_vec<float>> _sil_reference_path_render_points;
     float _lookahead_m{};
+    float _target_speed_mps{};
 
     // Rate of OS1 LiDAR
     static constexpr std::chrono::milliseconds _period{100};
