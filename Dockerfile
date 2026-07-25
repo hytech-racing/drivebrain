@@ -27,16 +27,4 @@ RUN wget https://packages.osrfoundation.org/gazebo.gpg -O /usr/share/keyrings/pk
     && apt-get update && apt-get install -y \
     libgz-transport13-dev \
     libgz-msgs10-dev \
-    clangd \ 
     && apt-get clean
-
-# LLVM 22 / clangd 22
-RUN wget -qO /usr/share/keyrings/apt.llvm.org.asc \
-        https://apt.llvm.org/llvm-snapshot.gpg.key \
-    && echo "deb [signed-by=/usr/share/keyrings/apt.llvm.org.asc] http://apt.llvm.org/jammy/ llvm-toolchain-jammy-22 main" \
-        > /etc/apt/sources.list.d/llvm.list \
-    && apt-get update \
-    && apt-get install -y clangd-22 \
-    && update-alternatives \
-        --install /usr/bin/clangd clangd /usr/bin/clangd-22 220 \
-    && rm -rf /var/lib/apt/lists/*
