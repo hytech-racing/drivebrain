@@ -2,6 +2,7 @@
 #include <foxglove/PointCloud.pb.h>
 #include <foxglove/FrameTransform.pb.h>
 #include <memory>
+#include <utility>
 #include "StateTracker.hpp"
 #include "dv_msgs.pb.h"
 
@@ -32,9 +33,9 @@ static std::string endpoint(uint16_t port) {
 /****************************************************************
  * STATIC HELPER METHODS
  ****************************************************************/
-void SimComms::create() {
+void SimComms::create(ReceiveHandler receive_handler) {
     SimComms* expected = nullptr;
-    SimComms* local = new SimComms();
+    SimComms* local = new SimComms(receive_handler);
     if(!_s_instance.compare_exchange_strong(expected, local, std::memory_order_release, std::memory_order_relaxed)) {
         // Already initialized, delete local instance
         delete local;
@@ -62,10 +63,19 @@ bool SimComms::start() {
 
 bool SimComms::close() {
     if (!_running.exchange(false)) return false;
+
+    _ctx.shutdown();
+
+    spdlog::info("Joining SimComms vehicle recv thread");
     if (_veh_recv_thread.joinable()) _veh_recv_thread.join();
+
+    spdlog::info("Joining SimComms lidar recv thread");
     if (_lidar_recv_thread.joinable()) _lidar_recv_thread.join();
+
     _veh_data_recv_socket.close();
     _lidar_socket.close();
+    _veh_data_send_socket.close();
+    _ctx.close();
     return true;
 }
 
@@ -91,7 +101,8 @@ bool SimComms::send_message(std::shared_ptr<google::protobuf::Message> message) 
 /****************************************************************
  * PRIVATE CLASS METHOD IMPLEMENTATIONS
  ****************************************************************/
-SimComms::SimComms() {
+SimComms::SimComms(ReceiveHandler receive_handler)
+    : _on_message_received(std::move(receive_handler)){
     _running = true;
     if (!_setup_recv_socket(_veh_data_recv_socket, _recv_socket_port)) {
         _running = false;
@@ -162,10 +173,19 @@ void SimComms::_veh_recv_loop() {
         } else if (desc == hytech_msgs::pose::descriptor()) {
             core::render_pose(std::static_pointer_cast<hytech_msgs::pose>(msg), "ground_truth_pose");
         } else if (desc == foxglove::FrameTransform::descriptor()) {
-            core::log(msg);
+            // core::log(msg);
         } else {
             core::log(msg);
-            core::StateTracker::instance().handle_receive_protobuf_message(msg);
+            // core::StateTracker::instance().handle_receive_protobuf_message(msg);
+            if (_on_message_received) {
+                try {
+                    _on_message_received(msg);
+                } catch (const std::exception& e) {
+                    spdlog::error("SimComms receive handler threw: {}", e.what());
+                }
+            } else {
+                spdlog::error("SimComms: no receive handler registered");
+            }
         }
     }
 }
