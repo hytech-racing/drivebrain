@@ -10,6 +10,7 @@
 
 #include "app.hpp"
 #include "ETHRecvComms.hpp"
+#include "EstimatorMessageAdapters.hpp"
 #include "FoxgloveServer.hpp"
 #include "MCAPLogger.hpp"
 #include "MatlabModelAddHelper.hpp"
@@ -65,8 +66,37 @@ void DrivebrainApp::run() {
 
   spdlog::info("Initialized ethernet drivers");
 
+  _latest_estimate = std::make_shared<estimation::LatestEstimate>();
+
+  // TransformBuffer will be used as the source of truth for all transforms, so set the static transforms immediately
+  _transform_buffer = std::make_shared<transforms::TransformBuffer>(5'000'000'000ULL);
+  _transform_buffer->set_base_to_imu(transforms::RigidTransform2D{0.0, 0.0, 0.0});
+  _transform_buffer->set_base_to_gss(transforms::RigidTransform2D{1.0, 0.25, 0.0});
+  _transform_buffer->set_base_to_lidar(transforms::RigidTransform2D{0.75, 0.0, 0.0});
+
+  const estimation::EkfParams ekf_params{
+        0.1, 0.1, 0.5,
+        0.1, 0.1, 0.5
+    };
+  const estimation::GssSensorConfig gss_config{
+        0.1, 0.1
+    };
+  _driverless_estimator = std::make_unique<estimation::DriverlessEstimatorRunner>(_latest_estimate, _transform_buffer, ekf_params, gss_config);
+
+  _driverless_estimator->start();
+
+
+
+  spdlog::info("Started driverless estimator");
+
+
 #if HOOTL_ENABLED
-  comms::SimComms::create(); 
+  comms::SimComms::create(
+        [this](std::shared_ptr<google::protobuf::Message> msg)
+        {
+            _route_received_message(msg);
+        }
+    ); 
   comms::SimComms::instance().start();
 #endif
 
@@ -137,7 +167,22 @@ void DrivebrainApp::run() {
   
   // Join threads when loop thread finishes
   if(_loop_thread.joinable()) _loop_thread.join();
+
+  #if HOOTL_ENABLED
+    spdlog::info("Stopping SimComms");
+    comms::SimComms::instance().close();
+    comms::SimComms::destroy();
+  #endif
+
+  if (_driverless_estimator)
+  {
+      spdlog::info("Stopping driverless estimator");
+      _driverless_estimator->stop();
+  }
+
+  spdlog::info("Stopping autonomy stack");
   _autonomy.stop();
+
   _io_context.stop();
   if(_io_context_thread.joinable()) _io_context_thread.join();
   spdlog::info("Joined all threads");
@@ -209,11 +254,41 @@ void DrivebrainApp::_loop() {
   std::chrono::microseconds loop_time_ms((int) (loop_time * 1000000.0f));
   auto next_tick = std::chrono::steady_clock::now();
 
+  auto previous_print_time = next_tick;
+
+  using namespace std::chrono_literals;
+
   while(running) {
+
 
     // spdlog::info("tick: start");
     
     next_tick += loop_time_ms;
+
+    // {
+    //     auto now_time = std::chrono::steady_clock::now();
+    //     auto elapsed = now_time - previous_print_time;
+    //
+    //     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed);
+    //
+    //     if (ms > 1000ms) {
+    //         const auto stats = _driverless_estimator->stats();
+    //
+    //         spdlog::info(
+    //         "estimator ingress: imu={}/{}, gss={}/{}, "
+    //         "depth={}, max_depth={}, drops={}, out_of_order={}",
+    //         stats.imu_processed,
+    //         stats.imu_enqueued,
+    //         stats.gss_processed,
+    //         stats.gss_enqueued,
+    //         stats.current_queue_depth,
+    //         stats.maximum_queue_depth,
+    //         stats.queue_drops,
+    //         stats.out_of_order_measurements);
+    //
+    //         previous_print_time = now_time;
+    //     }
+    // }
 
     // spdlog::info("tick: get_state");
 
@@ -262,5 +337,52 @@ void DrivebrainApp::_loop() {
 
     // spdlog::info("tick: stop");
   }
+}
+
+void DrivebrainApp::_route_received_message(std::shared_ptr<google::protobuf::Message> message)
+{
+
+    const auto* descriptor = message->GetDescriptor();
+
+    if (descriptor == hytech_msgs::VnImuData::descriptor()) {
+        const auto typed = std::static_pointer_cast<hytech_msgs::VnImuData>(message);
+
+        const auto measurement = adapters::to_imu_measurement(*typed);
+
+        if (!measurement) {
+            spdlog::warn("Rejected invalid VnImuData");
+        }
+
+        if (measurement) {
+            if(!_driverless_estimator->enqueue(*measurement))
+            {
+                spdlog::warn("Failed to enqueue IMU measurement at {} ns", measurement->timestamp_ns);
+            }
+        }
+
+        return;
+    }
+
+    if (descriptor == hytech_msgs::GssData::descriptor()) {
+
+        const auto typed = std::static_pointer_cast<hytech_msgs::GssData>(message);
+
+        const auto measurement = adapters::to_gss_measurement(*typed);
+
+        if (!measurement) {
+            spdlog::warn("Rejected invalid GssData");
+        }
+
+        if (measurement) {
+            if(!_driverless_estimator->enqueue(*measurement))
+            {
+                spdlog::warn("Failed to enqueue GSS measurement at {} ns", measurement->timestamp_ns);
+            }
+        }
+
+        return;
+    }
+
+    core::StateTracker::instance().handle_receive_protobuf_message(std::move(message));
 
 }

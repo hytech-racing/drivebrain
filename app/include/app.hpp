@@ -1,5 +1,7 @@
 #include "CANComms.hpp"
+#include "DriverlessEstimatorRunner.hpp"
 #include "ETHRecvComms.hpp"
+#include "LatestEstimate.hpp"
 #if HOOTL_ENABLED
 #include "SimComms.hpp"
 #endif
@@ -68,6 +70,11 @@ class DrivebrainApp
     core::ControllerOutput _teleop_command(const core::TeleopCommand &command);
 
   private:
+    void _route_received_message(
+        std::shared_ptr<google::protobuf::Message> message
+    );
+
+  private:
     boost::asio::io_context _io_context;
 
     /* Threads */
@@ -105,4 +112,15 @@ class DrivebrainApp
     /* Driverless autonomy stack */
     core::Autonomy _autonomy;
     DrivingMode _driving_mode = DrivingMode::DRIVERLESS;
+
+  private: 
+    // driverless estimator
+    std::shared_ptr<estimation::LatestEstimate> _latest_estimate;
+    std::unique_ptr<estimation::DriverlessEstimatorRunner> _driverless_estimator;
+
+  private:
+    // transform buffer
+    std::shared_ptr<transforms::TransformBuffer> _transform_buffer;
+
+
 };
