@@ -157,9 +157,8 @@ int core::MCAPLogger::open_new_mcap() {
             const google::protobuf::Descriptor *message_descriptor = file_descriptor->message_type(i);
             mcap::Schema schema(message_descriptor->full_name(), "protobuf", serialize_fd_set(message_descriptor));
             _writer.addSchema(schema);
-            mcap::Channel channel(message_descriptor->name(), "protobuf", schema.id);
-            _writer.addChannel(channel);
-            _name_to_id_map[message_descriptor->name()] = channel.id;
+            _schema_name_to_id_map[message_descriptor->full_name()] = schema.id;
+            _get_or_add_channel(message_descriptor->name(), message_descriptor);
         }
     }
 
@@ -169,7 +168,7 @@ int core::MCAPLogger::open_new_mcap() {
     _writer.addSchema(config_schema);
     mcap::Channel config_channel("drivebrain_configuration", "json", config_schema.id);
     _writer.addChannel(config_channel);
-    _name_to_id_map["drivebrain_configuration"] = config_channel.id;
+    _topic_to_id_map["drivebrain_configuration"] = config_channel.id;
 
     log_params(_initial_params);
 
@@ -206,16 +205,20 @@ void core::MCAPLogger::stop_logging() {
 }
 
 int core::MCAPLogger::log_msg(core::MsgType message) {
+    return log_msg(message->GetDescriptor()->name(), message);
+}
+
+int core::MCAPLogger::log_msg(const std::string& topic, core::MsgType message) {
     mcap::Timestamp log_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     RawMessage_s new_message; 
     new_message.log_time = log_time;
     new_message.serialized_data = message->SerializeAsString(); 
-    new_message.message_name = message->GetDescriptor()->name();
     {
         std::unique_lock lock(_input_buffer_mutex);
+        new_message.channel_id = _get_or_add_channel(topic, message->GetDescriptor());
         _input_buffer.push_back(new_message); 
         _input_buffer_cv.notify_one(); 
-   }
+    }
 
     return 0;
 }
@@ -228,6 +231,27 @@ core::MCAPLogger::MCAPLogger(const std::string &base_dir, const mcap::McapWriter
     nlohmann::json params_config = nlohmann::json::parse(raw_param_file);
     _initial_params = params_config; // Used in open_new_mcap to log initial params
     _params_schema_json = generate_json_schema(params_config);
+}
+
+uint32_t core::MCAPLogger::_get_or_add_channel(
+    const std::string& topic,
+    const google::protobuf::Descriptor* descriptor)
+{
+    if (auto it = _topic_to_id_map.find(topic); it != _topic_to_id_map.end()) {
+        return it->second;
+    }
+
+    auto schema_it = _schema_name_to_id_map.find(descriptor->full_name());
+    if (schema_it == _schema_name_to_id_map.end()) {
+        mcap::Schema schema(descriptor->full_name(), "protobuf", serialize_fd_set(descriptor));
+        _writer.addSchema(schema);
+        schema_it = _schema_name_to_id_map.emplace(descriptor->full_name(), schema.id).first;
+    }
+
+    mcap::Channel channel(topic, "protobuf", schema_it->second);
+    _writer.addChannel(channel);
+    _topic_to_id_map[topic] = channel.id;
+    return channel.id;
 }
 
 void core::MCAPLogger::_handle_log_to_file() {
@@ -252,11 +276,7 @@ void core::MCAPLogger::_handle_log_to_file() {
             msg_to_log.logTime = msg.log_time;
             msg_to_log.publishTime = msg.log_time;
 
-            auto id_it = _name_to_id_map.find(msg.message_name);
-            if (id_it == _name_to_id_map.end()) {
-                continue; // no channel registered for this message type, skip
-            }
-            msg_to_log.channelId = id_it->second;
+            msg_to_log.channelId = msg.channel_id;
             auto write_res = _writer.write(msg_to_log);
         }
         write_buffer.clear();
@@ -269,7 +289,7 @@ int core::MCAPLogger::log_params(nlohmann::json params) {
     RawMessage_s msg;
     msg.log_time = log_time;
     msg.serialized_data = params.dump();
-    msg.message_name = "drivebrain_configuration";
+    msg.channel_id = _topic_to_id_map["drivebrain_configuration"];
     {
         std::unique_lock lock(_input_buffer_mutex);
         _input_buffer.push_back(std::move(msg));
@@ -278,4 +298,3 @@ int core::MCAPLogger::log_params(nlohmann::json params) {
 
     return 0;
 }
-

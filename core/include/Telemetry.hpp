@@ -1,10 +1,15 @@
 #pragma once
 
 #include "StateTracker.hpp"
+#include <chrono>
 #include <MCAPLogger.hpp>
 #include <FoxgloveServer.hpp>
 #include <foxglove/SceneUpdate.pb.h>
 #include "dv_msgs.pb.h"
+#include <cmath>
+#include <cstdint>
+#include <foxglove/FrameTransform.pb.h>
+#include "RigidTransform2D.hpp"
 
 namespace core {
 
@@ -13,12 +18,29 @@ namespace core {
  *
  * @msg The protobuf message to log and stream.
 */
+inline void log(const std::string& topic,
+                std::shared_ptr<const google::protobuf::Message> msg) {
+    if (!msg) {
+        return;
+    }
+    MCAPLogger::instance().log_msg(topic, msg);
+    FoxgloveServer::instance().send_live_telem_msg(topic, msg);
+}
+
 inline void log(std::shared_ptr<const google::protobuf::Message> msg) {
     if (!msg) {
         return;
     }
-    MCAPLogger::instance().log_msg(msg);
-    FoxgloveServer::instance().send_live_telem_msg(msg);
+    log(msg->GetDescriptor()->name(), msg);
+}
+
+inline void set_timestamp(google::protobuf::Timestamp* timestamp,
+                          std::uint64_t timestamp_ns)
+{
+    timestamp->set_seconds(
+        static_cast<int64_t>(timestamp_ns / 1'000'000'000ULL));
+    timestamp->set_nanos(
+        static_cast<int32_t>(timestamp_ns % 1'000'000'000ULL));
 }
 
 /**
@@ -138,4 +160,76 @@ inline void render_path(const std::vector<xyz_vec<float>>& path, std::string id,
 
     log(scene);
 }
+
+inline void render_path_at(
+    const std::string& topic,
+    const std::vector<xyz_vec<float>>& path,
+    const std::string& id,
+    const std::string& frame_id,
+    std::uint64_t timestamp_ns,
+    float thickness = 0.1F)
+{
+    auto scene = std::make_shared<foxglove::SceneUpdate>();
+    auto* entity = scene->add_entities();
+    entity->set_frame_id(frame_id);
+    entity->set_id(id);
+    set_timestamp(entity->mutable_timestamp(), timestamp_ns);
+    entity->set_frame_locked(true);
+
+    auto* line = entity->add_lines();
+    line->set_type(foxglove::LinePrimitive::LINE_STRIP);
+    line->mutable_pose()->mutable_orientation()->set_w(1.0);
+    line->set_thickness(thickness);
+    for (const auto& point : path) {
+        auto* p = line->add_points();
+        p->set_x(point.x);
+        p->set_y(point.y);
+        p->set_z(point.z);
+    }
+    auto* color = line->mutable_color();
+    color->set_r(0.0);
+    color->set_g(0.9);
+    color->set_b(0.5);
+    color->set_a(1.0);
+
+    log(topic, scene);
+}
+
+inline void publish_transform(
+    const std::string& parent_frame_id,
+    const std::string& child_frame_id,
+    std::uint64_t timestamp_ns,
+    const transforms::RigidTransform2D& transform,
+    double z_m = 0.0
+)
+{
+    auto tf = std::make_shared<foxglove::FrameTransform>();
+
+    tf->set_parent_frame_id(parent_frame_id);
+    tf->set_child_frame_id(child_frame_id);
+
+    set_timestamp(tf->mutable_timestamp(), timestamp_ns);
+
+    tf->mutable_translation()->set_x(transform.x_m);
+    tf->mutable_translation()->set_y(transform.y_m);
+    tf->mutable_translation()->set_z(z_m);
+
+    const double half_yaw = 0.5 * transform.yaw_rad;
+
+    tf->mutable_rotation()->set_x(0.0);
+    tf->mutable_rotation()->set_y(0.0);
+    tf->mutable_rotation()->set_z(std::sin(half_yaw));
+    tf->mutable_rotation()->set_w(std::cos(half_yaw));
+
+    log(tf);
+}
+
+inline std::uint64_t system_time_ns()
+{
+    return static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::system_clock::now().time_since_epoch())
+            .count());
+}
+
 }

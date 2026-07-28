@@ -1,5 +1,6 @@
-#include <StateTracker.hpp>
 #include <foxglove/PointCloud.pb.h>
+
+#include <StateTracker.hpp>
 #include <foxglove/websocket/parameter.hpp>
 
 using namespace core;
@@ -9,8 +10,8 @@ using namespace core;
  ****************************************************************/
 void core::StateTracker::create()
 {
-    StateTracker *expected = nullptr;
-    StateTracker *local = new StateTracker();
+    StateTracker* expected = nullptr;
+    StateTracker* local = new StateTracker();
     if (!_s_instance.compare_exchange_strong(expected, local,
                                              std::memory_order_release,
                                              std::memory_order_relaxed))
@@ -20,16 +21,16 @@ void core::StateTracker::create()
     }
 }
 
-core::StateTracker &core::StateTracker::instance()
+core::StateTracker& core::StateTracker::instance()
 {
-    StateTracker *instance = _s_instance.load(std::memory_order_acquire);
+    StateTracker* instance = _s_instance.load(std::memory_order_acquire);
     assert(instance != nullptr && "StateTracker has not been initialized");
     return *instance;
 }
 
 void core::StateTracker::destroy()
 {
-    StateTracker *instance =
+    StateTracker* instance =
         _s_instance.exchange(nullptr, std::memory_order_acq_rel);
     if (instance)
     {
@@ -38,7 +39,7 @@ void core::StateTracker::destroy()
 }
 
 void StateTracker::set_previous_control_output(
-    core::ControllerOutput &prev_controller_output)
+    core::ControllerOutput& prev_controller_output)
 {
     std::unique_lock lk(_state_mutex);
     _vehicle_state.prev_controller_output = prev_controller_output;
@@ -141,6 +142,33 @@ void StateTracker::handle_receive_protobuf_message(
                 std::chrono::steady_clock::now();
         }
     }
+    else if (msg->GetDescriptor() == hytech_msgs::VnImuData::descriptor())
+    {
+        auto imu = std::static_pointer_cast<hytech_msgs::VnImuData>(msg);
+
+        std::unique_lock lk(_state_mutex);
+        _vehicle_state.current_body_accel_mss = {
+            imu->comp_no_gravity_accel_vehicle_flu_m_ss().x(),
+            imu->comp_no_gravity_accel_vehicle_flu_m_ss().y(),
+            imu->comp_no_gravity_accel_vehicle_flu_m_ss().z(),
+        };
+        _vehicle_state.current_angular_rate_rads = {
+            imu->comp_gyro_vehicle_flu_rad_s().x(),
+            imu->comp_gyro_vehicle_flu_rad_s().y(),
+            imu->comp_gyro_vehicle_flu_rad_s().z(),
+        };
+    }
+    else if (msg->GetDescriptor() == hytech_msgs::GssData::descriptor())
+    {
+        auto gss = std::static_pointer_cast<hytech_msgs::GssData>(msg);
+
+        std::unique_lock lk(_state_mutex);
+        _vehicle_state.current_body_vel_ms = {
+            gss->vel_sensor_flu_mps().x(),
+            gss->vel_sensor_flu_mps().y(),
+            gss->vel_sensor_flu_mps().z(),
+        };
+    }
     else
     {
         _receive_low_level_state(msg);
@@ -212,7 +240,7 @@ void StateTracker::set_cone_observations(
 
 static constexpr std::chrono::milliseconds TELEOP_TIMEOUT(500);
 
-void StateTracker::set_teleop_command(const TeleopCommand &command)
+void StateTracker::set_teleop_command(const TeleopCommand& command)
 {
     std::unique_lock lk(_teleop_mutex);
     _teleop_command = command;
@@ -281,7 +309,6 @@ template <size_t ind, typename inverter_temps_message>
 void StateTracker::_handle_set_inverter_temps(
     std::shared_ptr<google::protobuf::Message> msg)
 {
-
     auto in_msg = std::static_pointer_cast<inverter_temps_message>(msg);
     {
         std::unique_lock lk(_state_mutex);
@@ -490,7 +517,6 @@ void StateTracker::_receive_inverter_states(
     }
     else if (descriptor == hytech::inv1_status::descriptor())
     {
-
         auto in_msg = std::static_pointer_cast<hytech::inv1_status>(msg);
         auto voltage = in_msg->dc_bus_voltage();
         {
@@ -502,7 +528,7 @@ void StateTracker::_receive_inverter_states(
 
 template <size_t arr_len>
 bool StateTracker::_validate_timestamps(
-    const std::array<std::chrono::microseconds, arr_len> &timestamp_arr)
+    const std::array<std::chrono::microseconds, arr_len>& timestamp_arr)
 {
     std::array<std::chrono::microseconds, arr_len> timestamp_array_to_sort;
 
@@ -513,7 +539,7 @@ bool StateTracker::_validate_timestamps(
 
     auto debug_copy = timestamp_array_to_sort;
     const std::chrono::microseconds threshold(
-        500000); // 500 milliseconds in microseconds
+        500000);  // 500 milliseconds in microseconds
 
     // Sort the array
     std::sort(timestamp_array_to_sort.begin(), timestamp_array_to_sort.end());
@@ -531,7 +557,7 @@ bool StateTracker::_validate_timestamps(
     constexpr std::chrono::seconds debug_print_period(1);
 
     bool all_members_received =
-        min_stamp.count() > 0; // count here is the count in microseconds
+        min_stamp.count() > 0;  // count here is the count in microseconds
     bool last_update_recent_enough =
         (std::chrono::duration_cast<std::chrono::microseconds>(
             curr_time - max_stamp)) < threshold;
