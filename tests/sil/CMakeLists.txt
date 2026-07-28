@@ -4,12 +4,24 @@
 
 find_package(GTest REQUIRED)
 
-add_executable(drivebrain_test main.cpp MCAPLoggerTest.cpp
-                               ReferencePathTest.cpp)
+add_executable(
+  drivebrain_test
+  main.cpp MCAPLoggerTest.cpp ReferencePathTest.cpp
+  adapters/EstimatorMessageAdaptersTest.cpp
+  estimation/DriverlessEstimatorRunnerTest.cpp
+  estimation/GssModelTest.cpp estimation/LatestEstimateTest.cpp
+  transforms/TransformBufferTest.cpp)
 
 target_link_libraries(
-  drivebrain_test PUBLIC foxglove-websocket::foxglove-websocket mcap::mcap core
-                         planning GTest::gtest)
+  drivebrain_test
+  PUBLIC foxglove-websocket::foxglove-websocket
+         mcap::mcap
+         adapters
+         core
+         planning
+         estimation
+         transforms
+         GTest::gtest)
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/test_configs
      DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
