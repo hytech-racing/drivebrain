@@ -136,6 +136,24 @@ bool TransformBuffer::set_base_to_lidar(const RigidTransform2D& transform)
     return true;
 }
 
+RigidTransform2D TransformBuffer::base_to_imu() const
+{
+    std::scoped_lock lock(_mutex);
+    return _T_base_imu;
+}
+
+RigidTransform2D TransformBuffer::base_to_gss() const
+{
+    std::scoped_lock lock(_mutex);
+    return _T_base_gss;
+}
+
+RigidTransform2D TransformBuffer::base_to_lidar() const
+{
+    std::scoped_lock lock(_mutex);
+    return _T_base_lidar;
+}
+
 void TransformBuffer::_remove_stale_transforms(
     std::deque<std::pair<RigidTransform2D, std::uint64_t>>& buffer)
 {

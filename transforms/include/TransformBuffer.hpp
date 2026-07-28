@@ -72,6 +72,12 @@ class TransformBuffer
      */
     bool set_base_to_lidar(const RigidTransform2D& transform);
 
+    [[nodiscard]] RigidTransform2D base_to_imu() const;
+
+    [[nodiscard]] RigidTransform2D base_to_gss() const;
+
+    [[nodiscard]] RigidTransform2D base_to_lidar() const;
+
     /**
      * Looks up the transform T_target_source at query_timestamp_ns
      *
