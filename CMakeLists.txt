@@ -17,9 +17,12 @@ option(HOOTL "Build with HOOTL sim interface" OFF)
 add_subdirectory(core)
 add_subdirectory(comms)
 add_subdirectory(control)
+add_subdirectory(estimation)
 add_subdirectory(planning)
 add_subdirectory(perception)
 add_subdirectory(slam)
+add_subdirectory(transforms)
+add_subdirectory(adapters)
 
 # Aliases so external FetchContent deps (mostly db simulink models) that link
 # against the old target names still resolve TODO fix matlab simulink models to
@@ -105,6 +108,8 @@ target_link_libraries(
          planning
          perception
          slam
+         adapters
+         transforms
          matlab_model
          simulink_automation_msgs_proto_cpp)
 
