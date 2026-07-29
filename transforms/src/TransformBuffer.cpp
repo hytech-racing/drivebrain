@@ -26,6 +26,14 @@ double wrap_to_pi(double theta)
     return theta - pi;
 }
 
+Pose3D to_pose3d(const Pose2D& pose)
+{
+    const double half_yaw_rad = 0.5 * pose.yaw_rad;
+    return Pose3D{
+        pose.x_m, pose.y_m, 0.0,
+        Quaternion{std::cos(half_yaw_rad), 0.0, 0.0, std::sin(half_yaw_rad)}};
+}
+
 }  // namespace
 
 TransformBuffer::TransformBuffer(const std::uint64_t history_duration_ns)
@@ -34,70 +42,82 @@ TransformBuffer::TransformBuffer(const std::uint64_t history_duration_ns)
 }
 
 bool TransformBuffer::insert_T_odom_base(const std::uint64_t timestamp_ns,
-                                         const RigidTransform2D& transform)
+                                         const Pose2D& transform)
 {
-    std::scoped_lock lock(_mutex);
-
-    if (timestamp_ns == 0 || !_transform_is_finite(transform))
     {
-        return false;
+        std::scoped_lock lock(_mutex);
+
+        if (timestamp_ns == 0 || !_transform_is_finite(transform))
+        {
+            return false;
+        }
+
+        if (_T_odom_base_buffer.empty())
+        {
+            _T_odom_base_buffer.emplace_back(transform, timestamp_ns);
+        }
+        else
+        {
+            const std::uint64_t latest_stamp_ns =
+                _T_odom_base_buffer.back().second;
+            if (timestamp_ns < latest_stamp_ns)
+            {
+                return false;
+            }
+
+            if (timestamp_ns == latest_stamp_ns)
+            {
+                _T_odom_base_buffer.pop_back();
+            }
+
+            _T_odom_base_buffer.emplace_back(transform, timestamp_ns);
+            _remove_stale_transforms(_T_odom_base_buffer);
+        }
     }
 
-    if (_T_odom_base_buffer.empty())
-    {
-        _T_odom_base_buffer.emplace_back(transform, timestamp_ns);
-        return true;
-    }
-
-    const std::uint64_t latest_stamp_ns = _T_odom_base_buffer.back().second;
-    if (timestamp_ns < latest_stamp_ns)
-    {
-        return false;
-    }
-
-    if (timestamp_ns == latest_stamp_ns)
-    {
-        _T_odom_base_buffer.pop_back();
-    }
-
-    _T_odom_base_buffer.emplace_back(transform, timestamp_ns);
-    _remove_stale_transforms(_T_odom_base_buffer);
+    _cv.notify_all();
     return true;
 }
 
 bool TransformBuffer::insert_T_map_odom(const std::uint64_t timestamp_ns,
-                                        const RigidTransform2D& transform)
+                                        const Pose2D& transform)
 {
-    std::scoped_lock lock(_mutex);
-
-    if (timestamp_ns == 0 || !_transform_is_finite(transform))
     {
-        return false;
+        std::scoped_lock lock(_mutex);
+
+        if (timestamp_ns == 0 || !_transform_is_finite(transform))
+        {
+            return false;
+        }
+
+        if (_T_map_odom_buffer.empty())
+        {
+            _T_map_odom_buffer.emplace_back(transform, timestamp_ns);
+        }
+        else
+        {
+            const std::uint64_t latest_stamp_ns =
+                _T_map_odom_buffer.back().second;
+            if (timestamp_ns < latest_stamp_ns)
+            {
+                return false;
+            }
+
+            if (timestamp_ns == latest_stamp_ns)
+            {
+                _T_map_odom_buffer.pop_back();
+            }
+
+            _T_map_odom_buffer.emplace_back(transform, timestamp_ns);
+            _remove_stale_transforms(_T_map_odom_buffer);
+        }
     }
 
-    if (_T_map_odom_buffer.empty())
-    {
-        _T_map_odom_buffer.emplace_back(transform, timestamp_ns);
-        return true;
-    }
-
-    const std::uint64_t latest_stamp_ns = _T_map_odom_buffer.back().second;
-    if (timestamp_ns < latest_stamp_ns)
-    {
-        return false;
-    }
-
-    if (timestamp_ns == latest_stamp_ns)
-    {
-        _T_map_odom_buffer.pop_back();
-    }
-
-    _T_map_odom_buffer.emplace_back(transform, timestamp_ns);
-    _remove_stale_transforms(_T_map_odom_buffer);
+    _cv.notify_all();
     return true;
 }
 
-bool TransformBuffer::set_base_to_imu(const RigidTransform2D& transform)
+bool TransformBuffer::set_base_to_imu(const Pose2D& transform)
 {
     std::scoped_lock lock(_mutex);
 
@@ -110,7 +130,7 @@ bool TransformBuffer::set_base_to_imu(const RigidTransform2D& transform)
     return true;
 }
 
-bool TransformBuffer::set_base_to_gss(const RigidTransform2D& transform)
+bool TransformBuffer::set_base_to_gss(const Pose2D& transform)
 {
     std::scoped_lock lock(_mutex);
 
@@ -123,7 +143,7 @@ bool TransformBuffer::set_base_to_gss(const RigidTransform2D& transform)
     return true;
 }
 
-bool TransformBuffer::set_base_to_lidar(const RigidTransform2D& transform)
+bool TransformBuffer::set_base_to_lidar(const Pose2D& transform)
 {
     std::scoped_lock lock(_mutex);
 
@@ -136,26 +156,26 @@ bool TransformBuffer::set_base_to_lidar(const RigidTransform2D& transform)
     return true;
 }
 
-RigidTransform2D TransformBuffer::base_to_imu() const
+Pose2D TransformBuffer::base_to_imu() const
 {
     std::scoped_lock lock(_mutex);
     return _T_base_imu;
 }
 
-RigidTransform2D TransformBuffer::base_to_gss() const
+Pose2D TransformBuffer::base_to_gss() const
 {
     std::scoped_lock lock(_mutex);
     return _T_base_gss;
 }
 
-RigidTransform2D TransformBuffer::base_to_lidar() const
+Pose2D TransformBuffer::base_to_lidar() const
 {
     std::scoped_lock lock(_mutex);
     return _T_base_lidar;
 }
 
 void TransformBuffer::_remove_stale_transforms(
-    std::deque<std::pair<RigidTransform2D, std::uint64_t>>& buffer)
+    std::deque<std::pair<Pose2D, std::uint64_t>>& buffer)
 {
     if (buffer.empty())
     {
@@ -171,7 +191,7 @@ void TransformBuffer::_remove_stale_transforms(
     }
 }
 
-std::optional<RigidTransform2D> TransformBuffer::_lookup_T_odom_base_unlocked(
+std::optional<Pose2D> TransformBuffer::_lookup_T_odom_base_unlocked(
     std::uint64_t query_timestamp_ns) const
 {
     if (_timestamp_out_of_buffer_bound(_T_odom_base_buffer, query_timestamp_ns))
@@ -179,12 +199,12 @@ std::optional<RigidTransform2D> TransformBuffer::_lookup_T_odom_base_unlocked(
         return std::nullopt;
     }
 
-    auto it = std::lower_bound(
-        _T_odom_base_buffer.begin(), _T_odom_base_buffer.end(),
-        query_timestamp_ns,
-        [](const std::pair<RigidTransform2D, std::uint64_t>& element,
-           std::uint64_t query_stamp_ns)
-        { return element.second < query_stamp_ns; });
+    auto it =
+        std::lower_bound(_T_odom_base_buffer.begin(), _T_odom_base_buffer.end(),
+                         query_timestamp_ns,
+                         [](const std::pair<Pose2D, std::uint64_t>& element,
+                            std::uint64_t query_stamp_ns)
+                         { return element.second < query_stamp_ns; });
 
     if (it->second == query_timestamp_ns)
     {
@@ -205,15 +225,14 @@ std::optional<RigidTransform2D> TransformBuffer::_lookup_T_odom_base_unlocked(
     const double interpolated_yaw =
         wrap_to_pi(it_before->first.yaw_rad + alpha * delta_yaw);
 
-    return RigidTransform2D{
-        lerp(it_before->first.x_m, it_after->first.x_m, alpha),
-        lerp(it_before->first.y_m, it_after->first.y_m, alpha),
-        interpolated_yaw};
+    return Pose2D{lerp(it_before->first.x_m, it_after->first.x_m, alpha),
+                  lerp(it_before->first.y_m, it_after->first.y_m, alpha),
+                  interpolated_yaw};
 }
 
 // Does not interpolate T_map_odom, instead, returns latest T_map_odom within
 // bound
-std::optional<RigidTransform2D> TransformBuffer::_lookup_T_map_odom_unlocked(
+std::optional<Pose2D> TransformBuffer::_lookup_T_map_odom_unlocked(
     std::uint64_t query_timestamp_ns) const
 {
     if (_timestamp_out_of_buffer_bound(_T_map_odom_buffer, query_timestamp_ns))
@@ -221,26 +240,26 @@ std::optional<RigidTransform2D> TransformBuffer::_lookup_T_map_odom_unlocked(
         return std::nullopt;
     }
 
-    const auto it_after = std::upper_bound(
-        _T_map_odom_buffer.begin(), _T_map_odom_buffer.end(),
-        query_timestamp_ns,
-        [](std::uint64_t query_stamp_ns,
-           const std::pair<RigidTransform2D, std::uint64_t>& element)
-        { return query_stamp_ns < element.second; });
+    const auto it_after =
+        std::upper_bound(_T_map_odom_buffer.begin(), _T_map_odom_buffer.end(),
+                         query_timestamp_ns,
+                         [](std::uint64_t query_stamp_ns,
+                            const std::pair<Pose2D, std::uint64_t>& element)
+                         { return query_stamp_ns < element.second; });
 
     return std::prev(it_after)->first;
 }
 
-std::optional<RigidTransform2D> TransformBuffer::_get_T_odom_frame_unlocked(
+std::optional<Pose2D> TransformBuffer::_get_T_odom_frame_unlocked(
     const FrameId frame, const std::uint64_t timestamp_ns) const
 {
-    RigidTransform2D T_base_sensor;
+    Pose2D T_base_sensor;
     bool is_static_sensor = true;
 
     switch (frame)
     {
         case FrameId::Baselink:
-            T_base_sensor = RigidTransform2D{0.0, 0.0, 0.0};
+            T_base_sensor = Pose2D{0.0, 0.0, 0.0};
             break;
         case FrameId::Imu:
             T_base_sensor = _T_base_imu;
@@ -259,7 +278,7 @@ std::optional<RigidTransform2D> TransformBuffer::_get_T_odom_frame_unlocked(
     if (is_static_sensor)
     {
         // T_odom_sensor = T_odom_base * T_base_sensor
-        std::optional<RigidTransform2D> T_odom_base =
+        std::optional<Pose2D> T_odom_base =
             _lookup_T_odom_base_unlocked(timestamp_ns);
         if (!T_odom_base) return std::nullopt;
 
@@ -268,21 +287,38 @@ std::optional<RigidTransform2D> TransformBuffer::_get_T_odom_frame_unlocked(
 
     if (frame == FrameId::Odom)
     {
-        return RigidTransform2D{0.0, 0.0, 0.0};  // Identity
+        return Pose2D{0.0, 0.0, 0.0};  // Identity
     }
 
     return std::nullopt;
 }
 
-std::optional<RigidTransform2D> TransformBuffer::lookup(
+std::optional<Pose2D> TransformBuffer::lookup(
+    const FrameId target, const FrameId source,
+    const std::uint64_t timestamp_ns, std::chrono::nanoseconds timeout) const
+{
+    std::unique_lock lock(_mutex);
+
+    if (timeout > std::chrono::nanoseconds{0})
+    {
+        _cv.wait_for(lock, timeout,
+                     [this, target, source, timestamp_ns]()
+                     {
+                         return _lookup_ready_unlocked(target, source,
+                                                       timestamp_ns);
+                     });
+    }
+
+    return _lookup_unlocked(target, source, timestamp_ns);
+}
+
+std::optional<Pose2D> TransformBuffer::_lookup_unlocked(
     const FrameId target, const FrameId source,
     const std::uint64_t timestamp_ns) const
 {
-    std::scoped_lock lock(_mutex);
-
     if (target == source)
     {
-        return RigidTransform2D{0.0, 0.0, 0.0};
+        return Pose2D{0.0, 0.0, 0.0};
     }
 
     // If neither frame is map, then we can use the higher-frequency T_odom_base
@@ -333,15 +369,80 @@ std::optional<RigidTransform2D> TransformBuffer::lookup(
     }
 }
 
-bool TransformBuffer::_transform_is_finite(
-    const RigidTransform2D& transform) const
+std::optional<Pose3D> TransformBuffer::lookup3d(
+    const FrameId target, const FrameId source,
+    const std::uint64_t timestamp_ns, std::chrono::nanoseconds timeout) const
+{
+    const std::optional<Pose2D> pose2d =
+        lookup(target, source, timestamp_ns, timeout);
+    if (!pose2d)
+    {
+        return std::nullopt;
+    }
+
+    return to_pose3d(*pose2d);
+}
+
+bool TransformBuffer::_lookup_ready_unlocked(
+    const FrameId target, const FrameId source,
+    const std::uint64_t timestamp_ns) const
+{
+    if (target == source)
+    {
+        return true;
+    }
+
+    const bool needs_odom_buffer =
+        _frame_requires_odom_buffer(target) ||
+        _frame_requires_odom_buffer(source);
+    const bool needs_map_odom_buffer =
+        target == FrameId::Map || source == FrameId::Map;
+
+    if (needs_odom_buffer)
+    {
+        if (_T_odom_base_buffer.empty())
+        {
+            return false;
+        }
+
+        if (timestamp_ns < _T_odom_base_buffer.front().second ||
+            timestamp_ns > _T_odom_base_buffer.back().second)
+        {
+            return timestamp_ns < _T_odom_base_buffer.front().second;
+        }
+    }
+
+    if (needs_map_odom_buffer)
+    {
+        if (_T_map_odom_buffer.empty())
+        {
+            return false;
+        }
+
+        if (timestamp_ns < _T_map_odom_buffer.front().second ||
+            timestamp_ns > _T_map_odom_buffer.back().second)
+        {
+            return timestamp_ns < _T_map_odom_buffer.front().second;
+        }
+    }
+
+    return true;
+}
+
+bool TransformBuffer::_frame_requires_odom_buffer(const FrameId frame) const
+{
+    return frame == FrameId::Baselink || frame == FrameId::Imu ||
+           frame == FrameId::Gss || frame == FrameId::Lidar;
+}
+
+bool TransformBuffer::_transform_is_finite(const Pose2D& transform) const
 {
     return std::isfinite(transform.x_m) && std::isfinite(transform.y_m) &&
            std::isfinite(transform.yaw_rad);
 }
 
 bool TransformBuffer::_timestamp_out_of_buffer_bound(
-    const std::deque<std::pair<RigidTransform2D, std::uint64_t>>& buffer,
+    const std::deque<std::pair<Pose2D, std::uint64_t>>& buffer,
     std::uint64_t query_timestamp_ns) const
 {
     if (buffer.empty())
@@ -351,5 +452,17 @@ bool TransformBuffer::_timestamp_out_of_buffer_bound(
 
     return query_timestamp_ns < buffer.front().second ||
            query_timestamp_ns > buffer.back().second;
+}
+
+std::uint64_t TransformBuffer::latest_odom_buffer_timestamp_ns() const
+{
+    std::scoped_lock lock(_mutex);
+
+    if (_T_odom_base_buffer.empty())
+    {
+        return 0;
+    }
+
+    return _T_odom_base_buffer.back().second;
 }
 }  // namespace transforms

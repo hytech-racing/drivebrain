@@ -2,10 +2,13 @@
 
 #include <FrameId.hpp>
 #include <RigidTransform2D.hpp>
+#include <RigidTransform3D.hpp>
 #include <TransformBuffer.hpp>
 #include <cmath>
+#include <chrono>
 #include <limits>
 #include <optional>
+#include <thread>
 
 namespace transforms
 {
@@ -15,8 +18,9 @@ namespace
 constexpr double kTolerance = 1e-9;
 constexpr double kPi = 3.14159265358979323846;
 
-void expect_transform_near(const RigidTransform2D& actual,
-                           const RigidTransform2D& expected)
+using namespace std::chrono_literals;
+
+void expect_transform_near(const Pose2D& actual, const Pose2D& expected)
 {
     EXPECT_NEAR(actual.x_m, expected.x_m, kTolerance);
     EXPECT_NEAR(actual.y_m, expected.y_m, kTolerance);
@@ -26,12 +30,12 @@ void expect_transform_near(const RigidTransform2D& actual,
 TEST(TransformBufferTest, ExactTimestampLookup)
 {
     TransformBuffer buffer(1000);
-    const RigidTransform2D expected{1.0, 2.0, 0.3};
+    const Pose2D expected{1.0, 2.0, 0.3};
 
     EXPECT_TRUE(buffer.insert_T_odom_base(100, expected));
     EXPECT_TRUE(buffer.insert_T_odom_base(200, {3.0, 4.0, 0.6}));
 
-    const std::optional<RigidTransform2D> actual =
+    const std::optional<Pose2D> actual =
         buffer.lookup(FrameId::Odom, FrameId::Baselink, 100);
 
     ASSERT_TRUE(actual.has_value());
@@ -45,7 +49,7 @@ TEST(TransformBufferTest, MidpointTranslationInterpolation)
     EXPECT_TRUE(buffer.insert_T_odom_base(100, {0.0, 2.0, 0.0}));
     EXPECT_TRUE(buffer.insert_T_odom_base(200, {10.0, 6.0, 0.0}));
 
-    const std::optional<RigidTransform2D> actual =
+    const std::optional<Pose2D> actual =
         buffer.lookup(FrameId::Odom, FrameId::Baselink, 150);
 
     ASSERT_TRUE(actual.has_value());
@@ -59,7 +63,7 @@ TEST(TransformBufferTest, YawInterpolationAcrossPiBoundary)
     EXPECT_TRUE(buffer.insert_T_odom_base(100, {0.0, 0.0, kPi - 0.1}));
     EXPECT_TRUE(buffer.insert_T_odom_base(200, {0.0, 0.0, -kPi + 0.1}));
 
-    const std::optional<RigidTransform2D> actual =
+    const std::optional<Pose2D> actual =
         buffer.lookup(FrameId::Odom, FrameId::Baselink, 150);
 
     ASSERT_TRUE(actual.has_value());
@@ -88,6 +92,46 @@ TEST(TransformBufferTest, RequestNewerThanNewestReturnsNullopt)
               std::nullopt);
 }
 
+TEST(TransformBufferTest, ZeroTimeoutKeepsImmediateLookupBehavior)
+{
+    TransformBuffer buffer(1000);
+
+    EXPECT_TRUE(buffer.insert_T_odom_base(100, {1.0, 2.0, 0.3}));
+
+    EXPECT_EQ(buffer.lookup(FrameId::Odom, FrameId::Baselink, 200, 0ns),
+              std::nullopt);
+}
+
+TEST(TransformBufferTest, LookupWaitsForFutureOdomSample)
+{
+    TransformBuffer buffer(1000);
+
+    std::thread inserter(
+        [&buffer]()
+        {
+            std::this_thread::sleep_for(1ms);
+            EXPECT_TRUE(buffer.insert_T_odom_base(200, {1.0, 2.0, 0.3}));
+        });
+
+    const std::optional<Pose2D> actual =
+        buffer.lookup(FrameId::Odom, FrameId::Baselink, 200, 50ms);
+
+    inserter.join();
+
+    ASSERT_TRUE(actual.has_value());
+    expect_transform_near(*actual, {1.0, 2.0, 0.3});
+}
+
+TEST(TransformBufferTest, LookupReturnsNulloptAfterTimeout)
+{
+    TransformBuffer buffer(1000);
+
+    EXPECT_TRUE(buffer.insert_T_odom_base(100, {1.0, 2.0, 0.3}));
+
+    EXPECT_EQ(buffer.lookup(FrameId::Odom, FrameId::Baselink, 200, 1ms),
+              std::nullopt);
+}
+
 TEST(TransformBufferTest, HistoryPruningBySensorTimestamp)
 {
     TransformBuffer buffer(100);
@@ -99,7 +143,7 @@ TEST(TransformBufferTest, HistoryPruningBySensorTimestamp)
     EXPECT_EQ(buffer.lookup(FrameId::Odom, FrameId::Baselink, 100),
               std::nullopt);
 
-    const std::optional<RigidTransform2D> retained =
+    const std::optional<Pose2D> retained =
         buffer.lookup(FrameId::Odom, FrameId::Baselink, 150);
     ASSERT_TRUE(retained.has_value());
     expect_transform_near(*retained, {2.0, 0.0, 0.0});
@@ -108,13 +152,13 @@ TEST(TransformBufferTest, HistoryPruningBySensorTimestamp)
 TEST(TransformBufferTest, OutOfOrderInsertionRejected)
 {
     TransformBuffer buffer(1000);
-    const RigidTransform2D original_latest{2.0, 0.0, 0.0};
+    const Pose2D original_latest{2.0, 0.0, 0.0};
 
     EXPECT_TRUE(buffer.insert_T_odom_base(100, {1.0, 0.0, 0.0}));
     EXPECT_TRUE(buffer.insert_T_odom_base(200, original_latest));
     EXPECT_FALSE(buffer.insert_T_odom_base(150, {9.0, 0.0, 0.0}));
 
-    const std::optional<RigidTransform2D> latest =
+    const std::optional<Pose2D> latest =
         buffer.lookup(FrameId::Odom, FrameId::Baselink, 200);
     ASSERT_TRUE(latest.has_value());
     expect_transform_near(*latest, original_latest);
@@ -123,12 +167,12 @@ TEST(TransformBufferTest, OutOfOrderInsertionRejected)
 TEST(TransformBufferTest, SameTimestampInsertionReplacesExistingSample)
 {
     TransformBuffer buffer(1000);
-    const RigidTransform2D replacement{2.0, 3.0, 0.4};
+    const Pose2D replacement{2.0, 3.0, 0.4};
 
     EXPECT_TRUE(buffer.insert_T_odom_base(100, {1.0, 0.0, 0.0}));
     EXPECT_TRUE(buffer.insert_T_odom_base(100, replacement));
 
-    const std::optional<RigidTransform2D> actual =
+    const std::optional<Pose2D> actual =
         buffer.lookup(FrameId::Odom, FrameId::Baselink, 100);
 
     ASSERT_TRUE(actual.has_value());
@@ -157,13 +201,13 @@ TEST(TransformBufferTest, InvalidDynamicInsertionRejected)
 TEST(TransformBufferTest, MapOdomLookupHoldsLatestSampleAtOrBeforeQuery)
 {
     TransformBuffer buffer(1000);
-    const RigidTransform2D before{1.0, 2.0, 0.3};
-    const RigidTransform2D after{10.0, 20.0, 1.3};
+    const Pose2D before{1.0, 2.0, 0.3};
+    const Pose2D after{10.0, 20.0, 1.3};
 
     EXPECT_TRUE(buffer.insert_T_map_odom(100, before));
     EXPECT_TRUE(buffer.insert_T_map_odom(200, after));
 
-    const std::optional<RigidTransform2D> actual =
+    const std::optional<Pose2D> actual =
         buffer.lookup(FrameId::Map, FrameId::Odom, 150);
 
     ASSERT_TRUE(actual.has_value());
@@ -183,6 +227,49 @@ TEST(TransformBufferTest, ZeroDurationRetainsNewestSample)
     const auto latest = buffer.lookup(FrameId::Odom, FrameId::Baselink, 200);
 
     ASSERT_TRUE(latest.has_value());
+}
+
+TEST(TransformBufferTest, Lookup3dConvertsLookup2dResult)
+{
+    TransformBuffer buffer(1000);
+
+    EXPECT_TRUE(buffer.insert_T_odom_base(100, {1.0, 2.0, kPi / 2.0}));
+
+    const std::optional<Pose3D> actual =
+        buffer.lookup3d(FrameId::Odom, FrameId::Baselink, 100);
+
+    ASSERT_TRUE(actual.has_value());
+    EXPECT_NEAR(actual->x_m, 1.0, kTolerance);
+    EXPECT_NEAR(actual->y_m, 2.0, kTolerance);
+    EXPECT_NEAR(actual->z_m, 0.0, kTolerance);
+    EXPECT_NEAR(actual->q.w, std::cos(kPi / 4.0), kTolerance);
+    EXPECT_NEAR(actual->q.x, 0.0, kTolerance);
+    EXPECT_NEAR(actual->q.y, 0.0, kTolerance);
+    EXPECT_NEAR(actual->q.z, std::sin(kPi / 4.0), kTolerance);
+}
+
+TEST(TransformBufferTest, Lookup3dWaitsForFutureOdomSample)
+{
+    TransformBuffer buffer(1000);
+
+    std::thread inserter(
+        [&buffer]()
+        {
+            std::this_thread::sleep_for(1ms);
+            EXPECT_TRUE(buffer.insert_T_odom_base(100, {1.0, 2.0, kPi / 2.0}));
+        });
+
+    const std::optional<Pose3D> actual =
+        buffer.lookup3d(FrameId::Odom, FrameId::Baselink, 100, 50ms);
+
+    inserter.join();
+
+    ASSERT_TRUE(actual.has_value());
+    EXPECT_NEAR(actual->x_m, 1.0, kTolerance);
+    EXPECT_NEAR(actual->y_m, 2.0, kTolerance);
+    EXPECT_NEAR(actual->z_m, 0.0, kTolerance);
+    EXPECT_NEAR(actual->q.w, std::cos(kPi / 4.0), kTolerance);
+    EXPECT_NEAR(actual->q.z, std::sin(kPi / 4.0), kTolerance);
 }
 
 }  // namespace
