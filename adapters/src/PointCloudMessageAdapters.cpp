@@ -7,10 +7,119 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <iomanip>
+#include <limits>
+#include <memory>
+#include <sstream>
 #include <string>
 
 namespace adapters
 {
+namespace
+{
+
+void set_timestamp(google::protobuf::Timestamp* timestamp,
+                   const std::int64_t timestamp_ns)
+{
+    timestamp->set_seconds(static_cast<int64_t>(timestamp_ns / 1'000'000'000));
+    timestamp->set_nanos(static_cast<int32_t>(timestamp_ns % 1'000'000'000));
+}
+
+std::shared_ptr<foxglove::SceneUpdate> make_clearing_scene(
+    const std::int64_t timestamp_ns)
+{
+    auto scene = std::make_shared<foxglove::SceneUpdate>();
+
+    auto* deletion = scene->add_deletions();
+    deletion->set_type(foxglove::SceneEntityDeletion_Type_ALL);
+    set_timestamp(deletion->mutable_timestamp(), timestamp_ns);
+
+    return scene;
+}
+
+foxglove::SceneEntity* add_entity(foxglove::SceneUpdate* scene,
+                                  std::string_view frame_id,
+                                  std::string_view entity_id,
+                                  const std::int64_t timestamp_ns)
+{
+    auto* entity = scene->add_entities();
+    entity->set_frame_id(std::string(frame_id));
+    entity->set_id(std::string(entity_id));
+    set_timestamp(entity->mutable_timestamp(), timestamp_ns);
+    return entity;
+}
+
+const char* rejection_reason_to_string(
+    const perception::ConeRejectionReason reason)
+{
+    using perception::ConeRejectionReason;
+
+    switch (reason)
+    {
+        case ConeRejectionReason::None:
+            return "None";
+        case ConeRejectionReason::TooFar:
+            return "TooFar";
+        case ConeRejectionReason::TooFewPoints:
+            return "TooFewPoints";
+        case ConeRejectionReason::TooShort:
+            return "TooShort";
+        case ConeRejectionReason::TooTall:
+            return "TooTall";
+        case ConeRejectionReason::TooWide:
+            return "TooWide";
+        case ConeRejectionReason::TooElongated:
+            return "TooElongated";
+    }
+
+    return "Unknown";
+}
+
+std::string make_candidate_debug_text(
+    const perception::ConeCandidate& candidate)
+{
+    const auto& features = candidate.feature;
+
+    std::ostringstream stream;
+    stream << std::fixed << std::setprecision(2);
+
+    stream << "ACCEPTED\n"
+           << "range: " << features.range_m << " m\n"
+           << "points: " << features.num_points << "\n"
+           << "height: " << features.height_z_m << " m\n"
+           << "width x/y: " << features.width_x_m << " / "
+           << features.width_y_m << " m\n"
+           << "confidence: " << candidate.confidence;
+
+    return stream.str();
+}
+
+std::string make_rejected_debug_text(
+    const perception::RejectedCluster& rejected_cluster)
+{
+    const auto& features = rejected_cluster.features;
+
+    const double small_width = std::min(features.width_x_m, features.width_y_m);
+    const double elongation = small_width > 0.0
+                                  ? features.max_horizontal_width_m / small_width
+                                  : std::numeric_limits<double>::infinity();
+
+    std::ostringstream stream;
+    stream << std::fixed << std::setprecision(2);
+
+    stream << "REJECTED: "
+           << rejection_reason_to_string(rejected_cluster.reason) << "\n"
+           << "range: " << features.range_m << " m\n"
+           << "points: " << features.num_points << "\n"
+           << "height: " << features.height_z_m << " m\n"
+           << "width x/y: " << features.width_x_m << " / "
+           << features.width_y_m << " m\n"
+           << "elongation: " << elongation;
+
+    return stream.str();
+}
+
+}  // namespace
 
 std::optional<perception::StampedPointCloud> to_core_point_cloud(
     const foxglove::PointCloud& message)
@@ -205,6 +314,189 @@ std::shared_ptr<foxglove::PointCloud> to_foxglove_point_cloud(
 
     message->set_data(std::move(byte_buffer));
     return message;
+}
+
+std::shared_ptr<foxglove::SceneUpdate> to_foxglove_cluster_markers(
+    const std::vector<perception::ClusterFeatures>& cluster_features,
+    std::string_view frame_id, std::int64_t timestamp_ns,
+    std::string_view entity_id)
+{
+    auto scene = make_clearing_scene(timestamp_ns);
+
+    if (cluster_features.empty())
+    {
+        return scene;
+    }
+
+    auto* entity = add_entity(scene.get(), frame_id, entity_id, timestamp_ns);
+
+    for (const auto& curr_cluster_features : cluster_features)
+    {
+        auto* sphere = entity->add_spheres();
+        auto* position = sphere->mutable_pose()->mutable_position();
+        position->set_x(curr_cluster_features.centroid.x);
+        position->set_y(curr_cluster_features.centroid.y);
+        position->set_z(curr_cluster_features.centroid.z);
+        sphere->mutable_pose()->mutable_orientation()->set_w(1.0);
+
+        sphere->mutable_size()->set_x(0.2);
+        sphere->mutable_size()->set_y(0.2);
+        sphere->mutable_size()->set_z(0.2);
+
+        auto* color = sphere->mutable_color();
+        color->set_r(0.0);
+        color->set_g(1.0);
+        color->set_b(0.0);
+        color->set_a(0.5);
+    }
+
+    return scene;
+}
+
+std::shared_ptr<foxglove::SceneUpdate> to_foxglove_cone_candidate_markers(
+    const std::vector<perception::ConeCandidate>& cone_candidates,
+    std::string_view frame_id, std::int64_t timestamp_ns,
+    std::string_view entity_id)
+{
+    auto scene = make_clearing_scene(timestamp_ns);
+
+    if (cone_candidates.empty())
+    {
+        return scene;
+    }
+
+    auto* entity = add_entity(scene.get(), frame_id, entity_id, timestamp_ns);
+
+    for (const auto& cone_candidate : cone_candidates)
+    {
+        auto* sphere = entity->add_spheres();
+        auto* position = sphere->mutable_pose()->mutable_position();
+        position->set_x(cone_candidate.position.x);
+        position->set_y(cone_candidate.position.y);
+        position->set_z(cone_candidate.position.z);
+        sphere->mutable_pose()->mutable_orientation()->set_w(1.0);
+
+        sphere->mutable_size()->set_x(0.2);
+        sphere->mutable_size()->set_y(0.2);
+        sphere->mutable_size()->set_z(0.2);
+
+        auto* color = sphere->mutable_color();
+        color->set_r(0.0);
+        color->set_g(1.0);
+        color->set_b(0.0);
+        color->set_a(0.25 + 0.75 * cone_candidate.confidence);
+    }
+
+    return scene;
+}
+
+std::shared_ptr<foxglove::SceneUpdate> to_foxglove_cone_candidate_text(
+    const std::vector<perception::ConeCandidate>& cone_candidates,
+    std::string_view frame_id, std::int64_t timestamp_ns,
+    std::string_view entity_id)
+{
+    auto scene = make_clearing_scene(timestamp_ns);
+
+    if (cone_candidates.empty())
+    {
+        return scene;
+    }
+
+    auto* entity = add_entity(scene.get(), frame_id, entity_id, timestamp_ns);
+
+    for (const auto& cone_candidate : cone_candidates)
+    {
+        auto* text = entity->add_texts();
+        auto* text_position = text->mutable_pose()->mutable_position();
+        text_position->set_x(cone_candidate.position.x);
+        text_position->set_y(cone_candidate.position.y);
+        text_position->set_z(cone_candidate.feature.bbox.max.z + 0.5);
+        text->mutable_pose()->mutable_orientation()->set_w(1.0);
+        text->set_billboard(true);
+        text->set_font_size(0.10);
+        text->set_text(make_candidate_debug_text(cone_candidate));
+
+        auto* text_color = text->mutable_color();
+        text_color->set_r(1.0);
+        text_color->set_g(1.0);
+        text_color->set_b(1.0);
+        text_color->set_a(1.0);
+    }
+
+    return scene;
+}
+
+std::shared_ptr<foxglove::SceneUpdate> to_foxglove_rejected_cluster_markers(
+    const std::vector<perception::RejectedCluster>& rejected_clusters,
+    std::string_view frame_id, std::int64_t timestamp_ns,
+    std::string_view entity_id)
+{
+    auto scene = make_clearing_scene(timestamp_ns);
+
+    if (rejected_clusters.empty())
+    {
+        return scene;
+    }
+
+    auto* entity = add_entity(scene.get(), frame_id, entity_id, timestamp_ns);
+
+    for (const auto& rejected_cluster : rejected_clusters)
+    {
+        auto* cube = entity->add_cubes();
+        auto* position = cube->mutable_pose()->mutable_position();
+        position->set_x(rejected_cluster.features.centroid.x);
+        position->set_y(rejected_cluster.features.centroid.y);
+        position->set_z(rejected_cluster.features.centroid.z);
+        cube->mutable_pose()->mutable_orientation()->set_w(1.0);
+
+        cube->mutable_size()->set_x(0.2);
+        cube->mutable_size()->set_y(0.2);
+        cube->mutable_size()->set_z(0.2);
+
+        auto* color = cube->mutable_color();
+        color->set_r(1.0);
+        color->set_g(0.0);
+        color->set_b(0.0);
+        color->set_a(0.5);
+    }
+
+    return scene;
+}
+
+std::shared_ptr<foxglove::SceneUpdate> to_foxglove_rejected_cluster_text(
+    const std::vector<perception::RejectedCluster>& rejected_clusters,
+    std::string_view frame_id, std::int64_t timestamp_ns,
+    std::string_view entity_id)
+{
+    auto scene = make_clearing_scene(timestamp_ns);
+
+    if (rejected_clusters.empty())
+    {
+        return scene;
+    }
+
+    auto* entity = add_entity(scene.get(), frame_id, entity_id, timestamp_ns);
+
+    for (const auto& rejected_cluster : rejected_clusters)
+    {
+        auto* text = entity->add_texts();
+        auto* text_position = text->mutable_pose()->mutable_position();
+        text_position->set_x(rejected_cluster.features.centroid.x);
+        text_position->set_y(rejected_cluster.features.centroid.y);
+        text_position->set_z(rejected_cluster.features.bbox.max.z + 0.5);
+        text->mutable_pose()->mutable_orientation()->set_w(1.0);
+        text->set_billboard(true);
+        text->set_font_size(0.10);
+        text->set_text(make_rejected_debug_text(rejected_cluster));
+
+        auto* text_color = text->mutable_color();
+        text_color->set_r(1.0);
+        text_color->set_g(1.0);
+        text_color->set_b(1.0);
+        text_color->set_a(1.0);
+    }
+
+    return scene;
 }
 
 }  // namespace adapters
