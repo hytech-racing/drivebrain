@@ -9,7 +9,12 @@ add_executable(
   main.cpp MCAPLoggerTest.cpp ReferencePathTest.cpp
   adapters/EstimatorMessageAdaptersTest.cpp
   estimation/GssModelTest.cpp estimation/LatestEstimateTest.cpp
+  perception/ClusterFeaturesTest.cpp
+  perception/ClusteringTest.cpp
+  perception/ConeFilterTest.cpp
   perception/GroundRemovalTest.cpp
+  perception/LidarProcessorTest.cpp
+  perception/PointCloudFiltersTest.cpp
   perception/PointCloudDeskewTest.cpp
   runtime/DriverlessEstimatorRunnerTest.cpp
   runtime/PerceptionFrontendRunnerTest.cpp

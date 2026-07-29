@@ -2,6 +2,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "PerceptionDebugMessageAdapters.hpp"
 #include "PointCloudMessageAdapters.hpp"
 #include "Telemetry.hpp"
 
@@ -175,10 +176,19 @@ bool PerceptionFrontendRunner::_process_point_cloud(
 
     if (_publish_full_telemetry && lidar_processor_result)
     {
+        core::log("/perception/lidar_processing_debug",
+                  adapters::to_lidar_processing_debug(stamped_point_cloud,
+                                                      *lidar_processor_result));
+
         core::log(
             "/perception/deskewed_point_cloud",
             adapters::to_foxglove_point_cloud(
                 lidar_processor_result->deskewed_point_cloud, kLidarFrame));
+
+        core::log(
+            "/perception/filtered_point_cloud",
+            adapters::to_foxglove_point_cloud(
+                lidar_processor_result->filtered_point_cloud, kLidarFrame));
 
         core::log("/perception/ground_point_cloud",
                   adapters::to_foxglove_point_cloud(
@@ -188,6 +198,36 @@ bool PerceptionFrontendRunner::_process_point_cloud(
             "/perception/non_ground_point_cloud",
             adapters::to_foxglove_point_cloud(
                 lidar_processor_result->non_ground_point_cloud, kLidarFrame));
+
+        core::log(
+            "/perception/cluster_markers",
+            adapters::to_foxglove_cluster_markers(
+                lidar_processor_result->cluster_features, kLidarFrame,
+                lidar_processor_result->non_ground_point_cloud.timestamp_ns));
+
+        core::log(
+            "/perception/cone_candidate_markers",
+            adapters::to_foxglove_cone_candidate_markers(
+                lidar_processor_result->cone_candidates, kLidarFrame,
+                lidar_processor_result->non_ground_point_cloud.timestamp_ns));
+
+        core::log(
+            "/perception/cone_candidate_text",
+            adapters::to_foxglove_cone_candidate_text(
+                lidar_processor_result->cone_candidates, kLidarFrame,
+                lidar_processor_result->non_ground_point_cloud.timestamp_ns));
+
+        core::log(
+            "/perception/rejected_cluster_markers",
+            adapters::to_foxglove_rejected_cluster_markers(
+                lidar_processor_result->rejected_clusters, kLidarFrame,
+                lidar_processor_result->non_ground_point_cloud.timestamp_ns));
+
+        core::log(
+            "/perception/rejected_cluster_text",
+            adapters::to_foxglove_rejected_cluster_text(
+                lidar_processor_result->rejected_clusters, kLidarFrame,
+                lidar_processor_result->non_ground_point_cloud.timestamp_ns));
     }
 
     return true;

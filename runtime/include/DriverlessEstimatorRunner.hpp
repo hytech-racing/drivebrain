@@ -77,6 +77,8 @@ class DriverlessEstimatorRunner
         10000;  // a little less than 4 laps with current settings before points
                 // get popped
     static constexpr std::uint64_t kOdomTrailPublishPeriodNs = 100'000'000ULL;
+    static constexpr std::uint64_t kStaticTransformPublishPeriodNs =
+        1'000'000'000ULL;
     static constexpr double kOdomTrailPointDistanceThresholdM = 0.10;
     static constexpr double kOdomTrailPointYawThresholdRad = 0.05;
 
@@ -101,6 +103,7 @@ class DriverlessEstimatorRunner
 
     std::deque<std::array<float, 3>> _odom_trail;
     std::optional<std::uint64_t> _last_odom_trail_publish_stamp_ns;
+    std::optional<std::uint64_t> _last_static_transform_publish_stamp_ns;
     std::optional<double> _last_odom_trail_point_yaw_rad;
 };
 

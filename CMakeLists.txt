@@ -83,7 +83,8 @@ FetchContent_MakeAvailable(drivebrain_simulink_models)
 # ##############################################################################
 # Linking to main app
 # ##############################################################################
-add_executable(drivebrain app/src/main.cpp app/src/app.cpp app/src/autonomy.cpp)
+add_executable(drivebrain app/src/main.cpp app/src/app.cpp app/src/autonomy.cpp
+                          app/src/ConfigParamLoader.cpp)
 
 target_include_directories(drivebrain PUBLIC app/include)
 

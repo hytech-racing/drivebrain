@@ -11,6 +11,7 @@
 #include <memory>
 #include <stdexcept>
 
+#include "ConfigParamLoader.hpp"
 #include "ControllerManager.hpp"
 #include "DrivebrainControllerInterface.hpp"
 #include "ETHRecvComms.hpp"
@@ -93,18 +94,19 @@ void DrivebrainApp::run()
     _transform_buffer->set_base_to_gss(transforms::Pose2D{1.0, 0.25, 0.0});
     _transform_buffer->set_base_to_lidar(transforms::Pose2D{0.75, 0.0, 0.0});
 
-    const estimation::EkfParams ekf_params{0.1, 0.1, 0.5, 0.1, 0.1, 0.5};
-    const estimation::GssSensorConfig gss_config{0.1, 0.1};
+    const app_config::DriverlessEstimatorRunnerParams estimator_params =
+        app_config::load_driverless_estimator_runner_params();
 
     _driverless_estimator_runner =
         std::make_unique<runtime::DriverlessEstimatorRunner>(
-            _latest_estimate, _transform_buffer, ekf_params, gss_config);
+            _latest_estimate, _transform_buffer, estimator_params.ekf_params,
+            estimator_params.gss_sensor_config);
     _driverless_estimator_runner->start();
 
     spdlog::info("Started driverless estimator runner");
 
-    perception::LidarProcessorParams lidar_processor_params;
-    lidar_processor_params.deskew_enabled = false;
+    perception::LidarProcessorParams lidar_processor_params =
+        app_config::load_lidar_processor_params();
     _perception_frontend_runner =
         std::make_unique<runtime::PerceptionFrontendRunner>(
             _transform_buffer, lidar_processor_params);
@@ -229,14 +231,20 @@ void DrivebrainApp::run()
     comms::SimComms::destroy();
 #endif
 
+    if (_perception_frontend_runner)
+    {
+        spdlog::info("Stopping perception frontend runner");
+        _perception_frontend_runner->stop();
+    }
+
+    spdlog::info("Stopping autonomy stack");
+    _autonomy.stop();
+
     if (_driverless_estimator_runner)
     {
         spdlog::info("Stopping driverless estimator");
         _driverless_estimator_runner->stop();
     }
-
-    spdlog::info("Stopping autonomy stack");
-    _autonomy.stop();
 
     _io_context.stop();
     if (_io_context_thread.joinable()) _io_context_thread.join();
@@ -496,10 +504,11 @@ void DrivebrainApp::_route_received_message(
 
         if (point_cloud)
         {
+            const auto timestamp_ns = point_cloud->timestamp_ns;
             if (!_perception_frontend_runner->enqueue(std::move(*point_cloud)))
             {
                 spdlog::warn("Failed to enqueue PointCloud at {} ns",
-                             point_cloud->timestamp_ns);
+                             timestamp_ns);
             }
         }
     }

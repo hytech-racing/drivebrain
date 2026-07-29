@@ -296,26 +296,37 @@ void DriverlessEstimatorRunner::_publish_estimate(const StateEstimate& estimate,
         _latest_estimate->store(estimate);
     }
 
-    if (!publish_full_telemetry)
-    {
-        return;
-    }
-
     const transforms::Pose2D T_odom_base{estimate.x_odom_m, estimate.y_odom_m,
                                          estimate.yaw_odom_rad};
 
     _transform_buffer->insert_T_odom_base(estimate.timestamp_ns, T_odom_base);
 
-    core::publish_transform("map", "odom", estimate.timestamp_ns,
-                            transforms::Pose2D{0.0, 0.0, 0.0});
+    if (!publish_full_telemetry)
+    {
+        return;
+    }
+
+    const bool should_publish_static_transforms =
+        !_last_static_transform_publish_stamp_ns ||
+        estimate.timestamp_ns < *_last_static_transform_publish_stamp_ns ||
+        estimate.timestamp_ns - *_last_static_transform_publish_stamp_ns >=
+            kStaticTransformPublishPeriodNs;
+
+    if (should_publish_static_transforms)
+    {
+        core::publish_transform("map", "odom", estimate.timestamp_ns,
+                                transforms::Pose2D{0.0, 0.0, 0.0});
+        core::publish_transform("base_link", "imu", estimate.timestamp_ns,
+                                _transform_buffer->base_to_imu());
+        core::publish_transform("base_link", "gss", estimate.timestamp_ns,
+                                _transform_buffer->base_to_gss());
+        core::publish_transform("base_link", "lidar", estimate.timestamp_ns,
+                                _transform_buffer->base_to_lidar(), 0.15);
+        _last_static_transform_publish_stamp_ns = estimate.timestamp_ns;
+    }
+
     core::publish_transform("odom", "base_link", estimate.timestamp_ns,
                             T_odom_base);
-    core::publish_transform("base_link", "imu", estimate.timestamp_ns,
-                            _transform_buffer->base_to_imu());
-    core::publish_transform("base_link", "gss", estimate.timestamp_ns,
-                            _transform_buffer->base_to_gss());
-    core::publish_transform("base_link", "lidar", estimate.timestamp_ns,
-                            _transform_buffer->base_to_lidar(), 0.15);
 
     auto msg = std::make_shared<dv_msgs::DriverlessStateEstimate>();
 

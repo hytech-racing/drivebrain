@@ -34,12 +34,12 @@ GroundRemovalParams make_one_cell_params()
 {
     GroundRemovalParams params;
 
-    params.min_range_m = 0.0;
-    params.max_range_m = 2.0;
+    params.grid_min_range_m = 0.0;
+    params.grid_max_range_m = 2.0;
     params.radial_bin_size_m = 2.0;
 
-    params.min_theta_rad = -0.1;
-    params.max_theta_rad = 0.1;
+    params.grid_min_theta_rad = -0.1;
+    params.grid_max_theta_rad = 0.1;
     params.angular_bin_size_rad = 0.2;
 
     params.flat_ground_z_max_m = -0.15;
@@ -146,12 +146,12 @@ TEST(GroundRemovalTest, BuildsExpectedDebugGridBounds)
 {
     GroundRemovalParams params;
 
-    params.min_range_m = 0.0;
-    params.max_range_m = 2.0;
+    params.grid_min_range_m = 0.0;
+    params.grid_max_range_m = 2.0;
     params.radial_bin_size_m = 1.0;
 
-    params.min_theta_rad = -1.0;
-    params.max_theta_rad = 1.0;
+    params.grid_min_theta_rad = -1.0;
+    params.grid_max_theta_rad = 1.0;
     params.angular_bin_size_rad = 1.0;
 
     params.min_points_per_cell = 1;
