@@ -103,7 +103,6 @@ void Autonomy::start()
     }
 #endif
 
-    _slam.start();
     _thread = std::thread(&Autonomy::_run, this);
     spdlog::info("Autonomy stack started");
 }
@@ -118,7 +117,6 @@ void Autonomy::stop()
     {
         _thread.join();
     }
-    _slam.stop();
     spdlog::info("Autonomy stack stopped");
 }
 
