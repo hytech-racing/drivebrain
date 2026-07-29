@@ -8,8 +8,11 @@ add_executable(
   drivebrain_test
   main.cpp MCAPLoggerTest.cpp ReferencePathTest.cpp
   adapters/EstimatorMessageAdaptersTest.cpp
-  estimation/DriverlessEstimatorRunnerTest.cpp
   estimation/GssModelTest.cpp estimation/LatestEstimateTest.cpp
+  perception/GroundRemovalTest.cpp
+  perception/PointCloudDeskewTest.cpp
+  runtime/DriverlessEstimatorRunnerTest.cpp
+  runtime/PerceptionFrontendRunnerTest.cpp
   transforms/TransformBufferTest.cpp)
 
 target_link_libraries(
@@ -20,6 +23,7 @@ target_link_libraries(
          core
          planning
          estimation
+         runtime
          transforms
          GTest::gtest)
 

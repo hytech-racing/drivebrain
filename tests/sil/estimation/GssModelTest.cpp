@@ -16,7 +16,7 @@ TEST(GssModelTest, PredictsSensorVelocityFromFluYawRateAndOffset)
     state.vy_body_mps() = 2.0;
 
     const double yaw_rate_radps = 3.0;
-    const transforms::RigidTransform2D T_base_gss{1.0, 0.25, 0.0};
+    const transforms::Pose2D T_base_gss{1.0, 0.25, 0.0};
 
     const GssMeasurementEigen predicted =
         predict_gss_measurement(state, yaw_rate_radps, T_base_gss);
@@ -27,7 +27,7 @@ TEST(GssModelTest, PredictsSensorVelocityFromFluYawRateAndOffset)
 
 TEST(GssModelTest, JacobianDependsOnlyOnBodyVelocityStates)
 {
-    const transforms::RigidTransform2D T_base_gss{1.0, 0.25, 0.0};
+    const transforms::Pose2D T_base_gss{1.0, 0.25, 0.0};
 
     const GssMeasurementJacobian jacobian =
         compute_gss_measurement_jacobian(T_base_gss);
