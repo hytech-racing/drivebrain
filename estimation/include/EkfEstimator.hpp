@@ -15,7 +15,7 @@ class EkfEstimator
    public:
     explicit EkfEstimator(const EkfParams& params,
                           const GssSensorConfig& gss_sensor_config,
-                          const transforms::RigidTransform2D& T_base_gss);
+                          const transforms::Pose2D& T_base_gss);
 
     void initialize(const InternalEstimatorState& initial_state,
                     const StateCovariance& initial_covariance);
@@ -43,7 +43,7 @@ class EkfEstimator
     EkfParams _params;
     GssSensorConfig _gss_sensor_config{};
 
-    transforms::RigidTransform2D _T_base_gss{};
+    transforms::Pose2D _T_base_gss{};
 
     std::uint64_t _filter_timestamp_ns{};
     double _latest_yaw_rate_vehicle_flu_radps{};

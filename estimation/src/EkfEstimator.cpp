@@ -31,7 +31,7 @@ double wrap_angle(double angle_rad)
 
 EkfEstimator::EkfEstimator(const EkfParams& params,
                            const GssSensorConfig& optical_sensor_config,
-                           const transforms::RigidTransform2D& T_base_gss)
+                           const transforms::Pose2D& T_base_gss)
     : _params(params),
       _gss_sensor_config(optical_sensor_config),
       _T_base_gss(T_base_gss)
@@ -98,9 +98,8 @@ void EkfEstimator::update_gss_speed(const GssMeasurementEigen& measurement)
         return;
     }
 
-    const GssMeasurementEigen predicted_measurement =
-        predict_gss_measurement(_state, _latest_yaw_rate_vehicle_flu_radps,
-                                _T_base_gss);
+    const GssMeasurementEigen predicted_measurement = predict_gss_measurement(
+        _state, _latest_yaw_rate_vehicle_flu_radps, _T_base_gss);
 
     const GssMeasurementVector residual =
         measurement.z - predicted_measurement.z;
