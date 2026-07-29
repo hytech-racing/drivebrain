@@ -16,6 +16,11 @@ add_executable(
   perception/LidarProcessorTest.cpp
   perception/PointCloudFiltersTest.cpp
   perception/PointCloudDeskewTest.cpp
+  slam/IncrementalGraphSlamTest.cpp
+  slam/SlamFrontendAssociationTest.cpp
+  slam/SlamFrontendMapStateTest.cpp
+  slam/SlamFrontendOptimizedAssociationTest.cpp
+  slam/SlamFrontendTrackingTest.cpp
   runtime/DriverlessEstimatorRunnerTest.cpp
   runtime/PerceptionFrontendRunnerTest.cpp
   transforms/TransformBufferTest.cpp)
@@ -28,8 +33,9 @@ target_link_libraries(
          core
          planning
          estimation
-         runtime
-         transforms
+          runtime
+          slam
+          transforms
          GTest::gtest)
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/test_configs
