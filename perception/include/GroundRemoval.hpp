@@ -11,10 +11,10 @@ namespace perception
 
 struct GroundRemovalParams
 {
-    double min_range_m{1.0};
-    double max_range_m{20.0};
-    double min_theta_rad{-90.0 * 3.1415926 / 180.0};
-    double max_theta_rad{90.0 * 3.1415926 / 180.0};
+    double grid_min_range_m{1.0};
+    double grid_max_range_m{35.0};
+    double grid_min_theta_rad{-90.0 * 3.1415926 / 180.0};
+    double grid_max_theta_rad{90.0 * 3.1415926 / 180.0};
 
     // flat-z fallback
     double flat_ground_z_max_m{-0.5};

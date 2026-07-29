@@ -20,11 +20,6 @@ struct PointXYZI
 
 using PointCloud = std::vector<PointXYZI>;
 
-struct LidarProcessorParams
-{
-    bool deskew_enabled{false};
-};
-
 struct StampedLidarPose
 {
     std::int64_t stamp_ns{};

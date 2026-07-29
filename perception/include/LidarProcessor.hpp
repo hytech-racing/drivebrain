@@ -2,10 +2,24 @@
 
 #include <optional>
 
+#include "ClusterFeatures.hpp"
+#include "Clustering.hpp"
+#include "ConeFilter.hpp"
+#include "GroundRemoval.hpp"
+#include "PointCloudFilters.hpp"
 #include "PointCloudTypes.hpp"
 
 namespace perception
 {
+
+struct LidarProcessorParams
+{
+    bool deskew_enabled{false};
+    PointCloudFilterParams point_cloud_filter_params;
+    GroundRemovalParams ground_removal_params;
+    ClusteringParams clustering_params;
+    ConeFilterParams cone_filter_params;
+};
 
 struct LidarMotionContext
 {
@@ -22,8 +36,20 @@ struct LidarProcessingInput
 struct LidarProcessingResult
 {
     StampedPointCloud deskewed_point_cloud;
+    StampedPointCloud filtered_point_cloud;
+
     StampedPointCloud ground_point_cloud;
     StampedPointCloud non_ground_point_cloud;
+
+    GroundRemovalDebug ground_removal_debug;
+
+    std::vector<Cluster> clusters;
+    ClusteringDebug clustering_debug;
+
+    std::vector<ClusterFeatures> cluster_features;
+
+    std::vector<ConeCandidate> cone_candidates;
+    std::vector<RejectedCluster> rejected_clusters;
 };
 
 class LidarProcessor

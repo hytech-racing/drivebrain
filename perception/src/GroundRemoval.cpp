@@ -109,21 +109,24 @@ void assign_points_to_cells(std::vector<GroundCell>& cells,
 
         const double theta = std::atan2(current_point.y, current_point.x);
 
-        if (r < params.min_range_m || r > params.max_range_m)
+        if (r < params.grid_min_range_m || r > params.grid_max_range_m)
         {
             continue;
         }
 
-        if (theta < params.min_theta_rad || theta > params.max_theta_rad)
+        if (theta < params.grid_min_theta_rad ||
+            theta > params.grid_max_theta_rad)
         {
             continue;
         }
 
         const std::size_t radial_index = static_cast<std::size_t>(
-            std::floor((r - params.min_range_m) / params.radial_bin_size_m));
+            std::floor((r - params.grid_min_range_m) /
+                       params.radial_bin_size_m));
 
         const std::size_t angular_index = static_cast<std::size_t>(std::floor(
-            (theta - params.min_theta_rad) / params.angular_bin_size_rad));
+            (theta - params.grid_min_theta_rad) /
+            params.angular_bin_size_rad));
 
         if (radial_index >= grid.num_radial_bins ||
             angular_index >= grid.num_angular_bins)
@@ -206,14 +209,14 @@ std::vector<GroundCellDebug> make_cell_debug(
             GroundCellDebug debug;
 
             debug.r_min_m =
-                params.min_range_m +
+                params.grid_min_range_m +
                 static_cast<double>(radial_index) * params.radial_bin_size_m;
 
             debug.r_max_m = debug.r_min_m + params.radial_bin_size_m;
 
             debug.theta_min_rad =
-                params.min_theta_rad + static_cast<double>(angular_index) *
-                                           params.angular_bin_size_rad;
+                params.grid_min_theta_rad + static_cast<double>(angular_index) *
+                                                params.angular_bin_size_rad;
 
             debug.theta_max_rad =
                 debug.theta_min_rad + params.angular_bin_size_rad;
@@ -234,11 +237,12 @@ GridShape compute_grid_shape(const GroundRemovalParams& params)
     GridShape grid;
 
     grid.num_angular_bins = static_cast<std::size_t>(
-        std::ceil((params.max_theta_rad - params.min_theta_rad) /
+        std::ceil((params.grid_max_theta_rad - params.grid_min_theta_rad) /
                   params.angular_bin_size_rad));
 
     grid.num_radial_bins = static_cast<std::size_t>(std::ceil(
-        (params.max_range_m - params.min_range_m) / params.radial_bin_size_m));
+        (params.grid_max_range_m - params.grid_min_range_m) /
+        params.radial_bin_size_m));
 
     return grid;
 }
