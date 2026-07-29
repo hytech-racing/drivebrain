@@ -23,6 +23,7 @@ add_subdirectory(perception)
 add_subdirectory(slam)
 add_subdirectory(transforms)
 add_subdirectory(adapters)
+add_subdirectory(runtime)
 
 # Aliases so external FetchContent deps (mostly db simulink models) that link
 # against the old target names still resolve TODO fix matlab simulink models to
@@ -111,6 +112,7 @@ target_link_libraries(
          adapters
          transforms
          matlab_model
+         runtime
          simulink_automation_msgs_proto_cpp)
 
 # ##############################################################################

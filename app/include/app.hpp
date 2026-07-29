@@ -2,6 +2,7 @@
 #include "DriverlessEstimatorRunner.hpp"
 #include "ETHRecvComms.hpp"
 #include "LatestEstimate.hpp"
+#include "PerceptionFrontendRunner.hpp"
 #if HOOTL_ENABLED
 #include "SimComms.hpp"
 #endif
@@ -70,6 +71,7 @@ class DrivebrainApp
     core::ControllerOutput _teleop_command(const core::TeleopCommand &command);
 
   private:
+    // event based callback 
     void _route_received_message(
         std::shared_ptr<google::protobuf::Message> message
     );
@@ -116,7 +118,11 @@ class DrivebrainApp
   private: 
     // driverless estimator
     std::shared_ptr<estimation::LatestEstimate> _latest_estimate;
-    std::unique_ptr<estimation::DriverlessEstimatorRunner> _driverless_estimator;
+    std::unique_ptr<runtime::DriverlessEstimatorRunner> _driverless_estimator_runner;
+
+  private:
+    // perception frontend
+    std::unique_ptr<runtime::PerceptionFrontendRunner> _perception_frontend_runner;
 
   private:
     // transform buffer
