@@ -22,7 +22,7 @@ DriverlessEstimatorRunner make_runner()
     const estimation::GssSensorConfig gss_config{0.1, 0.1};
     auto transform_buffer =
         std::make_shared<transforms::TransformBuffer>(1000000);
-    transform_buffer->set_base_to_gss(transforms::Pose2D{1.0, 0.25, 0.0});
+    transform_buffer->set_T_base_gss(transforms::Pose2D{1.0, 0.25, 0.0});
 
     return DriverlessEstimatorRunner{
         std::make_shared<estimation::LatestEstimate>(), transform_buffer,

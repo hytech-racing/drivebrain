@@ -8,6 +8,7 @@ add_executable(
   drivebrain_test
   main.cpp MCAPLoggerTest.cpp ReferencePathTest.cpp
   adapters/EstimatorMessageAdaptersTest.cpp
+  adapters/SlamVisualizationAdaptersTest.cpp
   estimation/GssModelTest.cpp estimation/LatestEstimateTest.cpp
   perception/ClusterFeaturesTest.cpp
   perception/ClusteringTest.cpp
@@ -17,12 +18,14 @@ add_executable(
   perception/PointCloudFiltersTest.cpp
   perception/PointCloudDeskewTest.cpp
   slam/IncrementalGraphSlamTest.cpp
+  slam/SlamEndToEndTest.cpp
   slam/SlamFrontendAssociationTest.cpp
   slam/SlamFrontendMapStateTest.cpp
   slam/SlamFrontendOptimizedAssociationTest.cpp
   slam/SlamFrontendTrackingTest.cpp
   runtime/DriverlessEstimatorRunnerTest.cpp
   runtime/PerceptionFrontendRunnerTest.cpp
+  runtime/SlamBackendRunnerTest.cpp
   transforms/TransformBufferTest.cpp)
 
 target_link_libraries(
@@ -33,9 +36,9 @@ target_link_libraries(
          core
          planning
          estimation
-          runtime
-          slam
-          transforms
+         runtime
+         slam
+         transforms
          GTest::gtest)
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/test_configs
