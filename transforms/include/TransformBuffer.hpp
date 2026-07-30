@@ -51,7 +51,7 @@ class TransformBuffer
      * Pose definition: T_base_imu represents the pose of the IMU
      * expressed in base_link
      */
-    bool set_base_to_imu(const Pose2D& transform);
+    bool set_T_base_imu(const Pose2D& transform);
 
     /**
      * Sets the static transform T_base_gss
@@ -62,7 +62,7 @@ class TransformBuffer
      * Pose definition: T_base_gss represents the pose of the GSS
      * expressed in base_link
      */
-    bool set_base_to_gss(const Pose2D& transform);
+    bool set_T_base_gss(const Pose2D& transform);
 
     /**
      * Sets the static transform T_base_lidar
@@ -73,13 +73,19 @@ class TransformBuffer
      * Pose definition: T_base_lidar represents the pose of the lidar
      * expressed in base_link
      */
-    bool set_base_to_lidar(const Pose2D& transform);
+    bool set_T_base_lidar(const Pose2D& transform);
 
-    [[nodiscard]] Pose2D base_to_imu() const;
+    [[nodiscard]] Pose2D T_base_imu() const;
 
-    [[nodiscard]] Pose2D base_to_gss() const;
+    [[nodiscard]] Pose2D T_base_gss() const;
 
-    [[nodiscard]] Pose2D base_to_lidar() const;
+    [[nodiscard]] Pose2D T_base_lidar() const;
+
+    [[nodiscard]] Pose3D T_base_imu3d() const;
+
+    [[nodiscard]] Pose3D T_base_gss3d() const;
+
+    [[nodiscard]] Pose3D T_base_lidar3d() const;
 
     /**
      * Looks up the transform T_target_source at query_timestamp_ns
@@ -90,10 +96,10 @@ class TransformBuffer
      * Pose definition: T_target_source represents the pose of source
      * expressed in target
      */
-    std::optional<Pose2D> lookup(const FrameId target, const FrameId source,
-                                 const std::uint64_t query_timestamp_ns,
-                                 std::chrono::nanoseconds timeout =
-                                     std::chrono::nanoseconds{0}) const;
+    std::optional<Pose2D> lookup(
+        const FrameId target, const FrameId source,
+        const std::uint64_t query_timestamp_ns,
+        std::chrono::nanoseconds timeout = std::chrono::nanoseconds{0}) const;
 
     std::optional<Pose3D> lookup3d(
         const FrameId target, const FrameId source,

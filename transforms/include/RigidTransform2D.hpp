@@ -5,6 +5,8 @@
 namespace transforms
 {
 
+struct Pose3D;
+
 struct Point2D
 {
     double x_m{};
@@ -80,6 +82,10 @@ struct Pose2D
 
         return Point2D{transformed_x, transformed_y};
     }
+
+    // Conversion: Pose2D -> Pose3D
+    // Zeros z-translation, converts yaw rotation to quaternion
+    [[nodiscard]] Pose3D to_pose3d() const noexcept;
 };
 
 }  // namespace transforms

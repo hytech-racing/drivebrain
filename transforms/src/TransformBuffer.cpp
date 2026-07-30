@@ -117,7 +117,7 @@ bool TransformBuffer::insert_T_map_odom(const std::uint64_t timestamp_ns,
     return true;
 }
 
-bool TransformBuffer::set_base_to_imu(const Pose2D& transform)
+bool TransformBuffer::set_T_base_imu(const Pose2D& transform)
 {
     std::scoped_lock lock(_mutex);
 
@@ -130,7 +130,7 @@ bool TransformBuffer::set_base_to_imu(const Pose2D& transform)
     return true;
 }
 
-bool TransformBuffer::set_base_to_gss(const Pose2D& transform)
+bool TransformBuffer::set_T_base_gss(const Pose2D& transform)
 {
     std::scoped_lock lock(_mutex);
 
@@ -143,7 +143,7 @@ bool TransformBuffer::set_base_to_gss(const Pose2D& transform)
     return true;
 }
 
-bool TransformBuffer::set_base_to_lidar(const Pose2D& transform)
+bool TransformBuffer::set_T_base_lidar(const Pose2D& transform)
 {
     std::scoped_lock lock(_mutex);
 
@@ -156,22 +156,40 @@ bool TransformBuffer::set_base_to_lidar(const Pose2D& transform)
     return true;
 }
 
-Pose2D TransformBuffer::base_to_imu() const
+Pose2D TransformBuffer::T_base_imu() const
 {
     std::scoped_lock lock(_mutex);
     return _T_base_imu;
 }
 
-Pose2D TransformBuffer::base_to_gss() const
+Pose2D TransformBuffer::T_base_gss() const
 {
     std::scoped_lock lock(_mutex);
     return _T_base_gss;
 }
 
-Pose2D TransformBuffer::base_to_lidar() const
+Pose2D TransformBuffer::T_base_lidar() const
 {
     std::scoped_lock lock(_mutex);
     return _T_base_lidar;
+}
+
+Pose3D TransformBuffer::T_base_imu3d() const
+{
+    std::scoped_lock lock(_mutex);
+    return to_pose3d(_T_base_imu);
+}
+
+Pose3D TransformBuffer::T_base_gss3d() const
+{
+    std::scoped_lock lock(_mutex);
+    return to_pose3d(_T_base_gss);
+}
+
+Pose3D TransformBuffer::T_base_lidar3d() const
+{
+    std::scoped_lock lock(_mutex);
+    return to_pose3d(_T_base_lidar);
 }
 
 void TransformBuffer::_remove_stale_transforms(
@@ -301,12 +319,9 @@ std::optional<Pose2D> TransformBuffer::lookup(
 
     if (timeout > std::chrono::nanoseconds{0})
     {
-        _cv.wait_for(lock, timeout,
-                     [this, target, source, timestamp_ns]()
-                     {
-                         return _lookup_ready_unlocked(target, source,
-                                                       timestamp_ns);
-                     });
+        _cv.wait_for(
+            lock, timeout, [this, target, source, timestamp_ns]()
+            { return _lookup_ready_unlocked(target, source, timestamp_ns); });
     }
 
     return _lookup_unlocked(target, source, timestamp_ns);
@@ -392,9 +407,8 @@ bool TransformBuffer::_lookup_ready_unlocked(
         return true;
     }
 
-    const bool needs_odom_buffer =
-        _frame_requires_odom_buffer(target) ||
-        _frame_requires_odom_buffer(source);
+    const bool needs_odom_buffer = _frame_requires_odom_buffer(target) ||
+                                   _frame_requires_odom_buffer(source);
     const bool needs_map_odom_buffer =
         target == FrameId::Map || source == FrameId::Map;
 
