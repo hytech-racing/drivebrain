@@ -50,7 +50,7 @@ DriverlessEstimatorRunner::DriverlessEstimatorRunner(
     : _latest_estimate(latest_estimate),
       _transform_buffer(transform_buffer),
       _publish_full_telemetry(publish_full_telemetry),
-      _ekf(ekf_params, gss_sensor_config, _transform_buffer->base_to_gss())
+      _ekf(ekf_params, gss_sensor_config, _transform_buffer->T_base_gss())
 {
     InternalEstimatorState initial_state;
     initial_state.x.setZero();
@@ -314,14 +314,12 @@ void DriverlessEstimatorRunner::_publish_estimate(const StateEstimate& estimate,
 
     if (should_publish_static_transforms)
     {
-        core::publish_transform("map", "odom", estimate.timestamp_ns,
-                                transforms::Pose2D{0.0, 0.0, 0.0});
         core::publish_transform("base_link", "imu", estimate.timestamp_ns,
-                                _transform_buffer->base_to_imu());
+                                _transform_buffer->T_base_imu());
         core::publish_transform("base_link", "gss", estimate.timestamp_ns,
-                                _transform_buffer->base_to_gss());
+                                _transform_buffer->T_base_gss());
         core::publish_transform("base_link", "lidar", estimate.timestamp_ns,
-                                _transform_buffer->base_to_lidar(), 0.15);
+                                _transform_buffer->T_base_lidar(), 0.15);
         _last_static_transform_publish_stamp_ns = estimate.timestamp_ns;
     }
 

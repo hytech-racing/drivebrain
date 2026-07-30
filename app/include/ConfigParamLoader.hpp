@@ -2,6 +2,8 @@
 
 #include "EstimatorTypes.hpp"
 #include "LidarProcessor.hpp"
+#include "backend/IncrementalGraphSlamTypes.hpp"
+#include "frontend/SlamFrontendTypes.hpp"
 
 namespace app_config
 {
@@ -15,5 +17,9 @@ struct DriverlessEstimatorRunnerParams
 perception::LidarProcessorParams load_lidar_processor_params();
 
 DriverlessEstimatorRunnerParams load_driverless_estimator_runner_params();
+
+slam::frontend::SlamFrontendParams load_slam_frontend_params();
+
+slam::backend::IncrementalGraphSlamParams load_incremental_graph_slam_params();
 
 }  // namespace app_config

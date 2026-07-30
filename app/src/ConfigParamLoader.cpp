@@ -1,6 +1,7 @@
 #include "ConfigParamLoader.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 
 #include <spdlog/spdlog.h>
@@ -228,6 +229,71 @@ DriverlessEstimatorRunnerParams load_driverless_estimator_runner_params()
         "DriverlessEstimatorRunner/Gss/vx_noise_std_mps", gss.vx_noise_std_mps);
     gss.vy_noise_std_mps = config_double_or(
         "DriverlessEstimatorRunner/Gss/vy_noise_std_mps", gss.vy_noise_std_mps);
+
+    return params;
+}
+
+slam::frontend::SlamFrontendParams load_slam_frontend_params()
+{
+    slam::frontend::SlamFrontendParams params;
+
+    params.optimized_association_gate_m = config_double_or(
+        "SlamFrontend/optimized_association_gate_m", 1.0);
+    params.local_track_association_gate_m = config_double_or(
+        "SlamFrontend/local_track_association_gate_m", 1.0);
+    params.minimum_observations_to_confirm = config_size_or(
+        "SlamFrontend/minimum_observations_to_confirm", 5U);
+    params.minimum_detection_confidence = config_double_or(
+        "SlamFrontend/minimum_detection_confidence", 0.5);
+    params.tentative_track_max_age_ns = static_cast<std::int64_t>(
+        config_double_or("SlamFrontend/tentative_track_max_age_s", 3.0) *
+        1'000'000'000.0);
+    params.pending_track_max_age_ns = static_cast<std::int64_t>(
+        config_double_or("SlamFrontend/pending_track_max_age_s", 1.0) *
+        1'000'000'000.0);
+
+    return params;
+}
+
+slam::backend::IncrementalGraphSlamParams load_incremental_graph_slam_params()
+{
+    slam::backend::IncrementalGraphSlamParams params;
+
+    auto& prior = params.prior_pose_noise;
+    prior.x_std_m = config_double_or(
+        "IncrementalGraphSlam/prior_pose_x_std_m", 0.01);
+    prior.y_std_m = config_double_or(
+        "IncrementalGraphSlam/prior_pose_y_std_m", 0.01);
+    prior.yaw_std_rad = config_double_or(
+        "IncrementalGraphSlam/prior_pose_yaw_std_rad", 0.01);
+
+    auto& odom = params.odom_pose_noise;
+    odom.x_std_m = config_double_or(
+        "IncrementalGraphSlam/odom_pose_x_std_m", 0.1);
+    odom.y_std_m = config_double_or(
+        "IncrementalGraphSlam/odom_pose_y_std_m", 0.1);
+    odom.yaw_std_rad = config_double_or(
+        "IncrementalGraphSlam/odom_pose_yaw_std_rad", 0.03);
+
+    auto& landmark = params.landmark_measurement_noise;
+    landmark.bearing_std_rad = config_double_or(
+        "IncrementalGraphSlam/landmark_bearing_std_rad", 0.15);
+    landmark.range_std_m = config_double_or(
+        "IncrementalGraphSlam/landmark_range_std_m", 1.0);
+
+    auto& range = params.measurement_range;
+    range.max_m = config_double_or(
+        "IncrementalGraphSlam/measurement_range_max_m", 50.0);
+    range.min_m = config_double_or(
+        "IncrementalGraphSlam/measurement_range_min_m", 0.1);
+
+    auto& isam2 = params.isam2;
+    isam2.relinearization_threshold = config_double_or(
+        "IncrementalGraphSlam/relinearization_threshold", 0.01);
+    isam2.relinearization_skip = config_size_or(
+        "IncrementalGraphSlam/relinearization_skip", 1U);
+    isam2.evaluate_nonlinear_error = config_param_or(
+        "IncrementalGraphSlam/evaluate_nonlinear_error", true);
 
     return params;
 }

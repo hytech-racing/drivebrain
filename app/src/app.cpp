@@ -90,9 +90,9 @@ void DrivebrainApp::run()
     // so set the static transforms immediately
     _transform_buffer =
         std::make_shared<transforms::TransformBuffer>(5'000'000'000ULL);
-    _transform_buffer->set_base_to_imu(transforms::Pose2D{0.0, 0.0, 0.0});
-    _transform_buffer->set_base_to_gss(transforms::Pose2D{1.0, 0.25, 0.0});
-    _transform_buffer->set_base_to_lidar(transforms::Pose2D{0.75, 0.0, 0.0});
+    _transform_buffer->set_T_base_imu(transforms::Pose2D{0.0, 0.0, 0.0});
+    _transform_buffer->set_T_base_gss(transforms::Pose2D{1.0, 0.25, 0.0});
+    _transform_buffer->set_T_base_lidar(transforms::Pose2D{0.75, 0.0, 0.0});
 
     const app_config::DriverlessEstimatorRunnerParams estimator_params =
         app_config::load_driverless_estimator_runner_params();
@@ -105,11 +105,25 @@ void DrivebrainApp::run()
 
     spdlog::info("Started driverless estimator runner");
 
+    _latest_map_state = std::make_shared<slam::LatestMapState>();
+
+    const slam::backend::IncrementalGraphSlamParams graph_slam_params =
+        app_config::load_incremental_graph_slam_params();
+    _slam_backend_runner = std::make_unique<runtime::SlamBackendRunner>(
+        _latest_map_state, graph_slam_params, true);
+    _slam_backend_runner->start();
+    spdlog::info("Started graphSLAM backend runner");
+
     perception::LidarProcessorParams lidar_processor_params =
         app_config::load_lidar_processor_params();
+    const slam::frontend::SlamFrontendParams slam_frontend_params =
+        app_config::load_slam_frontend_params();
     _perception_frontend_runner =
         std::make_unique<runtime::PerceptionFrontendRunner>(
-            _transform_buffer, lidar_processor_params);
+            _transform_buffer, _latest_map_state,
+            [this](slam::LandmarkFrame frame)
+            { return _slam_backend_runner->enqueue(std::move(frame)); },
+            lidar_processor_params, slam_frontend_params);
     _perception_frontend_runner->start();
     spdlog::info("Started perception frontend runner");
 
@@ -235,6 +249,12 @@ void DrivebrainApp::run()
     {
         spdlog::info("Stopping perception frontend runner");
         _perception_frontend_runner->stop();
+    }
+
+    if (_slam_backend_runner)
+    {
+        spdlog::info("Stopping graphSLAM backend runner");
+        _slam_backend_runner->stop();
     }
 
     spdlog::info("Stopping autonomy stack");
