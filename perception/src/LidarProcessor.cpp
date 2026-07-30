@@ -81,6 +81,7 @@ std::optional<LidarProcessingResult> LidarProcessor::process(
     result.cluster_features = std::move(cluster_features);
     result.cone_candidates = std::move(cone_filter_result.candidates);
     result.rejected_clusters = std::move(cone_filter_result.rejected);
+    result.timestamp_ns = input.point_cloud.timestamp_ns;
 
     return result;
 }

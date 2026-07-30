@@ -262,7 +262,7 @@ inline void publish_transform(const std::string& parent_frame_id,
     tf->mutable_rotation()->set_z(std::sin(half_yaw));
     tf->mutable_rotation()->set_w(std::cos(half_yaw));
 
-    log(tf);
+    log("/tf", tf);
 }
 
 inline std::uint64_t system_time_ns()
