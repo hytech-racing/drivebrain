@@ -10,6 +10,7 @@
 #include <cstdint>
 
 #include "RigidTransform2D.hpp"
+#include "RigidTransform3D.hpp"
 #include "StateTracker.hpp"
 #include "dv_msgs.pb.h"
 
@@ -241,8 +242,7 @@ inline void render_path_at(const std::string& topic,
 inline void publish_transform(const std::string& parent_frame_id,
                               const std::string& child_frame_id,
                               std::uint64_t timestamp_ns,
-                              const transforms::Pose2D& transform,
-                              double z_m = 0.0)
+                              const transforms::Pose3D& transform)
 {
     auto tf = std::make_shared<foxglove::FrameTransform>();
 
@@ -253,16 +253,26 @@ inline void publish_transform(const std::string& parent_frame_id,
 
     tf->mutable_translation()->set_x(transform.x_m);
     tf->mutable_translation()->set_y(transform.y_m);
-    tf->mutable_translation()->set_z(z_m);
+    tf->mutable_translation()->set_z(transform.z_m);
 
-    const double half_yaw = 0.5 * transform.yaw_rad;
-
-    tf->mutable_rotation()->set_x(0.0);
-    tf->mutable_rotation()->set_y(0.0);
-    tf->mutable_rotation()->set_z(std::sin(half_yaw));
-    tf->mutable_rotation()->set_w(std::cos(half_yaw));
+    const transforms::Quaternion q = transform.q.normalized();
+    tf->mutable_rotation()->set_x(q.x);
+    tf->mutable_rotation()->set_y(q.y);
+    tf->mutable_rotation()->set_z(q.z);
+    tf->mutable_rotation()->set_w(q.w);
 
     log("/tf", tf);
+}
+
+inline void publish_transform(const std::string& parent_frame_id,
+                              const std::string& child_frame_id,
+                              std::uint64_t timestamp_ns,
+                              const transforms::Pose2D& transform,
+                              double z_m = 0.0)
+{
+    transforms::Pose3D transform3d = transforms::Pose3D::from_pose2d(transform);
+    transform3d.z_m = z_m;
+    publish_transform(parent_frame_id, child_frame_id, timestamp_ns, transform3d);
 }
 
 inline std::uint64_t system_time_ns()

@@ -202,6 +202,35 @@
             "vy_noise_std_mps": 0.1
         }
     },
+    "StaticTransforms": {
+        "T_base_imu": {
+            "x_m": 0.0,
+            "y_m": 0.0,
+            "z_m": 0.0,
+            "qw": 1.0,
+            "qx": 0.0,
+            "qy": 0.0,
+            "qz": 0.0
+        },
+        "T_base_gss": {
+            "x_m": 1.0,
+            "y_m": 0.25,
+            "z_m": 0.0,
+            "qw": 1.0,
+            "qx": 0.0,
+            "qy": 0.0,
+            "qz": 0.0
+        },
+        "T_base_lidar": {
+            "x_m": 0.75,
+            "y_m": 0.0,
+            "z_m": 0.15,
+            "qw": 1.0,
+            "qx": 0.0,
+            "qy": 0.0,
+            "qz": 0.0
+        }
+    },
     "LidarProcessor": {
         "deskew_enabled": false,
         "PointCloudFilter": {

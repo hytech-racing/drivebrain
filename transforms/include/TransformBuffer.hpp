@@ -32,6 +32,9 @@ class TransformBuffer
     bool insert_T_odom_base(const std::uint64_t timestamp_ns,
                             const Pose2D& transform);
 
+    bool insert_T_odom_base3d(const std::uint64_t timestamp_ns,
+                              const Pose3D& transform);
+
     /**
      * Point definition: T_map_odom transforms coordinates expressed in odom
      * into coordinates expressed in map
@@ -41,6 +44,9 @@ class TransformBuffer
      */
     bool insert_T_map_odom(const std::uint64_t timestamp_ns,
                            const Pose2D& transform);
+
+    bool insert_T_map_odom3d(const std::uint64_t timestamp_ns,
+                             const Pose3D& transform);
 
     /**
      * Sets the static transform T_base_imu
@@ -53,6 +59,8 @@ class TransformBuffer
      */
     bool set_T_base_imu(const Pose2D& transform);
 
+    bool set_T_base_imu3d(const Pose3D& transform);
+
     /**
      * Sets the static transform T_base_gss
      *
@@ -64,6 +72,8 @@ class TransformBuffer
      */
     bool set_T_base_gss(const Pose2D& transform);
 
+    bool set_T_base_gss3d(const Pose3D& transform);
+
     /**
      * Sets the static transform T_base_lidar
      *
@@ -74,6 +84,8 @@ class TransformBuffer
      * expressed in base_link
      */
     bool set_T_base_lidar(const Pose2D& transform);
+
+    bool set_T_base_lidar3d(const Pose3D& transform);
 
     [[nodiscard]] Pose2D T_base_imu() const;
 
@@ -110,24 +122,24 @@ class TransformBuffer
 
    private:
     void _remove_stale_transforms(
-        std::deque<std::pair<Pose2D, std::uint64_t>>& buffer);
+        std::deque<std::pair<Pose3D, std::uint64_t>>& buffer);
 
-    bool _transform_is_finite(const Pose2D& transform) const;
+    bool _transform_is_finite(const Pose3D& transform) const;
 
     bool _timestamp_out_of_buffer_bound(
-        const std::deque<std::pair<Pose2D, std::uint64_t>>& buffer,
+        const std::deque<std::pair<Pose3D, std::uint64_t>>& buffer,
         std::uint64_t query_timestamp_ns) const;
 
-    std::optional<Pose2D> _lookup_T_odom_base_unlocked(
+    std::optional<Pose3D> _lookup_T_odom_base_unlocked(
         std::uint64_t query_timestamp_ns) const;
 
-    std::optional<Pose2D> _lookup_T_map_odom_unlocked(
+    std::optional<Pose3D> _lookup_T_map_odom_unlocked(
         std::uint64_t query_timestamp_ns) const;
 
-    std::optional<Pose2D> _get_T_odom_frame_unlocked(
+    std::optional<Pose3D> _get_T_odom_frame_unlocked(
         const FrameId frame, const std::uint64_t timestamp_ns) const;
 
-    std::optional<Pose2D> _lookup_unlocked(
+    std::optional<Pose3D> _lookup_unlocked(
         const FrameId target, const FrameId source,
         const std::uint64_t timestamp_ns) const;
 
@@ -142,11 +154,11 @@ class TransformBuffer
     mutable std::mutex _mutex;
     mutable std::condition_variable _cv;
 
-    Pose2D _T_base_imu{};
-    Pose2D _T_base_gss{};
-    Pose2D _T_base_lidar{};
+    Pose3D _T_base_imu{};
+    Pose3D _T_base_gss{};
+    Pose3D _T_base_lidar{};
 
-    std::deque<std::pair<Pose2D, std::uint64_t>> _T_odom_base_buffer;
-    std::deque<std::pair<Pose2D, std::uint64_t>> _T_map_odom_buffer;
+    std::deque<std::pair<Pose3D, std::uint64_t>> _T_odom_base_buffer;
+    std::deque<std::pair<Pose3D, std::uint64_t>> _T_map_odom_buffer;
 };
 }  // namespace transforms

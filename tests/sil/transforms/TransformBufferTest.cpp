@@ -27,6 +27,29 @@ void expect_transform_near(const Pose2D& actual, const Pose2D& expected)
     EXPECT_NEAR(actual.yaw_rad, expected.yaw_rad, kTolerance);
 }
 
+void expect_pose3d_near(const Pose3D& actual, const Pose3D& expected)
+{
+    EXPECT_NEAR(actual.x_m, expected.x_m, kTolerance);
+    EXPECT_NEAR(actual.y_m, expected.y_m, kTolerance);
+    EXPECT_NEAR(actual.z_m, expected.z_m, kTolerance);
+    EXPECT_NEAR(actual.q.w, expected.q.w, kTolerance);
+    EXPECT_NEAR(actual.q.x, expected.q.x, kTolerance);
+    EXPECT_NEAR(actual.q.y, expected.q.y, kTolerance);
+    EXPECT_NEAR(actual.q.z, expected.q.z, kTolerance);
+}
+
+Quaternion yaw_quaternion(const double yaw_rad)
+{
+    return Quaternion{std::cos(0.5 * yaw_rad), 0.0, 0.0,
+                      std::sin(0.5 * yaw_rad)};
+}
+
+Quaternion pitch_quaternion(const double pitch_rad)
+{
+    return Quaternion{std::cos(0.5 * pitch_rad), 0.0,
+                      std::sin(0.5 * pitch_rad), 0.0};
+}
+
 TEST(TransformBufferTest, ExactTimestampLookup)
 {
     TransformBuffer buffer(1000);
@@ -192,6 +215,10 @@ TEST(TransformBufferTest, InvalidDynamicInsertionRejected)
     EXPECT_FALSE(buffer.insert_T_map_odom(100, {nan, 2.0, 0.3}));
     EXPECT_FALSE(buffer.insert_T_map_odom(100, {1.0, nan, 0.3}));
     EXPECT_FALSE(buffer.insert_T_map_odom(100, {1.0, 2.0, nan}));
+    EXPECT_FALSE(buffer.insert_T_odom_base3d(
+        100, Pose3D{1.0, 2.0, nan, Quaternion{1.0, 0.0, 0.0, 0.0}}));
+    EXPECT_FALSE(buffer.insert_T_odom_base3d(
+        100, Pose3D{1.0, 2.0, 3.0, Quaternion{0.0, 0.0, 0.0, 0.0}}));
 
     EXPECT_EQ(buffer.lookup(FrameId::Odom, FrameId::Baselink, 100),
               std::nullopt);
@@ -246,6 +273,82 @@ TEST(TransformBufferTest, Lookup3dConvertsLookup2dResult)
     EXPECT_NEAR(actual->q.x, 0.0, kTolerance);
     EXPECT_NEAR(actual->q.y, 0.0, kTolerance);
     EXPECT_NEAR(actual->q.z, std::sin(kPi / 4.0), kTolerance);
+}
+
+TEST(TransformBufferTest, Lookup3dPreservesNative3dDynamicPose)
+{
+    TransformBuffer buffer(1000);
+    const Pose3D expected{1.0, 2.0, 3.0, pitch_quaternion(0.4)};
+
+    EXPECT_TRUE(buffer.insert_T_odom_base3d(100, expected));
+
+    const std::optional<Pose3D> actual =
+        buffer.lookup3d(FrameId::Odom, FrameId::Baselink, 100);
+
+    ASSERT_TRUE(actual.has_value());
+    expect_pose3d_near(*actual, expected);
+}
+
+TEST(TransformBufferTest, LookupProjectsNative3dDynamicPoseTo2d)
+{
+    TransformBuffer buffer(1000);
+    EXPECT_TRUE(buffer.insert_T_odom_base3d(
+        100, Pose3D{1.0, 2.0, 3.0, pitch_quaternion(0.4)}));
+
+    const std::optional<Pose2D> actual =
+        buffer.lookup(FrameId::Odom, FrameId::Baselink, 100);
+
+    ASSERT_TRUE(actual.has_value());
+    expect_transform_near(*actual, Pose2D{1.0, 2.0, 0.0});
+}
+
+TEST(TransformBufferTest, Lookup3dInterpolatesTranslationAndQuaternion)
+{
+    TransformBuffer buffer(1000);
+
+    EXPECT_TRUE(buffer.insert_T_odom_base3d(
+        100, Pose3D{0.0, 0.0, 0.0, yaw_quaternion(0.0)}));
+    EXPECT_TRUE(buffer.insert_T_odom_base3d(
+        200, Pose3D{10.0, 20.0, 4.0, yaw_quaternion(kPi)}));
+
+    const std::optional<Pose3D> actual =
+        buffer.lookup3d(FrameId::Odom, FrameId::Baselink, 150);
+
+    ASSERT_TRUE(actual.has_value());
+    EXPECT_NEAR(actual->x_m, 5.0, kTolerance);
+    EXPECT_NEAR(actual->y_m, 10.0, kTolerance);
+    EXPECT_NEAR(actual->z_m, 2.0, kTolerance);
+    expect_transform_near(actual->to_pose2d(), Pose2D{5.0, 10.0, kPi / 2.0});
+}
+
+TEST(TransformBufferTest, StaticSensor3dTransformParticipatesInLookup3d)
+{
+    TransformBuffer buffer(1000);
+    const Pose3D T_base_lidar{1.0, 2.0, 0.5, pitch_quaternion(0.2)};
+
+    EXPECT_TRUE(buffer.set_T_base_lidar3d(T_base_lidar));
+    EXPECT_TRUE(buffer.insert_T_odom_base(100, Pose2D{}));
+
+    const std::optional<Pose3D> actual =
+        buffer.lookup3d(FrameId::Baselink, FrameId::Lidar, 100);
+
+    ASSERT_TRUE(actual.has_value());
+    expect_pose3d_near(*actual, T_base_lidar);
+}
+
+TEST(TransformBufferTest, StaticSensor3dTransformProjectsForLookup)
+{
+    TransformBuffer buffer(1000);
+
+    EXPECT_TRUE(buffer.set_T_base_lidar3d(
+        Pose3D{1.0, 2.0, 0.5, pitch_quaternion(0.2)}));
+    EXPECT_TRUE(buffer.insert_T_odom_base(100, Pose2D{}));
+
+    const std::optional<Pose2D> actual =
+        buffer.lookup(FrameId::Baselink, FrameId::Lidar, 100);
+
+    ASSERT_TRUE(actual.has_value());
+    expect_transform_near(*actual, Pose2D{1.0, 2.0, 0.0});
 }
 
 TEST(TransformBufferTest, Lookup3dWaitsForFutureOdomSample)

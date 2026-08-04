@@ -63,7 +63,36 @@ std::size_t config_size_or(const std::string& name,
     return default_value;
 }
 
+transforms::Pose3D load_pose3d_or(const std::string& prefix,
+                                  const transforms::Pose3D& default_value)
+{
+    transforms::Pose3D pose;
+    pose.x_m = config_double_or(prefix + "/x_m", default_value.x_m);
+    pose.y_m = config_double_or(prefix + "/y_m", default_value.y_m);
+    pose.z_m = config_double_or(prefix + "/z_m", default_value.z_m);
+    pose.q.w = config_double_or(prefix + "/qw", default_value.q.w);
+    pose.q.x = config_double_or(prefix + "/qx", default_value.q.x);
+    pose.q.y = config_double_or(prefix + "/qy", default_value.q.y);
+    pose.q.z = config_double_or(prefix + "/qz", default_value.q.z);
+    pose.q = pose.q.normalized();
+    return pose;
+}
+
 }  // namespace
+
+StaticTransformParams load_static_transform_params()
+{
+    StaticTransformParams params;
+    params.T_base_imu = load_pose3d_or(
+        "StaticTransforms/T_base_imu", transforms::Pose3D::identity());
+    params.T_base_gss = load_pose3d_or(
+        "StaticTransforms/T_base_gss",
+        transforms::Pose3D{1.0, 0.25, 0.0, transforms::Quaternion{}});
+    params.T_base_lidar = load_pose3d_or(
+        "StaticTransforms/T_base_lidar",
+        transforms::Pose3D{0.75, 0.0, 0.15, transforms::Quaternion{}});
+    return params;
+}
 
 perception::LidarProcessorParams load_lidar_processor_params()
 {
