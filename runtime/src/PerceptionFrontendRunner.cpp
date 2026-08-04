@@ -278,6 +278,37 @@ bool PerceptionFrontendRunner::_process_point_cloud(
         return false;
     }
 
+    // TODO: Add camera/vision pipeline here (before the call to
+    // cone_candidates_to_cone_frame)
+    //
+    // LidarProcessor should be camera-blind
+    // SlamFrontend should also be camera-blind
+    //
+    // Camera/vision should only enrich cone candidate meta data by adding color
+    // and color confidence (optionally a fused overall confidence).
+    //
+    // So, after implementation, replace the cone_candidates input
+    // parameter in cone_candidates_to_cone_frame()
+    //
+    // Conceptually:
+    // const auto enriched_candidates =
+    // _vision_cone_processor.enrich(lidar_processor_result->cone_candidates,
+    // ...), probably with camera_frame, T_base_lidar, camera_calibration
+    //
+    // Ideally returns a vector of new struct like this:
+    //
+    // struct EnrichedConeCandidate
+    // {
+    // perception::ConeCandidate lidar_candidate;
+    // double confidence{};
+    // slam::ConeColor color{slam::ConeColor::Unknown};
+    // double color_confidence;
+    // }
+    //
+    // If no camera frame, or unable to process for whatever reason, color
+    // remains unknown, color_confidence = 0.0, and overall confidence stays
+    // untouched
+
     const auto pose_odom_from_base = _transform_buffer->lookup3d(
         transforms::FrameId::Odom, transforms::FrameId::Baselink,
         lidar_processor_result->timestamp_ns, kTransformBufferTimeout);
@@ -290,6 +321,9 @@ bool PerceptionFrontendRunner::_process_point_cloud(
     const transforms::Pose3D pose_base_from_lidar =
         _transform_buffer->T_base_lidar3d();
 
+    // TODO: After adding camera/vision, adjust cone_candidates_to_cone_frame to
+    // use EnrichedConeCandidate instead. Then convert them to ConeFrame.
+    // Everything else "should" just work
     const slam::ConeFrame cone_frame = cone_candidates_to_cone_frame(
         lidar_processor_result->cone_candidates, *pose_odom_from_base,
         pose_base_from_lidar, lidar_processor_result->timestamp_ns);
@@ -393,11 +427,12 @@ bool PerceptionFrontendRunner::_process_point_cloud(
 
         if (planner_map)
         {
-            core::log("/mapping/planner_landmarks",
-                      adapters::to_foxglove_planner_landmark_markers(
-                          *planner_map));
-            core::log("/mapping/planner_landmark_text",
-                      adapters::to_foxglove_planner_landmark_text(*planner_map));
+            core::log(
+                "/mapping/planner_landmarks",
+                adapters::to_foxglove_planner_landmark_markers(*planner_map));
+            core::log(
+                "/mapping/planner_landmark_text",
+                adapters::to_foxglove_planner_landmark_text(*planner_map));
         }
 
         _publish_slam_frontend_debug(frontend_result);
