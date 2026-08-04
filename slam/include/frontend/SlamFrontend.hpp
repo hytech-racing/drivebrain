@@ -1,10 +1,13 @@
 #pragma once
 #include <cstdint>
 #include <optional>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 #include "SlamFrontendTypes.hpp"
+#include "common/PlannerMap.hpp"
+#include "frontend/PlannerMapBuilder.hpp"
 
 namespace slam::frontend
 {
@@ -19,6 +22,9 @@ class SlamFrontend
 
     [[nodiscard]] slam::FrontendResult process_frame(
         const slam::ConeFrame& frame);
+
+    [[nodiscard]] std::optional<slam::PlannerMap> planner_map(
+        std::uint64_t sequence, std::int64_t timestamp_ns) const;
 
    public:
     // Test file only, do not call unless for testing
@@ -40,7 +46,7 @@ class SlamFrontend
         const std::unordered_set<std::uint64_t>& landmark_ids);
 
     bool _advance_landmark_id_allocator(const slam::MapState& state,
-                                         std::string& rejection_message);
+                                        std::string& rejection_message);
 
    private:
     // Pure geometry
@@ -104,6 +110,10 @@ class SlamFrontend
                                     slam::FrontendDiagnostics& diagnostics);
 
    private:
+    [[nodiscard]] std::vector<PendingPlannerLandmark>
+    _pending_planner_landmarks() const;
+
+   private:
     SlamFrontendParams _params;
 
     std::optional<slam::MapState> _latest_map_state;
@@ -115,6 +125,11 @@ class SlamFrontend
     std::optional<std::uint64_t> _cached_map_sequence;
     std::optional<std::int64_t> _previous_map_state_timestamp_ns;
     std::optional<std::int64_t> _previous_frame_timestamp_ns;
+
+   private:
+    std::unordered_map<std::uint64_t, ColorEvidence>
+        _color_evidence_by_landmark_id;
+    PlannerMapBuilder _planner_map_builder;
 };
 
 }  // namespace slam::frontend

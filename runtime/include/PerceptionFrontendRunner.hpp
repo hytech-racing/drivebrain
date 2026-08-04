@@ -14,6 +14,7 @@
 #include "PointCloudTypes.hpp"
 #include "TransformBuffer.hpp"
 #include "common/LatestMapState.hpp"
+#include "common/LatestPlannerMap.hpp"
 #include "frontend/SlamFrontend.hpp"
 
 namespace runtime
@@ -60,7 +61,8 @@ class PerceptionFrontendRunner
         perception::LidarProcessorParams lidar_processor_params = {},
         slam::frontend::SlamFrontendParams slam_frontend_params =
             {1.0, 1.0, 5U, 3'000'000'000LL, 1'000'000'000LL, 0.5},
-        bool publish_full_telemetry = true);
+        bool publish_full_telemetry = true,
+        std::shared_ptr<slam::LatestPlannerMap> latest_planner_map = nullptr);
 
     ~PerceptionFrontendRunner();
 
@@ -91,6 +93,7 @@ class PerceptionFrontendRunner
    private:
     std::shared_ptr<transforms::TransformBuffer> _transform_buffer;
     std::shared_ptr<slam::LatestMapState> _latest_map_state;
+    std::shared_ptr<slam::LatestPlannerMap> _latest_planner_map;
 
     perception::LidarProcessorParams _lidar_processor_params;
 
@@ -115,6 +118,7 @@ class PerceptionFrontendRunner
    private:
     LandmarkFrameHandler _landmark_frame_handler;
     std::uint64_t _next_landmark_frame_index{};
+    std::uint64_t _next_planner_map_sequence{};
     slam::frontend::SlamFrontendParams _frontend_params;
     slam::frontend::SlamFrontend _slam_frontend;
     std::optional<std::uint64_t> _last_consumed_map_sequence;

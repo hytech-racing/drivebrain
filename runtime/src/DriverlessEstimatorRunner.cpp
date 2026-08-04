@@ -315,11 +315,11 @@ void DriverlessEstimatorRunner::_publish_estimate(const StateEstimate& estimate,
     if (should_publish_static_transforms)
     {
         core::publish_transform("base_link", "imu", estimate.timestamp_ns,
-                                _transform_buffer->T_base_imu());
+                                _transform_buffer->T_base_imu3d());
         core::publish_transform("base_link", "gss", estimate.timestamp_ns,
-                                _transform_buffer->T_base_gss());
+                                _transform_buffer->T_base_gss3d());
         core::publish_transform("base_link", "lidar", estimate.timestamp_ns,
-                                _transform_buffer->T_base_lidar(), 0.15);
+                                _transform_buffer->T_base_lidar3d());
         _last_static_transform_publish_stamp_ns = estimate.timestamp_ns;
     }
 

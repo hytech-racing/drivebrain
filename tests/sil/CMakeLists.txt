@@ -18,6 +18,8 @@ add_executable(
   perception/PointCloudFiltersTest.cpp
   perception/PointCloudDeskewTest.cpp
   slam/IncrementalGraphSlamTest.cpp
+  slam/LandmarkColorTest.cpp
+  slam/PlannerMapBuilderTest.cpp
   slam/SlamEndToEndTest.cpp
   slam/SlamFrontendAssociationTest.cpp
   slam/SlamFrontendMapStateTest.cpp

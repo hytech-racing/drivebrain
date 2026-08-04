@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <tuple>
 #include <unordered_set>
+#include <utility>
 
 namespace slam::frontend
 {
@@ -61,8 +62,7 @@ SlamFrontend::SlamFrontend(const SlamFrontendParams& params)
     _next_landmark_id = 0;
 }
 
-MapStateUpdateResult SlamFrontend::update_map_state(
-    const MapState& state)
+MapStateUpdateResult SlamFrontend::update_map_state(const MapState& state)
 {
     MapStateUpdateResult result;
 
@@ -290,6 +290,8 @@ FrontendResult SlamFrontend::process_frame(const ConeFrame& frame)
                 frame.pose_odom_from_base.transform_point(
                     observation.position_base_m),
                 observation.confidence,
+                observation.color,
+                observation.color_confidence,
             });
         }
     }
@@ -300,7 +302,7 @@ FrontendResult SlamFrontend::process_frame(const ConeFrame& frame)
     std::vector<AcceptedAssociation> optimized_associations;
 
     const bool map_state_is_usable =
-            _latest_map_state.has_value() &&
+        _latest_map_state.has_value() &&
         _latest_map_state->timestamp_ns <= frame.timestamp_ns;
 
     // Associate with optimized landmarks if map state is usable
@@ -308,7 +310,7 @@ FrontendResult SlamFrontend::process_frame(const ConeFrame& frame)
     {
         const std::vector<PredictedLandmarkMeasurement> predicted_landmarks =
             _predict_optimized_landmarks_in_base(*_latest_map_state,
-                                                frame.pose_odom_from_base);
+                                                 frame.pose_odom_from_base);
         const std::vector<AssociationCandidate> optimized_candidates =
             _build_optimized_association_candidates(
                 valid_detections, predicted_landmarks,
@@ -316,7 +318,7 @@ FrontendResult SlamFrontend::process_frame(const ConeFrame& frame)
         optimized_associations =
             _select_one_to_one_associations(optimized_candidates);
         _emit_optimized_associations(valid_detections, predicted_landmarks,
-                                    optimized_associations, result);
+                                     optimized_associations, result);
 
         for (const AcceptedAssociation& association : optimized_associations)
         {
@@ -341,7 +343,7 @@ FrontendResult SlamFrontend::process_frame(const ConeFrame& frame)
 
     std::vector<AssociationCandidate> pending_candidates =
         _build_association_candidates(valid_detections, pending_targets,
-                                     _params.local_track_association_gate_m);
+                                      _params.local_track_association_gate_m);
 
     pending_candidates.erase(
         std::remove_if(
@@ -356,7 +358,7 @@ FrontendResult SlamFrontend::process_frame(const ConeFrame& frame)
         _select_one_to_one_associations(pending_candidates);
 
     _apply_pending_track_associations(frame, valid_detections, pending_targets,
-                                     pending_associations, result);
+                                      pending_associations, result);
 
     for (const AcceptedAssociation& association : pending_associations)
     {
@@ -380,7 +382,7 @@ FrontendResult SlamFrontend::process_frame(const ConeFrame& frame)
 
     std::vector<AssociationCandidate> tentative_candidates =
         _build_association_candidates(valid_detections, tentative_targets,
-                                     _params.local_track_association_gate_m);
+                                      _params.local_track_association_gate_m);
 
     tentative_candidates.erase(
         std::remove_if(
@@ -413,10 +415,10 @@ FrontendResult SlamFrontend::process_frame(const ConeFrame& frame)
     }
 
     _create_tentative_tracks(frame, valid_detections,
-                            unmatched_valid_detection_indices);
+                             unmatched_valid_detection_indices);
 
     _promote_eligible_tracks(frame, valid_detections, tentative_targets,
-                            tentative_associations, result);
+                             tentative_associations, result);
 
     _remove_stale_local_tracks(frame.timestamp_ns, result.debug);
 
@@ -441,6 +443,19 @@ FrontendResult SlamFrontend::process_frame(const ConeFrame& frame)
     result.message = "Success";
 
     return result;
+}
+
+std::optional<PlannerMap> SlamFrontend::planner_map(
+    const std::uint64_t sequence, const std::int64_t timestamp_ns) const
+{
+    if (!_latest_map_state)
+    {
+        return std::nullopt;
+    }
+
+    return _planner_map_builder.build(
+        sequence, timestamp_ns, *_latest_map_state,
+        _pending_planner_landmarks(), _color_evidence_by_landmark_id);
 }
 
 std::vector<PredictedLandmarkMeasurement>
@@ -630,12 +645,14 @@ void SlamFrontend::_emit_optimized_associations(
             LandmarkAssociation::ExistingMapLandmark, association.residual_m
 
         });
+
+        update_color_evidence(_color_evidence_by_landmark_id[target.landmark_id],
+                              detection.color, detection.color_confidence);
     }
 }
 
 void SlamFrontend::_apply_tentative_track_associations(
-    const ConeFrame& frame,
-    const std::vector<ValidDetection>& valid_detections,
+    const ConeFrame& frame, const std::vector<ValidDetection>& valid_detections,
     const std::vector<LocalTrackTarget>& tentative_targets,
     const std::vector<AcceptedAssociation>& associations)
 {
@@ -665,12 +682,13 @@ void SlamFrontend::_apply_tentative_track_associations(
 
         local_track.observation_count++;
         local_track.last_seen_ns = frame.timestamp_ns;
+        update_color_evidence(local_track.color_evidence, detection.color,
+                              detection.color_confidence);
     }
 }
 
 void SlamFrontend::_apply_pending_track_associations(
-    const ConeFrame& frame,
-    const std::vector<ValidDetection>& valid_detections,
+    const ConeFrame& frame, const std::vector<ValidDetection>& valid_detections,
     const std::vector<LocalTrackTarget>& pending_targets,
     const std::vector<AcceptedAssociation>& associations,
     FrontendResult& result)
@@ -701,11 +719,17 @@ void SlamFrontend::_apply_pending_track_associations(
 
         local_track.observation_count++;
         local_track.last_seen_ns = frame.timestamp_ns;
+        update_color_evidence(local_track.color_evidence, detection.color,
+                              detection.color_confidence);
 
         if (!local_track.landmark_id.has_value())
         {
             throw std::logic_error("Pending track has no landmark ID");
         }
+
+        update_color_evidence(
+            _color_evidence_by_landmark_id[*local_track.landmark_id],
+            detection.color, detection.color_confidence);
 
         result.landmark_observations.push_back(LandmarkObservation{
             *local_track.landmark_id,
@@ -717,8 +741,7 @@ void SlamFrontend::_apply_pending_track_associations(
 }
 
 void SlamFrontend::_create_tentative_tracks(
-    const ConeFrame& frame,
-    const std::vector<ValidDetection>& valid_detections,
+    const ConeFrame& frame, const std::vector<ValidDetection>& valid_detections,
     const std::vector<std::size_t>& unmatched_valid_detection_indices)
 {
     if (unmatched_valid_detection_indices.empty())
@@ -729,10 +752,11 @@ void SlamFrontend::_create_tentative_tracks(
     for (const std::size_t valid_detection_index :
          unmatched_valid_detection_indices)
     {
-        const transforms::Point2D& position_odom_m =
-            valid_detections[valid_detection_index].position_odom_m;
+        const ValidDetection& detection =
+            valid_detections[valid_detection_index];
+        const transforms::Point2D& position_odom_m = detection.position_odom_m;
 
-        _local_tracks.push_back(LocalLandmarkTrack{
+        LocalLandmarkTrack track{
             _next_local_track_id++,
             LocalTrackState::Tentative,
             std::nullopt,
@@ -740,13 +764,16 @@ void SlamFrontend::_create_tentative_tracks(
             1U,
             frame.timestamp_ns,
             frame.timestamp_ns,
-        });
+        };
+
+        update_color_evidence(track.color_evidence, detection.color,
+                              detection.color_confidence);
+        _local_tracks.push_back(track);
     }
 }
 
 void SlamFrontend::_promote_eligible_tracks(
-    const ConeFrame& frame,
-    const std::vector<ValidDetection>& valid_detections,
+    const ConeFrame& frame, const std::vector<ValidDetection>& valid_detections,
     const std::vector<LocalTrackTarget>& tentative_targets,
     const std::vector<AcceptedAssociation>& tentative_associations,
     FrontendResult& result)
@@ -769,6 +796,10 @@ void SlamFrontend::_promote_eligible_tracks(
             local_track.state = LocalTrackState::Pending;
             local_track.landmark_id = _next_landmark_id;
             local_track.last_seen_ns = frame.timestamp_ns;
+
+            merge_color_evidence(
+                _color_evidence_by_landmark_id[*local_track.landmark_id],
+                local_track.color_evidence);
 
             result.timestamp_ns = frame.timestamp_ns;
             result.new_landmark_ids.push_back(*local_track.landmark_id);
@@ -848,6 +879,30 @@ std::vector<AcceptedAssociation> SlamFrontend::associate_points_one_to_one(
         _build_association_candidates(valid_detections, local_targets, gate_m);
 
     return _select_one_to_one_associations(candidates);
+}
+
+std::vector<PendingPlannerLandmark> SlamFrontend::_pending_planner_landmarks()
+    const
+{
+    std::vector<PendingPlannerLandmark> pending;
+    pending.reserve(_local_tracks.size());
+
+    for (const LocalLandmarkTrack& track : _local_tracks)
+    {
+        if (track.state != LocalTrackState::Pending ||
+            !track.landmark_id.has_value())
+        {
+            continue;
+        }
+
+        pending.push_back(PendingPlannerLandmark{
+            *track.landmark_id,
+            track.position_odom_m,
+            estimate_color(track.color_evidence),
+        });
+    }
+
+    return pending;
 }
 
 }  // namespace slam::frontend

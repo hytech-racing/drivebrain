@@ -10,11 +10,28 @@
 namespace slam
 {
 
+enum class ConeColor
+{
+    Unknown,
+    Blue,
+    Yellow,
+    OrangeSmall,
+    OrangeBig,
+};
+
 // Step 1: Perception (LidarProcessor and/or cameras) -> frontend
 struct ConeDetection
 {
     transforms::Point2D position_base_m{};
+
+    // Overall/fused confidence that this detection should be considered by the
+    // frontend. Lidar-only detections can provide this directly (will be
+    // Unknown); future vision can update it before the frame reaches
+    // SlamFrontend
     double confidence{};
+
+    ConeColor color{ConeColor::Unknown};
+    double color_confidence{};
 };
 
 // Producer: Perception (LidarProcessor and/or cameras)

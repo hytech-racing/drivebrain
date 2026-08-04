@@ -54,6 +54,30 @@ void expect_observation(const LandmarkObservation& actual,
     EXPECT_NEAR(actual.measurement_base_m.y_m, 0.0, kTolerance);
 }
 
+TEST(SlamFrontendTrackingTest, ColorMetadataDoesNotAffectCurrentTracking)
+{
+    SlamFrontend frontend(make_test_params());
+
+    ConeDetection first_detection = make_detection(10.0);
+    first_detection.color = ConeColor::Blue;
+    first_detection.color_confidence = 0.9;
+    ASSERT_TRUE(frontend.process_frame(make_frame(100, {first_detection}))
+                    .frame_accepted);
+
+    ConeDetection second_detection = make_detection(10.1);
+    second_detection.color = ConeColor::Yellow;
+    second_detection.color_confidence = 0.8;
+    const FrontendResult result =
+        frontend.process_frame(make_frame(200, {second_detection}));
+
+    ASSERT_TRUE(result.frame_accepted);
+    EXPECT_EQ(result.debug.detections_received, 1U);
+    EXPECT_EQ(result.debug.detections_rejected_invalid, 0U);
+    ASSERT_EQ(result.landmark_observations.size(), 1U);
+    expect_observation(result.landmark_observations.front(), 0U, 10.1,
+                       LandmarkAssociation::NewLandmark);
+}
+
 TEST(SlamFrontendTrackingTest, FilteredDetectionKeepsSourceIndexStable)
 {
     SlamFrontend frontend(make_test_params(3U));

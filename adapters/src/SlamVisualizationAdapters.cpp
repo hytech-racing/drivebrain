@@ -141,6 +141,71 @@ void association_color(const slam::LandmarkAssociation association,
     b = 1.0;
 }
 
+void cone_color(const slam::ConeColor color, double& r, double& g, double& b)
+{
+    switch (color)
+    {
+        case slam::ConeColor::Blue:
+            r = 0.0;
+            g = 0.25;
+            b = 1.0;
+            return;
+        case slam::ConeColor::Yellow:
+            r = 1.0;
+            g = 0.85;
+            b = 0.0;
+            return;
+        case slam::ConeColor::OrangeSmall:
+        case slam::ConeColor::OrangeBig:
+            r = 1.0;
+            g = 0.45;
+            b = 0.0;
+            return;
+        case slam::ConeColor::Unknown:
+            r = 0.75;
+            g = 0.75;
+            b = 0.75;
+            return;
+    }
+
+    r = 0.75;
+    g = 0.75;
+    b = 0.75;
+}
+
+std::string cone_color_text(const slam::ConeColor color)
+{
+    switch (color)
+    {
+        case slam::ConeColor::Blue:
+            return "blue";
+        case slam::ConeColor::Yellow:
+            return "yellow";
+        case slam::ConeColor::OrangeSmall:
+            return "orange_small";
+        case slam::ConeColor::OrangeBig:
+            return "orange_big";
+        case slam::ConeColor::Unknown:
+            return "unknown";
+    }
+
+    return "unknown";
+}
+
+std::string planner_landmark_state_text(
+    const slam::PlannerLandmarkState state)
+{
+    switch (state)
+    {
+        case slam::PlannerLandmarkState::Pending:
+            return "pending";
+        case slam::PlannerLandmarkState::Optimized:
+            return "optimized";
+    }
+
+    return "unknown";
+}
+
 const char* association_to_string(const slam::LandmarkAssociation association)
 {
     switch (association)
@@ -315,6 +380,69 @@ std::shared_ptr<foxglove::SceneUpdate> to_foxglove_frontend_association_text(
         text->set_billboard(true);
         text->set_font_size(0.10);
         text->set_text(frontend_observation_text(observation));
+        set_color(text->mutable_color(), 1.0, 1.0, 1.0, 1.0);
+    }
+
+    return scene;
+}
+
+std::shared_ptr<foxglove::SceneUpdate> to_foxglove_planner_landmark_markers(
+    const slam::PlannerMap& map, std::string_view entity_id)
+{
+    auto scene = make_clearing_scene(map.timestamp_ns);
+    auto* entity = add_entity(scene.get(), kMapFrame, entity_id,
+                              map.timestamp_ns);
+
+    for (const slam::PlannerLandmark& landmark : map.landmarks)
+    {
+        double r{};
+        double g{};
+        double b{};
+        cone_color(landmark.color, r, g, b);
+
+        auto* sphere = entity->add_spheres();
+        auto* position = sphere->mutable_pose()->mutable_position();
+        position->set_x(landmark.position_map_m.x_m);
+        position->set_y(landmark.position_map_m.y_m);
+        position->set_z(0.15);
+        set_identity_orientation(sphere->mutable_pose()->mutable_orientation());
+
+        const bool optimized =
+            landmark.state == slam::PlannerLandmarkState::Optimized;
+        const double size = optimized ? 0.24 : 0.18;
+        sphere->mutable_size()->set_x(size);
+        sphere->mutable_size()->set_y(size);
+        sphere->mutable_size()->set_z(size);
+        set_color(sphere->mutable_color(), r, g, b, optimized ? 1.0 : 0.45);
+    }
+
+    return scene;
+}
+
+std::shared_ptr<foxglove::SceneUpdate> to_foxglove_planner_landmark_text(
+    const slam::PlannerMap& map, std::string_view entity_id)
+{
+    auto scene = make_clearing_scene(map.timestamp_ns);
+    auto* entity = add_entity(scene.get(), kMapFrame, entity_id,
+                              map.timestamp_ns);
+
+    for (const slam::PlannerLandmark& landmark : map.landmarks)
+    {
+        auto* text = entity->add_texts();
+        auto* position = text->mutable_pose()->mutable_position();
+        position->set_x(landmark.position_map_m.x_m);
+        position->set_y(landmark.position_map_m.y_m);
+        position->set_z(0.55);
+        set_identity_orientation(text->mutable_pose()->mutable_orientation());
+        text->set_billboard(true);
+        text->set_font_size(0.10);
+
+        std::ostringstream label;
+        label << "id: " << landmark.landmark_id << "\n"
+              << planner_landmark_state_text(landmark.state) << "\n"
+              << cone_color_text(landmark.color) << " " << std::fixed
+              << std::setprecision(2) << landmark.color_confidence;
+        text->set_text(label.str());
         set_color(text->mutable_color(), 1.0, 1.0, 1.0, 1.0);
     }
 

@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "RigidTransform2D.hpp"
+#include "common/PlannerMap.hpp"
 #include "common/SlamInterfaces.hpp"
 
 namespace adapters
@@ -34,6 +35,14 @@ std::shared_ptr<foxglove::SceneUpdate> to_foxglove_frontend_association_markers(
 std::shared_ptr<foxglove::SceneUpdate> to_foxglove_frontend_association_text(
     const slam::FrontendResult& result, std::string_view frame_id,
     std::string_view entity_id = "slam_frontend_association_labels");
+
+std::shared_ptr<foxglove::SceneUpdate> to_foxglove_planner_landmark_markers(
+    const slam::PlannerMap& map,
+    std::string_view entity_id = "planner_landmarks");
+
+std::shared_ptr<foxglove::SceneUpdate> to_foxglove_planner_landmark_text(
+    const slam::PlannerMap& map,
+    std::string_view entity_id = "planner_landmark_labels");
 
 std::shared_ptr<foxglove::FrameTransform> to_foxglove_map_odom_transform(
     const transforms::Pose2D& pose_map_from_odom, std::int64_t timestamp_ns);

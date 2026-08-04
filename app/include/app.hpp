@@ -2,6 +2,7 @@
 #include "DriverlessEstimatorRunner.hpp"
 #include "ETHRecvComms.hpp"
 #include "LatestEstimate.hpp"
+#include "common/LatestPlannerMap.hpp"
 #include "PerceptionFrontendRunner.hpp"
 #include "SlamBackendRunner.hpp"
 #if HOOTL_ENABLED
@@ -124,6 +125,7 @@ class DrivebrainApp
    private:
     // shared map_state between perception frontend and slam backend
     std::shared_ptr<slam::LatestMapState> _latest_map_state;
+    std::shared_ptr<slam::LatestPlannerMap> _latest_planner_map;
 
    private:
     // perception frontend

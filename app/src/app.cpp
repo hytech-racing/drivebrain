@@ -90,9 +90,11 @@ void DrivebrainApp::run()
     // so set the static transforms immediately
     _transform_buffer =
         std::make_shared<transforms::TransformBuffer>(5'000'000'000ULL);
-    _transform_buffer->set_T_base_imu(transforms::Pose2D{0.0, 0.0, 0.0});
-    _transform_buffer->set_T_base_gss(transforms::Pose2D{1.0, 0.25, 0.0});
-    _transform_buffer->set_T_base_lidar(transforms::Pose2D{0.75, 0.0, 0.0});
+    const app_config::StaticTransformParams static_transform_params =
+        app_config::load_static_transform_params();
+    _transform_buffer->set_T_base_imu3d(static_transform_params.T_base_imu);
+    _transform_buffer->set_T_base_gss3d(static_transform_params.T_base_gss);
+    _transform_buffer->set_T_base_lidar3d(static_transform_params.T_base_lidar);
 
     const app_config::DriverlessEstimatorRunnerParams estimator_params =
         app_config::load_driverless_estimator_runner_params();
@@ -106,6 +108,7 @@ void DrivebrainApp::run()
     spdlog::info("Started driverless estimator runner");
 
     _latest_map_state = std::make_shared<slam::LatestMapState>();
+    _latest_planner_map = std::make_shared<slam::LatestPlannerMap>();
 
     const slam::backend::IncrementalGraphSlamParams graph_slam_params =
         app_config::load_incremental_graph_slam_params();
@@ -123,7 +126,8 @@ void DrivebrainApp::run()
             _transform_buffer, _latest_map_state,
             [this](slam::LandmarkFrame frame)
             { return _slam_backend_runner->enqueue(std::move(frame)); },
-            lidar_processor_params, slam_frontend_params);
+            lidar_processor_params, slam_frontend_params, true,
+            _latest_planner_map);
     _perception_frontend_runner->start();
     spdlog::info("Started perception frontend runner");
 

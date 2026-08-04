@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "common/SlamInterfaces.hpp"
+#include "frontend/LandmarkColor.hpp"
 
 namespace slam::frontend
 {
@@ -30,6 +31,8 @@ struct LocalLandmarkTrack
     std::size_t observation_count{};
     std::int64_t first_seen_ns{};
     std::int64_t last_seen_ns{};
+
+    ColorEvidence color_evidence{};
 };
 
 struct ValidDetection
@@ -41,6 +44,8 @@ struct ValidDetection
     transforms::Point2D position_odom_m{};
 
     double confidence{};
+    ConeColor color{ConeColor::Unknown};
+    double color_confidence{};
 };
 
 struct LocalTrackTarget
@@ -99,6 +104,13 @@ struct SlamFrontendParams
     std::int64_t pending_track_max_age_ns{};
 
     double minimum_detection_confidence{};
+};
+
+struct PendingPlannerLandmark
+{
+    std::uint64_t landmark_id{};
+    transforms::Point2D position_odom_m{};
+    LandmarkColorEstimate color_estimate{};
 };
 
 }  // namespace slam::frontend

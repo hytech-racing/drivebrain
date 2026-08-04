@@ -51,6 +51,8 @@ slam::ConeFrame cone_candidates_to_cone_frame(
     {
         slam::ConeDetection detection;
         detection.confidence = candidate.confidence;
+        detection.color = slam::ConeColor::Unknown;
+        detection.color_confidence = 0.0;
 
         const transforms::Point3D point_lidar{
             candidate.position.x, candidate.position.y, candidate.position.z};
@@ -82,9 +84,11 @@ PerceptionFrontendRunner::PerceptionFrontendRunner(
     LandmarkFrameHandler landmark_frame_handler,
     perception::LidarProcessorParams lidar_processor_params,
     slam::frontend::SlamFrontendParams slam_frontend_params,
-    bool publish_full_telemetry)
+    bool publish_full_telemetry,
+    std::shared_ptr<slam::LatestPlannerMap> latest_planner_map)
     : _transform_buffer(std::move(transform_buffer)),
       _latest_map_state(std::move(latest_map_state)),
+      _latest_planner_map(std::move(latest_planner_map)),
       _landmark_frame_handler(std::move(landmark_frame_handler)),
       _lidar_processor_params(lidar_processor_params),
       _lidar_processor(_lidar_processor_params),
@@ -300,6 +304,18 @@ bool PerceptionFrontendRunner::_process_point_cloud(
         return false;
     }
 
+    const std::optional<slam::PlannerMap> planner_map =
+        _slam_frontend.planner_map(_next_planner_map_sequence,
+                                   frontend_result.timestamp_ns);
+    if (planner_map)
+    {
+        if (_latest_planner_map)
+        {
+            _latest_planner_map->store(*planner_map);
+        }
+        _next_planner_map_sequence++;
+    }
+
     slam::LandmarkFrame landmark_frame =
         frontend_to_landmark_frame(frontend_result, _next_landmark_frame_index);
 
@@ -374,6 +390,15 @@ bool PerceptionFrontendRunner::_process_point_cloud(
         core::log("/slam/frontend/association_text",
                   adapters::to_foxglove_frontend_association_text(
                       frontend_result, "base_link"));
+
+        if (planner_map)
+        {
+            core::log("/mapping/planner_landmarks",
+                      adapters::to_foxglove_planner_landmark_markers(
+                          *planner_map));
+            core::log("/mapping/planner_landmark_text",
+                      adapters::to_foxglove_planner_landmark_text(*planner_map));
+        }
 
         _publish_slam_frontend_debug(frontend_result);
     }
