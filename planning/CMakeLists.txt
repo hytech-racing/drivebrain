@@ -4,7 +4,7 @@ add_library(planning INTERFACE)
 
 target_include_directories(planning INTERFACE 
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
-    "${CMAKE_SOURCE_DIR}/planning/external/delaunator-cpp/include"
+    "${delaunator_SOURCE_DIR}/include"
 )
 
 target_link_libraries(planning INTERFACE

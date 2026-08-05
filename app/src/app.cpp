@@ -16,7 +16,6 @@
 #include "Telemetry.hpp"
 #include "ControllerManager.hpp"
 #include "DrivebrainControllerInterface.hpp"
-#include "PathPlanner.hpp"
 
 #include "dv_msgs.pb.h"
 #include "hytech_msgs.pb.h"

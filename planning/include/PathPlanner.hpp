@@ -25,33 +25,42 @@ namespace planning {
   inline std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones) {
     
     std::vector<core::xyz_vec<float>> path_points; // THe final set of points to be followed
+
+    if (cones.cones_size() < 3) return path_points; // Min 3 points required to do triangulation
+    
     float mx = 0.0f;
     float my = 0.0f;
 
     std::vector<double> coords; // Cone coordinates used to make the delaunay triangulation
 
-    coords.resize(cones.cones_size()*2); // Allocate enough memory to store the x and y coordinates of each cone
+    coords.reserve(cones.cones_size()*2); // Allocate enough memory to store the x and y coordinates of each cone
+
+    // Store cones in message order, so point index i corresponds to cones().at(i)
+    for (const auto& cone : cones.cones()) {
+      coords.push_back(cone.position().x());
+      coords.push_back(cone.position().y());
+    }
 
     // Pre-process the data to alternate between blue and yellow cones
-    int inner_index = 0;
-    int outer_index = 2;
-    for (int i = 0; i < cones.cones_size(); i++) {
-      if (cones.cones().at(i).color() == dv_msgs::Cones_ConeColor_BLUE) {
-        coords[inner_index] = cones.cones().at(i).position().x();
-        coords[inner_index + 1] = cones.cones().at(i).position().y();
-        inner_index +=4;
-      } 
+    // int inner_index = 0;
+    // int outer_index = 2;
+    // for (int i = 0; i < cones.cones_size(); i++) {
+    //   if (cones.cones().at(i).color() == dv_msgs::Cones_ConeColor_BLUE) {
+    //     coords[inner_index] = cones.cones().at(i).position().x();
+    //     coords[inner_index + 1] = cones.cones().at(i).position().y();
+    //     inner_index +=4;
+    //   }
 
-      if (cones.cones().at(i).color() == dv_msgs::Cones_ConeColor_YELLOW) {
-        coords[outer_index] = cones.cones().at(i).position().x();
-        coords[outer_index + 1] = cones.cones().at(i).position().y();
-        outer_index +=4;
-      }
+    //   if (cones.cones().at(i).color() == dv_msgs::Cones_ConeColor_YELLOW) {
+    //     coords[outer_index] = cones.cones().at(i).position().x();
+    //     coords[outer_index + 1] = cones.cones().at(i).position().y();
+    //     outer_index +=4;
+    //   }
 
-      // TODO: come up with something for orange cones (exit and entry lanes)
+    //   // TODO: come up with something for orange cones (exit and entry lanes)
 
-    }
-    
+    // }
+
 
     delaunator::Delaunator delaunay(coords); // Triangulation occurs on construction
 

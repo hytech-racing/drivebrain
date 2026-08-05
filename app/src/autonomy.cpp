@@ -63,7 +63,7 @@ void Autonomy::_run() {
 
     auto dv = StateTracker::instance().dv_state();
 
-    if (dv.lidar_is_valid && dv.lidar_cloud != last_scan) {
+    if (dv.lidar_is_valid && dv.lidar_cloud != last_scan && dv.cone_observations) {
       last_scan = dv.lidar_cloud;
 
       // TODO: cone classifier needs to be invoked here

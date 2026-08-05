@@ -12,6 +12,17 @@ list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/cmake")
 option(HOOTL "Build with HOOTL sim interface" OFF)
 
 #################################
+# Upstreams needed by the custom libs below
+#################################
+FetchContent_Declare(
+    delaunator
+    GIT_REPOSITORY https://github.com/delfrrr/delaunator-cpp.git
+    GIT_TAG v0.4.0
+    SOURCE_SUBDIR  none
+)
+FetchContent_MakeAvailable(delaunator)
+
+#################################
 # Custom libs
 #################################
 add_subdirectory(core)
