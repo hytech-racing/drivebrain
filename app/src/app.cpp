@@ -95,6 +95,10 @@ void DrivebrainApp::run()
     _transform_buffer->set_T_base_imu3d(static_transform_params.T_base_imu);
     _transform_buffer->set_T_base_gss3d(static_transform_params.T_base_gss);
     _transform_buffer->set_T_base_lidar3d(static_transform_params.T_base_lidar);
+    _transform_buffer->set_T_base_camera_wide3d(
+        static_transform_params.T_base_camera_wide);
+    _transform_buffer->set_T_base_camera_narrow3d(
+        static_transform_params.T_base_camera_narrow);
 
     const app_config::DriverlessEstimatorRunnerParams estimator_params =
         app_config::load_driverless_estimator_runner_params();

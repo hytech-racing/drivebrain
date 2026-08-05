@@ -20,6 +20,8 @@ struct StaticTransformParams
     transforms::Pose3D T_base_imu;
     transforms::Pose3D T_base_gss;
     transforms::Pose3D T_base_lidar;
+    transforms::Pose3D T_base_camera_wide;
+    transforms::Pose3D T_base_camera_narrow;
 };
 
 StaticTransformParams load_static_transform_params();

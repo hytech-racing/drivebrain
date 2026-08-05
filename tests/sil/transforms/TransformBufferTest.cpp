@@ -351,6 +351,44 @@ TEST(TransformBufferTest, StaticSensor3dTransformProjectsForLookup)
     expect_transform_near(*actual, Pose2D{1.0, 2.0, 0.0});
 }
 
+TEST(TransformBufferTest, CameraStaticTransformsParticipateInLookup3d)
+{
+    TransformBuffer buffer(1000);
+    const Pose3D expected{0.0, 0.0, 1.0, Quaternion{}};
+
+    EXPECT_TRUE(buffer.set_T_base_camera_wide3d(expected));
+    EXPECT_TRUE(buffer.set_T_base_camera_narrow3d(expected));
+    EXPECT_TRUE(buffer.insert_T_odom_base(100, Pose2D{}));
+
+    const std::optional<Pose3D> wide =
+        buffer.lookup3d(FrameId::Baselink, FrameId::CameraWide, 100);
+    const std::optional<Pose3D> narrow =
+        buffer.lookup3d(FrameId::Baselink, FrameId::CameraNarrow, 100);
+
+    ASSERT_TRUE(wide.has_value());
+    ASSERT_TRUE(narrow.has_value());
+    expect_pose3d_near(*wide, expected);
+    expect_pose3d_near(*narrow, expected);
+}
+
+TEST(TransformBufferTest, CameraToLidarLookupComposesThroughBaseLink)
+{
+    TransformBuffer buffer(1000);
+
+    EXPECT_TRUE(buffer.set_T_base_camera_wide3d(
+        Pose3D{0.0, 0.0, 1.0, Quaternion{}}));
+    EXPECT_TRUE(buffer.set_T_base_lidar3d(
+        Pose3D{0.75, 0.0, 0.15, Quaternion{}}));
+    EXPECT_TRUE(buffer.insert_T_odom_base(100, Pose2D{}));
+
+    const std::optional<Pose3D> T_camera_lidar =
+        buffer.lookup3d(FrameId::CameraWide, FrameId::Lidar, 100);
+
+    ASSERT_TRUE(T_camera_lidar.has_value());
+    expect_pose3d_near(*T_camera_lidar,
+                       Pose3D{0.75, 0.0, -0.85, Quaternion{}});
+}
+
 TEST(TransformBufferTest, Lookup3dWaitsForFutureOdomSample)
 {
     TransformBuffer buffer(1000);

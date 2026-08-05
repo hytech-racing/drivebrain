@@ -87,6 +87,10 @@ class TransformBuffer
 
     bool set_T_base_lidar3d(const Pose3D& transform);
 
+    bool set_T_base_camera_wide3d(const Pose3D& transform);
+
+    bool set_T_base_camera_narrow3d(const Pose3D& transform);
+
     [[nodiscard]] Pose2D T_base_imu() const;
 
     [[nodiscard]] Pose2D T_base_gss() const;
@@ -98,6 +102,10 @@ class TransformBuffer
     [[nodiscard]] Pose3D T_base_gss3d() const;
 
     [[nodiscard]] Pose3D T_base_lidar3d() const;
+
+    [[nodiscard]] Pose3D T_base_camera_wide3d() const;
+
+    [[nodiscard]] Pose3D T_base_camera_narrow3d() const;
 
     /**
      * Looks up the transform T_target_source at query_timestamp_ns
@@ -157,6 +165,8 @@ class TransformBuffer
     Pose3D _T_base_imu{};
     Pose3D _T_base_gss{};
     Pose3D _T_base_lidar{};
+    Pose3D _T_base_camera_wide{};
+    Pose3D _T_base_camera_narrow{};
 
     std::deque<std::pair<Pose3D, std::uint64_t>> _T_odom_base_buffer;
     std::deque<std::pair<Pose3D, std::uint64_t>> _T_map_odom_buffer;

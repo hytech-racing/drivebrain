@@ -91,6 +91,12 @@ StaticTransformParams load_static_transform_params()
     params.T_base_lidar = load_pose3d_or(
         "StaticTransforms/T_base_lidar",
         transforms::Pose3D{0.75, 0.0, 0.15, transforms::Quaternion{}});
+    params.T_base_camera_wide = load_pose3d_or(
+        "StaticTransforms/T_base_camera_wide",
+        transforms::Pose3D{0.0, 0.0, 1.0, transforms::Quaternion{}});
+    params.T_base_camera_narrow = load_pose3d_or(
+        "StaticTransforms/T_base_camera_narrow",
+        transforms::Pose3D{0.0, 0.0, 1.0, transforms::Quaternion{}});
     return params;
 }
 

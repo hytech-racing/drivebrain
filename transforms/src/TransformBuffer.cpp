@@ -197,6 +197,34 @@ bool TransformBuffer::set_T_base_lidar3d(const Pose3D& transform)
     return true;
 }
 
+bool TransformBuffer::set_T_base_camera_wide3d(const Pose3D& transform)
+{
+    if (!_transform_is_finite(transform))
+    {
+        return false;
+    }
+
+    const Pose3D normalized_transform = normalized_pose(transform);
+    std::scoped_lock lock(_mutex);
+
+    _T_base_camera_wide = normalized_transform;
+    return true;
+}
+
+bool TransformBuffer::set_T_base_camera_narrow3d(const Pose3D& transform)
+{
+    if (!_transform_is_finite(transform))
+    {
+        return false;
+    }
+
+    const Pose3D normalized_transform = normalized_pose(transform);
+    std::scoped_lock lock(_mutex);
+
+    _T_base_camera_narrow = normalized_transform;
+    return true;
+}
+
 Pose2D TransformBuffer::T_base_imu() const
 {
     std::scoped_lock lock(_mutex);
@@ -231,6 +259,18 @@ Pose3D TransformBuffer::T_base_lidar3d() const
 {
     std::scoped_lock lock(_mutex);
     return _T_base_lidar;
+}
+
+Pose3D TransformBuffer::T_base_camera_wide3d() const
+{
+    std::scoped_lock lock(_mutex);
+    return _T_base_camera_wide;
+}
+
+Pose3D TransformBuffer::T_base_camera_narrow3d() const
+{
+    std::scoped_lock lock(_mutex);
+    return _T_base_camera_narrow;
 }
 
 void TransformBuffer::_remove_stale_transforms(
@@ -321,6 +361,12 @@ std::optional<Pose3D> TransformBuffer::_get_T_odom_frame_unlocked(
             break;
         case FrameId::Lidar:
             T_base_sensor = _T_base_lidar;
+            break;
+        case FrameId::CameraWide:
+            T_base_sensor = _T_base_camera_wide;
+            break;
+        case FrameId::CameraNarrow:
+            T_base_sensor = _T_base_camera_narrow;
             break;
         default:
             is_static_sensor = false;
@@ -480,7 +526,8 @@ bool TransformBuffer::_lookup_ready_unlocked(
 bool TransformBuffer::_frame_requires_odom_buffer(const FrameId frame) const
 {
     return frame == FrameId::Baselink || frame == FrameId::Imu ||
-           frame == FrameId::Gss || frame == FrameId::Lidar;
+           frame == FrameId::Gss || frame == FrameId::Lidar ||
+           frame == FrameId::CameraWide || frame == FrameId::CameraNarrow;
 }
 
 bool TransformBuffer::_transform_is_finite(const Pose3D& transform) const

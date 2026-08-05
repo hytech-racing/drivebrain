@@ -320,6 +320,11 @@ void DriverlessEstimatorRunner::_publish_estimate(const StateEstimate& estimate,
                                 _transform_buffer->T_base_gss3d());
         core::publish_transform("base_link", "lidar", estimate.timestamp_ns,
                                 _transform_buffer->T_base_lidar3d());
+        core::publish_transform("base_link", "camera_wide", estimate.timestamp_ns,
+                                _transform_buffer->T_base_camera_wide3d());
+        core::publish_transform("base_link", "camera_narrow",
+                                estimate.timestamp_ns,
+                                _transform_buffer->T_base_camera_narrow3d());
         _last_static_transform_publish_stamp_ns = estimate.timestamp_ns;
     }
 

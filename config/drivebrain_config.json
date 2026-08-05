@@ -229,6 +229,24 @@
             "qx": 0.0,
             "qy": 0.0,
             "qz": 0.0
+        },
+        "T_base_camera_wide": {
+            "x_m": 0.0,
+            "y_m": 0.0,
+            "z_m": 1.0,
+            "qw": 1.0,
+            "qx": 0.0,
+            "qy": 0.0,
+            "qz": 0.0
+        },
+        "T_base_camera_narrow": {
+            "x_m": 0.0,
+            "y_m": 0.0,
+            "z_m": 1.0,
+            "qw": 1.0,
+            "qx": 0.0,
+            "qy": 0.0,
+            "qz": 0.0
         }
     },
     "LidarProcessor": {
