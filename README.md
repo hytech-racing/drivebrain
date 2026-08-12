@@ -41,7 +41,7 @@ Alternatively, if you want to enter a modified container for whatever reason, yo
 ```bash
 # running with modified memory and cpu limits
 docker run -it \
-  --mount type=volume,source=conan_cache,target=/root/.conan2 \
+  --mount type=volume,source=conan-cache,target=/root/.conan2 \
   --mount type=bind,source="$(pwd)",target=/app \
   --memory=16g \
   --cpus=4 \ 
