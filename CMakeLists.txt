@@ -52,7 +52,8 @@ endif()
 FetchContent_Declare(
   HT_Proto
   GIT_REPOSITORY https://github.com/hytech-racing/HT_proto.git
-  GIT_TAG 63ab00ac421cba55e1544ac0130303d39f96d508)
+  # GIT_TAG 63ab00ac421cba55e1544ac0130303d39f96d508)
+  GIT_TAG 4d33ecae5fc740f28e823efa3dfa84ce735f2856)
 FetchContent_MakeAvailable(HT_Proto)
 
 FetchContent_Declare(

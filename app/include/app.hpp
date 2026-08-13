@@ -113,7 +113,7 @@ class DrivebrainApp
 
     /* Driverless autonomy stack */
     core::Autonomy _autonomy;
-    DrivingMode _driving_mode = DrivingMode::DRIVERLESS;
+    DrivingMode _driving_mode = DrivingMode::TELEOP;
 
   private: 
     // driverless estimator
