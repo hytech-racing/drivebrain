@@ -71,7 +71,7 @@ FetchContent_MakeAvailable(vn_driver_lib)
 
 FetchContent_Declare(
     HT_CAN
-    URL "https://github.com/hytech-racing/HT_CAN/releases/download/268/drivebrain_can_lib.tar.gz"
+    URL "https://github.com/hytech-racing/HT_CAN/releases/download/269/drivebrain_can_lib.tar.gz"
 )
 FetchContent_MakeAvailable(HT_CAN)
 

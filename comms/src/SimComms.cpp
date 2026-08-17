@@ -26,7 +26,8 @@ static std::shared_ptr<google::protobuf::Message> parse_by_name(const std::strin
 }
 
 static std::string endpoint(uint16_t port) {
-    return "ipc:///tmp/drivebrain_sim_" + std::to_string(port);
+    // return "ipc:///tmp/drivebrain_sim_" + std::to_string(port);
+    return "tcp://127.0.0.1:" + std::to_string(port);
 }
 
 /****************************************************************
@@ -134,6 +135,7 @@ bool SimComms::_setup_recv_socket(zmq::socket_t& s, uint16_t port) {
 
 void SimComms::_veh_recv_loop() {
     while (_running) {
+        spdlog::error("in veh recv loop");
         zmq::multipart_t m;
         try {
             if (!m.recv(_veh_data_recv_socket)) continue;  
@@ -167,6 +169,7 @@ void SimComms::_veh_recv_loop() {
             core::log(msg);
             core::StateTracker::instance().handle_receive_protobuf_message(msg);
         }
+
     }
 }
 

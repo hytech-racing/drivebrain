@@ -45,14 +45,11 @@ namespace planning {
     // TODO: come up with something for orange cones (exit and entry lanes)
 
 
-
     delaunator::Delaunator delaunay(coords); // Triangulation occurs on construction
-
-  
 
     std::size_t invalid_index = static_cast<std::size_t>(-1);
 
-    for (int i = 0; i < delaunay.triangles.size(); i++) {
+    for (std::size_t i = 0; i < delaunay.triangles.size(); i++) {
 
       // If the edge is a boundary (-1) or a twin edge already iterated over, skip it
       if (delaunay.halfedges[i] == invalid_index || delaunay.halfedges[i] > i) {
@@ -70,10 +67,9 @@ namespace planning {
 
       if (is_crossing_edge) {
         mx = (delaunay.coords[2* curr_edge] + delaunay.coords[2* twin_edge]) / (2.0);
-        my = (delaunay.coords[2* (curr_edge + 1)] + delaunay.coords[2* (twin_edge + 1)]) / (2.0);
+        my = (delaunay.coords[2*curr_edge + 1] + delaunay.coords[2* twin_edge + 1]) / (2.0);
+        path_points.push_back({mx, my, 0.0f});
       }
-
-      path_points.push_back({mx, my, 0.0f});
 
     }
 

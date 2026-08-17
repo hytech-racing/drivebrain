@@ -15,8 +15,8 @@
 #include <thread>
 #include <spdlog/spdlog.h>
 
-#include "hytech_msgs.pb.h"
 #include "hytech.pb.h"
+#include "hytech_msgs.pb.h"
 #include "dv_msgs.pb.h"
 
 /**

@@ -67,6 +67,7 @@ void DrivebrainApp::run() {
 #if HOOTL_ENABLED
   comms::SimComms::create(); 
   comms::SimComms::instance().start();
+  spdlog::info("Initialized simcomms instance");
 #endif
 
   bool vn_init_not_successful;
