@@ -5,9 +5,11 @@ services:
     build:
       context: .
       target: dev-sim
+    ipc: "host"
     volumes:
       - conan-cache:/root/.conan2
       - ./:/app
+      - /tmp:/tmp
     working_dir: /app
     tty: true
     stdin_open: true
