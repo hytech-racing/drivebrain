@@ -27,7 +27,6 @@ static std::shared_ptr<google::protobuf::Message> parse_by_name(const std::strin
 
 static std::string endpoint(uint16_t port) {
     return "ipc:///tmp/drivebrain_sim_" + std::to_string(port);
-    //return "tcp://host.docker.internal:" + std::to_string(port);
 }
 
 /****************************************************************

@@ -7,7 +7,6 @@ BLACKLIST = {"estimator_Outports"}
 ctx = zmq.Context()
 sock = ctx.socket(zmq.PUSH)
 sock.connect("ipc:///tmp/drivebrain_sim_6767")
-#sock.connect("tcp://172.21.68.99:6767")
 
 if (len(sys.argv) != 2): 
     sys.exit("Error: Expected usage python3 mcap_replay.py mcap/<mcap-name>.mcap")
