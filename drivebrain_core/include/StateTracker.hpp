@@ -14,6 +14,7 @@
 
 #include "hytech_msgs.pb.h"
 #include "hytech.pb.h"
+#include "FzEstimator.h"
 
 /**
  * The state tracker acts 
@@ -335,7 +336,12 @@ namespace core {
             std::array<std::chrono::microseconds, 4> _timestamp_array;
             
             /* Private constructor called by the init method */
-            StateTracker() {}; 
+            StateTracker() {
+                // Create the normal load estimator
+                fz_state_covariance Q = fz_state_covariance::Identity() * 0.1;
+                fz_measurement_covariance R = fz_measurement_covariance::Identity() * 0.1;
+                _fz_estimator = FzEstimator(Q, R);
+            }; 
             
             /* Singleton move semantics */
             StateTracker(const StateTracker&) = delete; 
@@ -344,5 +350,7 @@ namespace core {
             /* Singleton instance */
             inline static std::atomic<StateTracker*> _s_instance; 
 
+            /* Estimators */
+            FzEstimator _fz_estimator;
     };
 }

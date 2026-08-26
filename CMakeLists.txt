@@ -17,6 +17,7 @@ option(HOOTL "Build with HOOTL sim interface" OFF)
 add_subdirectory(drivebrain_core)
 add_subdirectory(drivebrain_comms)
 add_subdirectory(drivebrain_control)
+add_subdirectory(drivebrain_estimation)
 
 #################################
 # Find packages
@@ -27,6 +28,7 @@ find_package(Boost REQUIRED)
 find_package(spdlog REQUIRED)
 find_package(mcap REQUIRED)
 find_package(dbcppp REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 if (HOOTL)
     find_package(cppzmq REQUIRED)
