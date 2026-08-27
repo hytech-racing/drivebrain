@@ -269,8 +269,11 @@ void StateTracker::_update_estimators() {
     estimation::fz_control_input_vector u;
     u <<
         _vehicle_state.current_body_accel_mss.x, _vehicle_state.current_body_accel_mss.y;
-    std::cout << "Control input vector: " << u.transpose() << std::endl;
+    std::cout << "FL loadcell: " << _vehicle_state.loadcells.FL << ", FR loadcell: " << _vehicle_state.loadcells.FR << ", RL loadcell: " << _vehicle_state.loadcells.RL << ", RR loadcell: " << _vehicle_state.loadcells.RR << std::endl;
+    std::cout << "Fl fz: " << _fz_estimator.getEstimates()(0) << ", FR fz: " << _fz_estimator.getEstimates()(1) << ", RL fz: " << _fz_estimator.getEstimates()(2) << ", RR fz: " << _fz_estimator.getEstimates()(3) << std::endl;
     _fz_estimator.predict(u);
+    _fz_estimator.update(_vehicle_state.loadcells.FL, _vehicle_state.loadcells.FR, _vehicle_state.loadcells.RL, _vehicle_state.loadcells.RR);
+    
     auto estimates = _fz_estimator.getEstimates();
         
     std::shared_ptr<hytech::front_thermistors> front_fz_estimate = std::make_shared<hytech::front_thermistors>();

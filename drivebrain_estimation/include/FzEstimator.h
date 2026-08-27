@@ -63,10 +63,26 @@ class FzEstimator {
         fz_estimates _fz_static;
         fz_estimates _estimates;
 
-        // InterpolatingTable fl_load_cell_to_fz;
-        // InterpolatingTable fr_load_cell_to_fz;
-        // InterpolatingTable rl_load_cell_to_fz;
-        // InterpolatingTable rr_load_cell_to_fz;
+        InterpolatingTable fl_load_cell_to_fz{{
+            {673, 422.55}, {924, 615.63}, {982, 701.76}, {1019, 705.49},
+            {1098, 720.56}, {1264, 974.46}, {1401, 1029.04}, {1562, 1104.69}
+        }};
+        
+        InterpolatingTable fr_load_cell_to_fz{{
+            {385, 304.96}, {524, 358.02}, {670, 459.96}, {778, 698.43},
+            {926, 707.26}, {950, 747.38}, {1210, 1007.82}
+        }};
+        
+        InterpolatingTable rl_load_cell_to_fz{{
+            {504, 343.19}, {768, 590.51}, {834, 642.06}, {887, 649.73},
+            {930, 655.22}, {965, 683.50}, {1139, 902.22}, {1293, 993.22}, {1416, 1062.18}
+        }};
+        
+        InterpolatingTable rr_load_cell_to_fz{{
+            {289, 238.29}, {438, 322.96}, {576, 382.96}, {746, 650.29},
+            {862, 650.77}, {961, 755.30}, {1229, 934.27}
+        }};
+
 };
 
 }
