@@ -15,6 +15,7 @@
 #include "hytech_msgs.pb.h"
 #include "hytech.pb.h"
 #include "FzEstimator.h"
+#include "Telemetry.hpp"
 
 /**
  * The state tracker acts 
@@ -30,6 +31,12 @@ namespace core {
      */
     template <typename T>
     struct veh_vec {
+
+        bool fl_new; 
+        bool fr_new;
+        bool rl_new;
+        bool rr_new;
+
         T FL;
         T FR;
         T RL;
@@ -330,18 +337,16 @@ namespace core {
 
             void _receive_inverter_states(std::shared_ptr<google::protobuf::Message> message);
 
+            void _update_estimators();
+
             VehicleState _vehicle_state = { };
             RawInputData _raw_input_data = { };
             std::mutex _state_mutex;
             std::array<std::chrono::microseconds, 4> _timestamp_array;
             
             /* Private constructor called by the init method */
-            StateTracker() {
-                // Create the normal load estimator
-                fz_state_covariance Q = fz_state_covariance::Identity() * 0.1;
-                fz_measurement_covariance R = fz_measurement_covariance::Identity() * 0.1;
-                _fz_estimator = FzEstimator(Q, R);
-            }; 
+            StateTracker()  : _fz_estimator(estimation::fz_state_covariance::Identity() * 0.1,
+                     estimation::fz_measurement_covariance::Identity() * 0.1) {}; 
             
             /* Singleton move semantics */
             StateTracker(const StateTracker&) = delete; 
@@ -351,6 +356,6 @@ namespace core {
             inline static std::atomic<StateTracker*> _s_instance; 
 
             /* Estimators */
-            FzEstimator _fz_estimator;
+            estimation::FzEstimator _fz_estimator;
     };
 }

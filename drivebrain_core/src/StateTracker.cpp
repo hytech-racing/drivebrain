@@ -78,6 +78,7 @@ void StateTracker::handle_receive_protobuf_message(std::shared_ptr<google::proto
     else {
         _receive_low_level_state(msg);
     }
+    _update_estimators();
 }
 
 std::pair<core::VehicleState, bool> StateTracker::get_latest_state_and_validity() {
@@ -132,6 +133,8 @@ void StateTracker::_receive_low_level_state(std::shared_ptr<google::protobuf::Me
             _raw_input_data.raw_load_cell_values.RR = in_msg->rr_load_cell();
             _raw_input_data.raw_shock_pot_values.RL = in_msg->rl_shock_pot();
             _raw_input_data.raw_shock_pot_values.RR = in_msg->rr_shock_pot();
+            _vehicle_state.loadcells.rl_new = false;
+            _vehicle_state.loadcells.rr_new = false;
             _vehicle_state.loadcells = _raw_input_data.raw_load_cell_values;
             _vehicle_state.suspension_potentiometers_mm = _raw_input_data.raw_shock_pot_values;
         }
@@ -145,6 +148,8 @@ void StateTracker::_receive_low_level_state(std::shared_ptr<google::protobuf::Me
             _raw_input_data.raw_load_cell_values.FR = in_msg->fr_load_cell();
             _raw_input_data.raw_shock_pot_values.FL = in_msg->fl_shock_pot();
             _raw_input_data.raw_shock_pot_values.FR = in_msg->fr_shock_pot();
+            _vehicle_state.loadcells.fl_new = false;
+            _vehicle_state.loadcells.fr_new = false;
             _vehicle_state.loadcells = _raw_input_data.raw_load_cell_values;
             _vehicle_state.suspension_potentiometers_mm = _raw_input_data.raw_shock_pot_values;
         }
@@ -256,6 +261,23 @@ void StateTracker::_receive_inverter_states(std::shared_ptr<google::protobuf::Me
             _vehicle_state.acc_data.pack_voltage = static_cast<float>(voltage);
         }
     }
+}
+
+void StateTracker::_update_estimators() {
+    std::cout << "Updating estimators" << std::endl;
+    std::unique_lock lk(_state_mutex);
+    estimation::fz_control_input_vector u;
+    u <<
+        _vehicle_state.current_body_accel_mss.x, _vehicle_state.current_body_accel_mss.y;
+    std::cout << "Control input vector: " << u.transpose() << std::endl;
+    _fz_estimator.predict(u);
+    auto estimates = _fz_estimator.getEstimates();
+        
+    std::shared_ptr<hytech::front_thermistors> front_fz_estimate = std::make_shared<hytech::front_thermistors>();
+    front_fz_estimate->set_thermistor_motor_fl(estimates(0));
+    front_fz_estimate->set_thermistor_motor_fr(estimates(1));
+
+    core::log(front_fz_estimate);
 }
 
 template <size_t arr_len>

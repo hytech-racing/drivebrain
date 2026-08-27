@@ -53,7 +53,7 @@ FetchContent_MakeAvailable(vn_driver_lib)
 
 FetchContent_Declare(
     HT_CAN
-    URL "https://github.com/hytech-racing/HT_CAN/releases/download/264/drivebrain_can_lib.tar.gz"
+    URL "https://github.com/hytech-racing/HT_CAN/releases/download/280/drivebrain_can_lib.tar.gz"
 )
 FetchContent_MakeAvailable(HT_CAN)
 
@@ -97,6 +97,7 @@ target_link_libraries(drivebrain PUBLIC
     drivebrain_core
     drivebrain_comms
     drivebrain_control
+    drivebrain_estimation
     matlab_model
     -Wl,--whole-archive
     simulink_automation_msgs_proto_cpp

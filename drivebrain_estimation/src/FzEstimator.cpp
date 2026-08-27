@@ -11,17 +11,17 @@ FzEstimator::FzEstimator(fz_state_covariance Q, fz_measurement_covariance R) {
     _R = R;
 
     _B <<
-        -0.5 * (m_b * cg_z) / l, -0.5 * (m_b * cg_z) / tr,
-        -0.5 * (m_b * cg_z) / l, 0.5 * (m_b * cg_z) / tr,
-        0.5 * (m_b * cg_z) / l, -0.5 * (m_b * cg_z) / tr,
-        0.5 * (m_b * cg_z) / l, 0.5 * (m_b * cg_z) / tr;
+        -0.5 * (FZ_M_B * FZ_CG_Z) / FZ_WHEELBASE, -0.5 * (FZ_M_B * FZ_CG_Z) / FZ_TRACK_WIDTH,
+        -0.5 * (FZ_M_B * FZ_CG_Z) / FZ_WHEELBASE, 0.5 * (FZ_M_B * FZ_CG_Z) / FZ_TRACK_WIDTH,
+        0.5 * (FZ_M_B * FZ_CG_Z) / FZ_WHEELBASE, -0.5 * (FZ_M_B * FZ_CG_Z) / FZ_TRACK_WIDTH,
+        0.5 * (FZ_M_B * FZ_CG_Z) / FZ_WHEELBASE, 0.5 * (FZ_M_B * FZ_CG_Z) / FZ_TRACK_WIDTH;
 
-    _fz_static << fz_fl_static, fz_fr_static, fz_rl_static, fz_rr_static;
+    _fz_static << FZ_FL_STATIC, FZ_FR_STATIC, FZ_RL_STATIC, FZ_RR_STATIC;
 }
 
-void FzEstimator::predict(const fz_control_input_matrix& u) {
-    _state = _A * _state + _B * u;
-    _P = _A * _P * _A.transpose() + _Q;
+void FzEstimator::predict(const fz_control_input_vector& u) {
+    _state = (_A * _state) + (_B * u);
+    _P = (_A * _P * _A.transpose()) + _Q;
 }
 
 void FzEstimator::update(double load_cell_fl, double load_cell_fr, double load_cell_rl, double load_cell_rr) {
@@ -36,5 +36,5 @@ void FzEstimator::update(double load_cell_fl, double load_cell_fr, double load_c
 }
 
 fz_estimates FzEstimator::getEstimates() const {
-    return _estimates + fz_static;
+    return _state + _fz_static;
 }

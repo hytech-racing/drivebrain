@@ -38,8 +38,8 @@ class InterpolatingTable {
             auto& [x0, y0] = *(it - 1);
             auto& [x1, y1] = *it;
 
-            double t = (x - x0) / (x1 - x0);
-            return std::lerp(y0, y1, t);
+            double slope = (y1 - y0) / (x1 - x0);
+            return y0 + slope * (x - x0);
         }
 
     private: 

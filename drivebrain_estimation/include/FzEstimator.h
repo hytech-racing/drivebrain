@@ -15,15 +15,15 @@
 // dFz_fl, dFz_fr, dFz_rl, dFz_rr
 #define FZ_MEASUREMENT_SIZE 4
 
-#define m_b 276.7
-#define cg_z 0.29
-#define l 1.53
-#define tr 1.2
+#define FZ_M_B 276.7
+#define FZ_CG_Z 0.29
+#define FZ_WHEELBASE 1.53
+#define FZ_TRACK_WIDTH 1.2
 
-#define fz_fl_static 707.1
-#define fz_fr_static 707.1
-#define fz_rl_static 650.1
-#define fz_rr_static 650.1
+#define FZ_FL_STATIC 707.1
+#define FZ_FR_STATIC 707.1
+#define FZ_RL_STATIC 650.1
+#define FZ_RR_STATIC 650.1
 
 namespace estimation {
 
@@ -33,6 +33,7 @@ typedef Eigen::Matrix<double, FZ_MEASUREMENT_SIZE, FZ_MEASUREMENT_SIZE> fz_measu
 typedef Eigen::Matrix<double, FZ_MEASUREMENT_SIZE, FZ_STATE_SIZE> fz_measurement_matrix; // H 
 typedef Eigen::Matrix<double, FZ_STATE_SIZE, FZ_STATE_SIZE> fz_process_model_matrix; // A
 typedef Eigen::Matrix<double, FZ_STATE_SIZE, FZ_CONTROL_INPUT_SIZE> fz_control_input_matrix; // B
+typedef Eigen::Matrix<double, FZ_CONTROL_INPUT_SIZE, 1> fz_control_input_vector; // u
 typedef Eigen::Matrix<double, FZ_MEASUREMENT_SIZE, 1> fz_measurement_vector; // z
 typedef Eigen::Matrix<double, FZ_STATE_SIZE, 1> fz_estimates; 
 
@@ -43,7 +44,7 @@ class FzEstimator {
         
         FzEstimator(fz_state_covariance Q, fz_measurement_covariance R);
 
-        void predict(const fz_control_input_matrix& u);
+        void predict(const fz_control_input_vector& u);
 
         void update(double load_cell_fl, double load_cell_fr, double load_cell_rl, double load_cell_rr);
 
