@@ -264,7 +264,6 @@ void StateTracker::_receive_inverter_states(std::shared_ptr<google::protobuf::Me
 }
 
 void StateTracker::_update_estimators() {
-    std::cout << "Updating estimators" << std::endl;
     std::unique_lock lk(_state_mutex);
     estimation::fz_control_input_vector u;
     u <<

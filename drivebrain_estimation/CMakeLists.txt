@@ -15,6 +15,7 @@ add_library(drivebrain_estimation
 target_include_directories(drivebrain_estimation PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 target_link_libraries(drivebrain_estimation PUBLIC 
+    drivebrain_core
     spdlog::spdlog
     nlohmann_json::nlohmann_json
     boost::boost

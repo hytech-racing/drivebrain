@@ -4,6 +4,8 @@
  * Uses an LKF with the state estimated being [dFz_fl, dFz_fr, dFz_rl, dFz_rr] where dFz is the difference between the actual normal force and the static normal force
  */
 #include <Eigen/Dense>
+#include <mutex>
+#include <FoxgloveServer.hpp>  
 #include "InterpolatingTable.h"
 
 // dFz_fl, fFz_fr, dFz_rl, dFz_rr
@@ -25,6 +27,8 @@
 #define FZ_RL_STATIC 650.1
 #define FZ_RR_STATIC 650.1
 
+using namespace core;
+
 namespace estimation {
 
 typedef Eigen::Matrix<double, FZ_STATE_SIZE, 1> fz_state_vector; // x
@@ -41,8 +45,10 @@ typedef Eigen::Matrix<double, FZ_STATE_SIZE, 1> fz_estimates;
 class FzEstimator {
 
     public: 
+
+        void _handle_param_updates(const std::unordered_map<std::string, core::DBParam> &new_param_map);
         
-        FzEstimator(fz_state_covariance Q, fz_measurement_covariance R);
+        FzEstimator();
 
         void predict(const fz_control_input_vector& u);
 
@@ -61,6 +67,9 @@ class FzEstimator {
         fz_measurement_covariance _R; 
 
         fz_estimates _fz_static;
+
+        mutable std::mutex _kf_mutex;
+
 
         InterpolatingTable fl_load_cell_to_fz{{
             {673, 422.55}, {924, 615.63}, {982, 701.76}, {1019, 705.49},

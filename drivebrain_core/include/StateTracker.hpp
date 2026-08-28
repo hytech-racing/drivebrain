@@ -336,8 +336,7 @@ namespace core {
             std::array<std::chrono::microseconds, 4> _timestamp_array;
             
             /* Private constructor called by the init method */
-            StateTracker()  : _fz_estimator(estimation::fz_state_covariance::Identity() * 0.1,
-                     estimation::fz_measurement_covariance::Identity() * 0.1) {}; 
+            StateTracker() {}; 
             
             /* Singleton move semantics */
             StateTracker(const StateTracker&) = delete; 

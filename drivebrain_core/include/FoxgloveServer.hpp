@@ -24,6 +24,30 @@ namespace core {
 
     using DBParam = std::variant<bool, int, float, double, std::string, std::monostate>; 
 
+    /**
+     * Case insensitive method to process parameter updates.
+     * 
+     * @param params the map of parameters to search through
+     * @param key the key of the parameter to search for
+     * @return the parameter value if found and of the correct type, otherwise std::null
+     */
+    template <typename param_type> 
+    std::optional<param_type> process_param_update(const std::unordered_map<std::string, core::DBParam> &params, std::string key) {
+        std::transform(key.begin(), key.end(), key.begin(),
+            [](unsigned char c){ return static_cast<unsigned char>(std::tolower(c)); });
+        auto it = params.find(key);
+        if (it == params.end()) {
+            spdlog::error("Parameter {} not found in the updated parameters", key);
+            return std::nullopt;
+        }
+        if (auto pval = std::get_if<param_type>(&it->second)) {
+            return *pval;
+        } else {
+            spdlog::error("Parameter {} has incorrect type in the updated parameters", key);
+            return std::nullopt;
+        }
+    }
+
     class FoxgloveServer {
         public: 
             /**
