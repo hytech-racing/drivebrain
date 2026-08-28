@@ -61,7 +61,6 @@ class FzEstimator {
         fz_measurement_covariance _R; 
 
         fz_estimates _fz_static;
-        fz_estimates _estimates;
 
         InterpolatingTable fl_load_cell_to_fz{{
             {673, 422.55}, {924, 615.63}, {982, 701.76}, {1019, 705.49},

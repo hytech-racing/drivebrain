@@ -37,12 +37,14 @@ endif()
 #################################
 # Upstreams (non-conan)
 #################################
-FetchContent_Declare(
-    HT_Proto 
-    GIT_REPOSITORY https://github.com/hytech-racing/HT_proto.git
-    GIT_TAG f4fc651
-)
-FetchContent_MakeAvailable(HT_Proto)
+# FetchContent_Declare(
+#     HT_Proto 
+#     GIT_REPOSITORY https://github.com/hytech-racing/HT_proto.git
+#     GIT_TAG f4fc651
+#     SOURCE_DIR "${CMAKE_SOURCE_DIR}../HT_proto"
+# )
+# FetchContent_MakeAvailable(HT_Proto)
+add_subdirectory(../HT_proto ${CMAKE_BINARY_DIR}/HT_proto)
 
 FetchContent_Declare(
     vn_driver_lib
@@ -56,19 +58,6 @@ FetchContent_Declare(
     URL "https://github.com/hytech-racing/HT_CAN/releases/download/280/drivebrain_can_lib.tar.gz"
 )
 FetchContent_MakeAvailable(HT_CAN)
-
-FetchContent_Declare(
-    simulink_automation_msgs_cpp
-    URL "https://github.com/hytech-racing/drivebrain_simulink_models/releases/download/rel57/proto_outputs.tar.gz"
-)
-
-FetchContent_MakeAvailable(simulink_automation_msgs_cpp)
-
-FetchContent_Declare(
-    drivebrain_simulink_models
-    URL "https://github.com/hytech-racing/drivebrain_simulink_models/releases/download/rel57/codegen_outputs.tar.gz"
-)
-FetchContent_MakeAvailable(drivebrain_simulink_models)
 
 #################################
 # Linking to main app
@@ -98,10 +87,6 @@ target_link_libraries(drivebrain PUBLIC
     drivebrain_comms
     drivebrain_control
     drivebrain_estimation
-    matlab_model
-    -Wl,--whole-archive
-    simulink_automation_msgs_proto_cpp
-    -Wl,--no-whole-archive
 )
 
 #################################

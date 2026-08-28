@@ -163,14 +163,6 @@ namespace core {
     };
 
     /**
-     * @struct Collection of different outputs
-     */
-    struct MatlabMathResult {
-        TireDynamics tire_dynamics;
-        TorqueVectoringStatus torque_vectoring_status;
-    };
-
-    /**
      * @struct Collection of desired speed and torques
      */
     struct SpeedControlOut {
@@ -239,7 +231,6 @@ namespace core {
         ControllerOutput prev_controller_output;
         TireDynamics tire_dynamics;
         veh_vec<float> driver_torque;
-        ControllerTorqueOut matlab_math_temp_out;
         veh_vec<float> suspension_potentiometers_mm;
         Position vehicle_position;
         veh_vec<float> loadcells;

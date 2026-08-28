@@ -11,8 +11,6 @@
 #include "VNComms.hpp"
 
 #include "hytech_msgs.pb.h"
-#include <EstimatorManager.hpp>
-#include <MatlabModelAddHelper.hpp>
 
 class DrivebrainApp {
 public:
@@ -62,12 +60,8 @@ private:
   
   /* Controllers */
   std::shared_ptr<control::LoadCellTorqueController> _mode1;
-  std::vector<std::shared_ptr<MatlabModel>> _gend_controllers;
 
   /* Vectornav */
   std::unique_ptr<comms::VNDriver> _vn_driver; 
-
-  /* Estimator Manager */
-  std::shared_ptr<estimation::EstimatorManager> _estim_manager;
 
 };

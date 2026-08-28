@@ -4,9 +4,6 @@
 #include <DrivebrainControllerInterface.hpp>
 #include <cstddef>
 
-namespace matlab_model_gen {
-inline constexpr std::size_t num_controllers = 1;
-}
 
 /** Singleton Methods */
 void core::DrivebrainControllerInterface::create() {
@@ -78,7 +75,7 @@ void core::DrivebrainControllerInterface::_request_stop_logging() {
 }
 
 void core::DrivebrainControllerInterface::_request_controller_change(int controller_index) {
-    const size_t num_controllers = 1 + matlab_model_gen::num_controllers;
+    const size_t num_controllers = 1;
     auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, num_controllers>::instance();
 
     if (controller_index == controller_manager.get_active_controller_index()) {
