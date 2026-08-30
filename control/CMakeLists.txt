@@ -10,9 +10,13 @@ find_package(dbcppp REQUIRED)
 add_library(control
     src/LoadCellTorqueController.cpp
     src/SimplePowerLimiter.cpp
+    driverless/src/PurePursuitController.cpp
 )
 
-target_include_directories(control PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_include_directories(control PUBLIC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/driverless/headers"
+)
 
 target_link_libraries(control PUBLIC 
     core

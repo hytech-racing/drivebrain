@@ -132,6 +132,13 @@ void StateTracker::set_dv_path(std::shared_ptr<const std::vector<xyz_vec<float>>
     _dv_state.path = std::move(path);
 }
 
+void StateTracker::set_dv_pose(std::shared_ptr<const hytech_msgs::pose> pose)
+{
+    std::unique_lock lock(_dv_state_mutex);
+    _dv_state.vehicle_pose = std::move(pose);
+}
+
+
 void StateTracker::set_cone_observations(std::shared_ptr<const dv_msgs::Cones> cones) {
     std::unique_lock lk(_dv_state_mutex);
     _dv_state.cone_observations = std::move(cones);

@@ -77,6 +77,15 @@ namespace core {
     };
 
     /**
+     * @struct Represents an xy vector (2 elements of any type)
+     */
+    template <typename T>
+    struct xy_vec {
+        T x;
+        T y;
+    };
+
+    /**
      * @struct Represents a ypr vector (3 elements of any type that represent angle)
      */
     template <typename T>
@@ -295,6 +304,7 @@ namespace core {
         /* Returns the latest LiDAR point cloud in a clean struct */
         const LidarPoint* points() const { return lidar_cloud ? core::points(*lidar_cloud) : nullptr; }
         uint64_t num_points() const { return lidar_cloud ? core::num_points(*lidar_cloud) : 0; }
+        std::shared_ptr<const hytech_msgs::pose> vehicle_pose;
     };
 
 
@@ -363,6 +373,14 @@ namespace core {
              * @param path the planned path, map frame
              */
             void set_dv_path(std::shared_ptr<const std::vector<xyz_vec<float>>> path);
+
+
+            /**
+             * Sets the latest vehicle pose produced by the autonomy stack.
+             *
+             * @param pose the latest vehicle pose, map frame
+             */
+            void set_dv_pose(std::shared_ptr<const hytech_msgs::pose> pose);
 
             /**
              * Sets the latest cone observations produced by perception.
