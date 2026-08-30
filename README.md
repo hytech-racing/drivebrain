@@ -46,6 +46,8 @@ docker run -it \
   --memory=16g \
   --cpus=4 \ 
   -w /app \
+  --ipc=host \
+  -v /tmp:/tmp \
   kkittur/drivebrain_cross_compile /bin/bash 
 ```
 and pass in whatever flags you see fit. 
