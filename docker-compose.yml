@@ -9,6 +9,8 @@ services:
     stdin_open: true
     command: sleep infinity
     restart: "no"
+    ipc: "host"
 
 volumes:
   conan-cache:
+    - /tmp:/tmp
