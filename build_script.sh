@@ -5,7 +5,7 @@ profile="rpi_profile"
 build_folder="build-arm"
 
 hootl=""
-if [ "$1" = "--test" ]; then
+if [ "$1" = "--local" ]; then
   profile="default"
   build_folder="build-native"
   hootl="-DHOOTL=ON"
@@ -47,7 +47,7 @@ cmake .. \
 make -j
 
 # run unit tests
-if [ "$1" = "--test" ]; then
+if [ "$1" = "--local" ]; then
   ctest --rerun-failed --output-on-failure
 fi
 

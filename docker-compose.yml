@@ -1,6 +1,10 @@
 services:
   dev:
-    image: kkittur/drivebrain_cross_compile
+    # TODO: update docker hub image
+    # image: kkittur/drivebrain_cross_compile 
+    build:
+      context: .
+      target: dev-sim
     volumes:
       - conan-cache:/root/.conan2
       - ./:/app

@@ -34,7 +34,7 @@ It may take a few minutes.
 Run the following command to start and enter the Docker container with the necessary volumes mounted:
 
 ```bash
-docker compose run dev
+docker compose run dev bash
 ```
 
 Alternatively, if you want to enter a modified container for whatever reason, you can run:
@@ -61,14 +61,15 @@ Inside the container, execute:
 ```
 
 This script will build the DriveBrain software using the cross-compilation toolchain for the target platform.
-The first time you run it, it will take some time because it needs to compile all the dependencies. However, future builds past the first one take <1 minute because dependencies are cached. 
+The first time you run it, it will take some time because it needs to compile all the dependencies. However, future builds past the first one take <1 minute because dependencies are cached. Once finished, the `drivebrain` binary will be in `build-arm/`
 
-### Unit Tests
-Unit tests have to be compiled to your native architecture if you actually want to see them run. To do this, you can pass in the `--test` flag in the build script.
+### Local Testing
+
+If you want to run Drivebrain locally with the (simulator)[https://github.com/warrenyun/xcel], you can pass in the `--local` flag when calling the build script.
 ```bash
-./build_script.sh --test
+./build_script.sh --local
 ```
-and the project along with its unit tests will be compiled and ran.
+When finished, you can find the `drivebrain` binary for your computer's architecture in `build-native/`. Upon building locally, Drivebrain unit tests will also be run.
 
 ### Notes
 * Make sure the build script has execute permissions: `chmod +x build_script.sh`.
