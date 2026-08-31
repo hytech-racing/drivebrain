@@ -11,6 +11,10 @@ list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/cmake")
 #################################
 option(HOOTL "Build with HOOTL sim interface" OFF)
 
+### Packages for custom libs
+find_package(ht_proto REQUIRED CONFIG)
+find_package(ht_can REQUIRED CONFIG)
+
 #################################
 # Custom libs
 #################################
@@ -28,6 +32,7 @@ find_package(spdlog REQUIRED)
 find_package(mcap REQUIRED)
 find_package(dbcppp REQUIRED)
 
+
 if (HOOTL)
     find_package(cppzmq REQUIRED)
 endif()
@@ -35,12 +40,7 @@ endif()
 #################################
 # Upstreams (non-conan)
 #################################
-FetchContent_Declare(
-    HT_Proto 
-    GIT_REPOSITORY https://github.com/hytech-racing/HT_proto.git
-    GIT_TAG f4fc651
-)
-FetchContent_MakeAvailable(HT_Proto)
+
 
 FetchContent_Declare(
     vn_driver_lib
@@ -49,11 +49,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(vn_driver_lib)
 
-FetchContent_Declare(
-    HT_CAN
-    URL "https://github.com/hytech-racing/HT_CAN/releases/download/264/drivebrain_can_lib.tar.gz"
-)
-FetchContent_MakeAvailable(HT_CAN)
 
 FetchContent_Declare(
     simulink_automation_msgs_cpp
@@ -90,8 +85,8 @@ target_link_libraries(drivebrain PUBLIC
     mcap::mcap
     protobuf::libprotobuf 
     boost::boost
-    hytech_msgs_cpp_lib
-    hytech_can_msgs_cpp_lib
+    ht_proto::hytech_msgs_cpp_lib
+    ht_can::hytech_can_msgs_cpp_lib
     drivebrain_core
     drivebrain_comms
     drivebrain_control
