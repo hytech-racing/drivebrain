@@ -77,6 +77,16 @@ namespace core {
     };
 
     /**
+     * @struct Represents an xy vector (2 elements of any type)
+     */
+    template <typename T>
+    struct xy_vec {
+        T x;
+        T y;
+    };
+
+
+    /**
      * @struct Represents a ypr vector (3 elements of any type that represent angle)
      */
     template <typename T>
