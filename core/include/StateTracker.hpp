@@ -77,6 +77,40 @@ namespace core {
     };
 
     /**
+     * @struct Represents an xy vector (2 elements of any type)
+     */
+    template <typename T>
+    struct xy_vec {
+        T x;
+        T y;
+
+        xy_vec operator+(const xy_vec& other) const {
+            return {x + other.x, y + other.y};
+        }
+
+        xy_vec operator-(const xy_vec& other) const {
+            return {x - other.x, y - other.y};
+        }
+
+        T operator*(const xy_vec& other) const {
+            return x * other.x + y * other.y;
+        }
+
+        xy_vec operator*(const float scalar) const {
+            return {x * scalar, y * scalar};
+        }
+
+        bool operator==(const xy_vec& other) const {
+            return x == other.x && y == other.y;
+        }
+
+        float length() const {
+            return std::sqrt(x * x + y * y);
+        }
+    };
+
+
+    /**
      * @struct Represents a ypr vector (3 elements of any type that represent angle)
      */
     template <typename T>
@@ -254,6 +288,9 @@ namespace core {
         float old_energy_meter_kw;
         DrivetrainData dt_data;
         AccumulatorData acc_data;
+
+        xy_vec<float> vehicle_position_map_frame;
+        xy_vec<float> vehicle_heading_map_frame_unit_vector;
     };
 
     enum class ControllerManagerStatus

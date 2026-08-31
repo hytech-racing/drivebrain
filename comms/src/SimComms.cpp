@@ -160,6 +160,7 @@ void SimComms::_veh_recv_loop() {
             // Right now for testing purposes, we assume that all cones of the track are visible
             core::StateTracker::instance().set_cone_observations(std::static_pointer_cast<dv_msgs::Cones>(msg));
         } else if (desc == hytech_msgs::pose::descriptor()) {
+            core::log(msg);
             core::render_pose(std::static_pointer_cast<hytech_msgs::pose>(msg), "ground_truth_pose");
         } else if (desc == foxglove::FrameTransform::descriptor()) {
             core::log(msg);
