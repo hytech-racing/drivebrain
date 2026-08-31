@@ -20,11 +20,12 @@ class DrivebrainSoftware(ConanFile):
     def requirements(self): 
         self.requires("foxglove-websocket/1.4.0", transitive_headers=True)
         self.requires("protobuf/5.29.3", transitive_headers=True)
-        self.requires("boost/1.80.0")
+        self.requires("boost/1.80.0", options={"header_only": True})
         self.requires("spdlog/1.15.3")
         self.requires("mcap/2.0.2")
         self.requires("dbcppp/3.2.6")
         self.requires("cppzmq/4.11.0")
+        self.requires("ht_proto/1.0.0")
         
     def build_requirements(self): 
         if not self.settings_build.get_safe("cross_build"):

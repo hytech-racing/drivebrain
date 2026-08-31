@@ -27,6 +27,7 @@ find_package(Boost REQUIRED)
 find_package(spdlog REQUIRED)
 find_package(mcap REQUIRED)
 find_package(dbcppp REQUIRED)
+find_package(ht_proto REQUIRED CONFIG)
 
 if (HOOTL)
     find_package(cppzmq REQUIRED)
@@ -35,12 +36,7 @@ endif()
 #################################
 # Upstreams (non-conan)
 #################################
-FetchContent_Declare(
-    HT_Proto 
-    GIT_REPOSITORY https://github.com/hytech-racing/HT_proto.git
-    GIT_TAG f4fc651
-)
-FetchContent_MakeAvailable(HT_Proto)
+
 
 FetchContent_Declare(
     vn_driver_lib
@@ -90,7 +86,7 @@ target_link_libraries(drivebrain PUBLIC
     mcap::mcap
     protobuf::libprotobuf 
     boost::boost
-    hytech_msgs_cpp_lib
+    ht_proto::hytech_msgs_cpp_lib
     hytech_can_msgs_cpp_lib
     drivebrain_core
     drivebrain_comms
