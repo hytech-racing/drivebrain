@@ -30,7 +30,6 @@ with open(mcap_path, "rb") as f:
         dt = target - time.monotonic()
         if dt > 0:
             time.sleep(dt)
-        print(message)
         sock.send_multipart([schema.name.encode(), message.data])
 
 sock.close()

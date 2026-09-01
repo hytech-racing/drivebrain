@@ -133,8 +133,6 @@ void StateTracker::_receive_low_level_state(std::shared_ptr<google::protobuf::Me
             _raw_input_data.raw_load_cell_values.RR = in_msg->rr_load_cell();
             _raw_input_data.raw_shock_pot_values.RL = in_msg->rl_shock_pot();
             _raw_input_data.raw_shock_pot_values.RR = in_msg->rr_shock_pot();
-            _vehicle_state.loadcells.rl_new = false;
-            _vehicle_state.loadcells.rr_new = false;
             _vehicle_state.loadcells = _raw_input_data.raw_load_cell_values;
             _vehicle_state.suspension_potentiometers_mm = _raw_input_data.raw_shock_pot_values;
         }
@@ -148,8 +146,6 @@ void StateTracker::_receive_low_level_state(std::shared_ptr<google::protobuf::Me
             _raw_input_data.raw_load_cell_values.FR = in_msg->fr_load_cell();
             _raw_input_data.raw_shock_pot_values.FL = in_msg->fl_shock_pot();
             _raw_input_data.raw_shock_pot_values.FR = in_msg->fr_shock_pot();
-            _vehicle_state.loadcells.fl_new = false;
-            _vehicle_state.loadcells.fr_new = false;
             _vehicle_state.loadcells = _raw_input_data.raw_load_cell_values;
             _vehicle_state.suspension_potentiometers_mm = _raw_input_data.raw_shock_pot_values;
         }
@@ -269,7 +265,7 @@ void StateTracker::_update_estimators() {
     u <<
         _vehicle_state.current_body_accel_mss.x, _vehicle_state.current_body_accel_mss.y;
     _fz_estimator.predict(u);
-    // _fz_estimator.update(_vehicle_state.loadcells.FL, _vehicle_state.loadcells.FR, _vehicle_state.loadcells.RL, _vehicle_state.loadcells.RR);
+    _fz_estimator.update(_vehicle_state.loadcells.FL, _vehicle_state.loadcells.FR, _vehicle_state.loadcells.RL, _vehicle_state.loadcells.RR);
 
     auto estimates = _fz_estimator.getEstimates();
 

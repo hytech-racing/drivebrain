@@ -32,11 +32,6 @@ namespace core {
     template <typename T>
     struct veh_vec {
 
-        bool fl_new; 
-        bool fr_new;
-        bool rl_new;
-        bool rr_new;
-
         T FL;
         T FR;
         T RL;
