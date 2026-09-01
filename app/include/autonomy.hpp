@@ -1,6 +1,5 @@
 #pragma once
 
-#include <GraphSLAM.hpp>
 #include <ReferencePath.hpp>
 #include <StateTracker.hpp>
 #include <atomic>
@@ -53,8 +52,6 @@ class Autonomy
 
     std::thread _thread;
     std::atomic<bool> _running{false};
-
-    slam::GraphSlam _slam;
 
     // SIL reference path
     planning::ReferencePath _sil_reference_path;

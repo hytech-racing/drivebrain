@@ -35,6 +35,8 @@ struct LidarProcessingInput
 
 struct LidarProcessingResult
 {
+    std::int64_t timestamp_ns{};
+
     StampedPointCloud deskewed_point_cloud;
     StampedPointCloud filtered_point_cloud;
 

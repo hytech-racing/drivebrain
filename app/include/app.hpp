@@ -2,7 +2,9 @@
 #include "DriverlessEstimatorRunner.hpp"
 #include "ETHRecvComms.hpp"
 #include "LatestEstimate.hpp"
+#include "common/LatestPlannerMap.hpp"
 #include "PerceptionFrontendRunner.hpp"
+#include "SlamBackendRunner.hpp"
 #if HOOTL_ENABLED
 #include "SimComms.hpp"
 #endif
@@ -29,26 +31,26 @@ enum class DrivingMode
 
 class DrivebrainApp
 {
-  public:
+   public:
     /**
      * Creates a new instance of Drivebrain
      *
      * @param json_params_path The path to the JSON parameters file
      * @param dbc_path The path to the DBC file
      */
-    DrivebrainApp(const std::string &json_params_path,
-                  const std::string &dbc_path);
+    DrivebrainApp(const std::string& json_params_path,
+                  const std::string& dbc_path);
     ~DrivebrainApp();
 
-    DrivebrainApp &operator=(DrivebrainApp &&) = delete;
-    DrivebrainApp(DrivebrainApp &&) = delete;
+    DrivebrainApp& operator=(DrivebrainApp&&) = delete;
+    DrivebrainApp(DrivebrainApp&&) = delete;
 
     /**
      * Starts running the Drivebrain main loop
      */
     void run();
 
-  private:
+   private:
     /**
      * Processes one loop iteration of Drivebrain
      */
@@ -60,7 +62,7 @@ class DrivebrainApp
      *
      * @param out the controller output to command
      */
-    void _actuate(const core::ControllerOutput &out);
+    void _actuate(const core::ControllerOutput& out);
 
     /**
      * Maps a teleop twist onto torque and steering.
@@ -68,15 +70,14 @@ class DrivebrainApp
      * @param command the latest teleop command
      * @return the controller output to send
      */
-    core::ControllerOutput _teleop_command(const core::TeleopCommand &command);
+    core::ControllerOutput _teleop_command(const core::TeleopCommand& command);
 
-  private:
-    // event based callback 
+   private:
+    // event based callback
     void _route_received_message(
-        std::shared_ptr<google::protobuf::Message> message
-    );
+        std::shared_ptr<google::protobuf::Message> message);
 
-  private:
+   private:
     boost::asio::io_context _io_context;
 
     /* Threads */
@@ -115,18 +116,27 @@ class DrivebrainApp
     core::Autonomy _autonomy;
     DrivingMode _driving_mode = DrivingMode::TELEOP;
 
-  private: 
+   private:
     // driverless estimator
     std::shared_ptr<estimation::LatestEstimate> _latest_estimate;
-    std::unique_ptr<runtime::DriverlessEstimatorRunner> _driverless_estimator_runner;
+    std::unique_ptr<runtime::DriverlessEstimatorRunner>
+        _driverless_estimator_runner;
 
-  private:
+   private:
+    // shared map_state between perception frontend and slam backend
+    std::shared_ptr<slam::LatestMapState> _latest_map_state;
+    std::shared_ptr<slam::LatestPlannerMap> _latest_planner_map;
+
+   private:
     // perception frontend
-    std::unique_ptr<runtime::PerceptionFrontendRunner> _perception_frontend_runner;
+    std::unique_ptr<runtime::PerceptionFrontendRunner>
+        _perception_frontend_runner;
 
-  private:
+   private:
+    // slam backend
+    std::unique_ptr<runtime::SlamBackendRunner> _slam_backend_runner;
+
+   private:
     // transform buffer
     std::shared_ptr<transforms::TransformBuffer> _transform_buffer;
-
-
 };

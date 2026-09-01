@@ -8,6 +8,7 @@ add_executable(
   drivebrain_test
   main.cpp MCAPLoggerTest.cpp ReferencePathTest.cpp
   adapters/EstimatorMessageAdaptersTest.cpp
+  adapters/SlamVisualizationAdaptersTest.cpp
   estimation/GssModelTest.cpp estimation/LatestEstimateTest.cpp
   perception/ClusterFeaturesTest.cpp
   perception/ClusteringTest.cpp
@@ -16,8 +17,17 @@ add_executable(
   perception/LidarProcessorTest.cpp
   perception/PointCloudFiltersTest.cpp
   perception/PointCloudDeskewTest.cpp
+  slam/IncrementalGraphSlamTest.cpp
+  slam/LandmarkColorTest.cpp
+  slam/PlannerMapBuilderTest.cpp
+  slam/SlamEndToEndTest.cpp
+  slam/SlamFrontendAssociationTest.cpp
+  slam/SlamFrontendMapStateTest.cpp
+  slam/SlamFrontendOptimizedAssociationTest.cpp
+  slam/SlamFrontendTrackingTest.cpp
   runtime/DriverlessEstimatorRunnerTest.cpp
   runtime/PerceptionFrontendRunnerTest.cpp
+  runtime/SlamBackendRunnerTest.cpp
   transforms/TransformBufferTest.cpp)
 
 target_link_libraries(
@@ -29,6 +39,7 @@ target_link_libraries(
          planning
          estimation
          runtime
+         slam
          transforms
          GTest::gtest)
 

@@ -9,7 +9,9 @@ enum class FrameId
     Baselink,
     Imu,
     Gss,
-    Lidar
+    Lidar,
+    CameraWide,
+    CameraNarrow
 };
 
 }  // namespace transforms

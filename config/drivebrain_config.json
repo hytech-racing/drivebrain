@@ -202,6 +202,53 @@
             "vy_noise_std_mps": 0.1
         }
     },
+    "StaticTransforms": {
+        "T_base_imu": {
+            "x_m": 0.0,
+            "y_m": 0.0,
+            "z_m": 0.0,
+            "qw": 1.0,
+            "qx": 0.0,
+            "qy": 0.0,
+            "qz": 0.0
+        },
+        "T_base_gss": {
+            "x_m": 1.0,
+            "y_m": 0.25,
+            "z_m": 0.0,
+            "qw": 1.0,
+            "qx": 0.0,
+            "qy": 0.0,
+            "qz": 0.0
+        },
+        "T_base_lidar": {
+            "x_m": 0.75,
+            "y_m": 0.0,
+            "z_m": 0.55,
+            "qw": 1.0,
+            "qx": 0.0,
+            "qy": 0.0,
+            "qz": 0.0
+        },
+        "T_base_camera_wide": {
+            "x_m": 0.0,
+            "y_m": 0.0,
+            "z_m": 1.0,
+            "qw": 1.0,
+            "qx": 0.0,
+            "qy": 0.0,
+            "qz": 0.0
+        },
+        "T_base_camera_narrow": {
+            "x_m": 0.0,
+            "y_m": 0.0,
+            "z_m": 1.0,
+            "qw": 1.0,
+            "qx": 0.0,
+            "qy": 0.0,
+            "qz": 0.0
+        }
+    },
     "LidarProcessor": {
         "deskew_enabled": false,
         "PointCloudFilter": {
@@ -253,5 +300,28 @@
             "mid_accepted_confidence": 0.5,
             "far_accepted_confidence": 0.25
         }
+    },
+    "SlamFrontend": {
+        "optimized_association_gate_m": 1.0,
+        "local_track_association_gate_m": 1.0,
+        "minimum_observations_to_confirm": 5,
+        "minimum_detection_confidence": 0.5,
+        "tentative_track_max_age_s": 3.0,
+        "pending_track_max_age_s": 1.0
+    },
+    "IncrementalGraphSlam": {
+        "prior_pose_x_std_m": 0.01,
+        "prior_pose_y_std_m": 0.01,
+        "prior_pose_yaw_std_rad": 0.01,
+        "odom_pose_x_std_m": 0.2,
+        "odom_pose_y_std_m": 0.2,
+        "odom_pose_yaw_std_rad": 0.06,
+        "landmark_bearing_std_rad": 0.05,
+        "landmark_range_std_m": 0.5,
+        "measurement_range_max_m": 50.0,
+        "measurement_range_min_m": 0.1,
+        "relinearization_threshold": 0.01,
+        "relinearization_skip": 1,
+        "evaluate_nonlinear_error": true
     }
 }

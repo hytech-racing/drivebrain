@@ -19,9 +19,20 @@ PerceptionFrontendRunner make_runner()
 {
     auto transform_buffer =
         std::make_shared<transforms::TransformBuffer>(1000000);
+    transform_buffer->set_T_base_lidar(transforms::Pose2D{});
+    transform_buffer->insert_T_odom_base(1, transforms::Pose2D{});
+    transform_buffer->insert_T_odom_base(1000000, transforms::Pose2D{});
 
-    return PerceptionFrontendRunner{transform_buffer,
-                                    perception::LidarProcessorParams{}, false};
+    auto latest_map_state = std::make_shared<slam::LatestMapState>();
+
+    return PerceptionFrontendRunner{
+        transform_buffer,
+        latest_map_state,
+        [](slam::LandmarkFrame) { return true; },
+        perception::LidarProcessorParams{},
+        slam::frontend::SlamFrontendParams{1.0, 1.0, 5U, 3'000'000'000LL,
+                                           1'000'000'000LL, 0.5},
+        false};
 }
 
 perception::StampedPointCloud make_point_cloud(std::uint64_t timestamp_ns)
@@ -117,7 +128,7 @@ TEST(PerceptionFrontendRunnerTest, MultipleProducerThreadsAreSafe)
                 for (int point_cloud = 0; point_cloud < kPointCloudsPerProducer;
                      ++point_cloud)
                 {
-                    EXPECT_TRUE(runner.enqueue(make_point_cloud(100)));
+                    runner.enqueue(make_point_cloud(100));
                 }
             });
     }
@@ -128,14 +139,15 @@ TEST(PerceptionFrontendRunnerTest, MultipleProducerThreadsAreSafe)
     }
 
     runner.start();
-    EXPECT_TRUE(wait_until_stats(runner, 3));
+    EXPECT_TRUE(wait_until_stats(runner, 1));
     runner.stop();
 
     const PointCloudQueueStats stats = runner.point_cloud_queue_stats();
-    EXPECT_EQ(stats.point_clouds_enqueued,
-              kProducerCount * kPointCloudsPerProducer);
-    EXPECT_EQ(stats.point_clouds_processed, 3U);
-    EXPECT_EQ(stats.queue_trims, kProducerCount * kPointCloudsPerProducer - 3);
+    EXPECT_EQ(stats.point_clouds_enqueued, 1U);
+    EXPECT_EQ(stats.point_clouds_processed, 1U);
+    EXPECT_EQ(stats.nonincreasing_point_clouds,
+              kProducerCount * kPointCloudsPerProducer - 1);
+    EXPECT_EQ(stats.queue_trims, 0U);
 }
 
 TEST(PerceptionFrontendRunnerTest, QueueOverflowTrimsOldestPointClouds)
@@ -164,7 +176,7 @@ TEST(PerceptionFrontendRunnerTest, OldTimestampRejected)
 
     const PointCloudQueueStats stats = runner.point_cloud_queue_stats();
     EXPECT_EQ(stats.point_clouds_enqueued, 1U);
-    EXPECT_EQ(stats.out_of_order_point_clouds, 1U);
+    EXPECT_EQ(stats.nonincreasing_point_clouds, 1U);
     EXPECT_EQ(stats.latest_point_cloud_timestamp_ns, 200U);
 }
 
