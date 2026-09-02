@@ -84,14 +84,7 @@ namespace planning {
       }
     }
 
-
-    try {
-      delaunator::Delaunator delaunay(coords);
-    }
-    catch (const std::runtime_error& e) {
-      std::cerr << "Triangulation failed: " << e.what() << '\n';
-    }
-     // Triangulation occurs on construction
+    delaunator::Delaunator delaunay(coords); // Triangulation occurs on construction
 
     std::size_t invalid_index = static_cast<std::size_t>(-1);
 
