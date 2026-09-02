@@ -17,6 +17,7 @@ option(HOOTL "Build with HOOTL sim interface" OFF)
 add_subdirectory(drivebrain_core)
 add_subdirectory(drivebrain_comms)
 add_subdirectory(drivebrain_control)
+add_subdirectory(drivebrain_estimation)
 
 #################################
 # Find packages
@@ -27,6 +28,7 @@ find_package(Boost REQUIRED)
 find_package(spdlog REQUIRED)
 find_package(mcap REQUIRED)
 find_package(dbcppp REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 if (HOOTL)
     find_package(cppzmq REQUIRED)
@@ -35,12 +37,14 @@ endif()
 #################################
 # Upstreams (non-conan)
 #################################
+# NOTE: for local HT_proto development, I keep my HT_Proto at ../HT_proto and uncomment the add_subdirectory line below. Otherwise, use FetchContent to pull the repo from github.
 FetchContent_Declare(
     HT_Proto 
     GIT_REPOSITORY https://github.com/hytech-racing/HT_proto.git
-    GIT_TAG f4fc651
+    GIT_TAG 6cc8e92a57ca83c404f86558671dc4629b0ab107
 )
 FetchContent_MakeAvailable(HT_Proto)
+# add_subdirectory(../HT_proto ${CMAKE_BINARY_DIR}/HT_proto)
 
 FetchContent_Declare(
     vn_driver_lib
@@ -49,24 +53,12 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(vn_driver_lib)
 
+# NOTE: If doing replay with HT09 data use release 280 for it to work with the older can description
 FetchContent_Declare(
     HT_CAN
     URL "https://github.com/hytech-racing/HT_CAN/releases/download/264/drivebrain_can_lib.tar.gz"
 )
 FetchContent_MakeAvailable(HT_CAN)
-
-FetchContent_Declare(
-    simulink_automation_msgs_cpp
-    URL "https://github.com/hytech-racing/drivebrain_simulink_models/releases/download/rel57/proto_outputs.tar.gz"
-)
-
-FetchContent_MakeAvailable(simulink_automation_msgs_cpp)
-
-FetchContent_Declare(
-    drivebrain_simulink_models
-    URL "https://github.com/hytech-racing/drivebrain_simulink_models/releases/download/rel57/codegen_outputs.tar.gz"
-)
-FetchContent_MakeAvailable(drivebrain_simulink_models)
 
 #################################
 # Linking to main app
@@ -95,10 +87,7 @@ target_link_libraries(drivebrain PUBLIC
     drivebrain_core
     drivebrain_comms
     drivebrain_control
-    matlab_model
-    -Wl,--whole-archive
-    simulink_automation_msgs_proto_cpp
-    -Wl,--no-whole-archive
+    drivebrain_estimation
 )
 
 #################################

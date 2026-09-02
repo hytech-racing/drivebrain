@@ -17,6 +17,7 @@ add_library(drivebrain_core
 target_include_directories(drivebrain_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 target_link_libraries(drivebrain_core PUBLIC 
+    drivebrain_estimation
     spdlog::spdlog 
     boost::boost 
     nlohmann_json::nlohmann_json
@@ -25,5 +26,4 @@ target_link_libraries(drivebrain_core PUBLIC
     protobuf::libprotobuf
     hytech_msgs_cpp_lib
     hytech_can_msgs_cpp_lib
-    matlab_model
 )

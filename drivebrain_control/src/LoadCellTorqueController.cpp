@@ -3,65 +3,51 @@
 #include <variant>
 #include <spdlog/spdlog.h>
 #include <algorithm>
+#include <FoxgloveServer.hpp>
+
 
 void control::LoadCellTorqueController::_handle_param_updates(const std::unordered_map<std::string, DBParam> &new_param_map) {
 
     spdlog::info("Entering load cell torque controller parameter updates.");
 
-    if (auto it = new_param_map.find("loadcelltorquecontroller/max_torque"); it != new_param_map.end()) {
-        if (auto pval = std::get_if<float>(&it->second)) {
-            std::unique_lock lk(_config_mutex);
-            _config.max_torque = *pval;
-        }
+    if (auto v = process_param_update<float>(new_param_map, "loadcelltorquecontroller/max_torque")) {
+        std::unique_lock lk(_config_mutex);
+        _config.max_torque = *v;
     }
 
-    if (auto it = new_param_map.find("loadcelltorquecontroller/max_regen_torque"); it != new_param_map.end()) {
-        if (auto pval = std::get_if<float>(&it->second)) {
-            std::unique_lock lk(_config_mutex);
-            _config.max_regen_torque = *pval;
-        }
+    if (auto v = process_param_update<float>(new_param_map, "loadcelltorquecontroller/max_regen_torque")) {
+        std::unique_lock lk(_config_mutex);
+        _config.max_regen_torque = *v;
     }
 
-    if (auto it = new_param_map.find("loadcelltorquecontroller/rear_torque_scale"); it != new_param_map.end()) {
-        if (auto pval = std::get_if<float>(&it->second)) {
-            std::unique_lock lk(_config_mutex);
-            _config.rear_torque_scale = *pval;
-        }
+    if (auto v = process_param_update<float>(new_param_map, "loadcelltorquecontroller/rear_torque_scale")) {
+        std::unique_lock lk(_config_mutex);
+        _config.rear_torque_scale = *v;
     }
 
-    if (auto it = new_param_map.find("loadcelltorquecontroller/regen_torque_scale"); it != new_param_map.end()) {
-        if (auto pval = std::get_if<float>(&it->second)) {
-            std::unique_lock lk(_config_mutex);
-            _config.regen_torque_scale = *pval;
-        }
+    if (auto v = process_param_update<float>(new_param_map, "loadcelltorquecontroller/regen_torque_scale")) {
+        std::unique_lock lk(_config_mutex);
+        _config.regen_torque_scale = *v;
     }
 
-    if (auto it = new_param_map.find("loadcelltorquecontroller/positive_speed_set"); it != new_param_map.end()) {
-        if (auto pval = std::get_if<float>(&it->second)) {
-            std::unique_lock lk(_config_mutex);
-            _config.positive_speed_set = *pval;
-        }
+    if (auto v = process_param_update<float>(new_param_map, "loadcelltorquecontroller/positive_speed_set")) {
+        std::unique_lock lk(_config_mutex);
+        _config.positive_speed_set = *v;
     }
 
-    if (auto it = new_param_map.find("loadcelltorquecontroller/max_power_kw"); it != new_param_map.end()) {
-        if (auto pval = std::get_if<float>(&it->second)) {
-            std::unique_lock lk(_config_mutex);
-            _config.max_power_kw = *pval;
-        }
+    if (auto v = process_param_update<float>(new_param_map, "loadcelltorquecontroller/max_power_kw")) {
+        std::unique_lock lk(_config_mutex);
+        _config.max_power_kw = *v;
     }
 
-    if (auto it = new_param_map.find("loadcelltorquecontroller/dt_rate_hz"); it != new_param_map.end()) {
-        if (auto pval = std::get_if<float>(&it->second)) {
-            std::unique_lock lk(_config_mutex);
-            _config.dt_rate_hz = *pval;
-        }
+    if (auto v = process_param_update<float>(new_param_map, "loadcelltorquecontroller/dt_rate_hz")) {
+        std::unique_lock lk(_config_mutex);
+        _config.dt_rate_hz = *v;
     }
 
-    if (auto it = new_param_map.find("loadcelltorquecontroller/apply_vectoring_in_regen"); it != new_param_map.end()) {
-        if (auto pval = std::get_if<float>(&it->second)) {
-            std::unique_lock lk(_config_mutex);
-            _config.apply_vectoring_in_regen = *pval;
-        }
+    if (auto v = process_param_update<bool>(new_param_map, "loadcelltorquecontroller/apply_vectoring_in_regen")) {
+        std::unique_lock lk(_config_mutex);
+        _config.apply_vectoring_in_regen = *v;
     }
 
     spdlog::info("Exiting load cell torque controller parameter updates.");
@@ -69,14 +55,14 @@ void control::LoadCellTorqueController::_handle_param_updates(const std::unorder
 
 bool control::LoadCellTorqueController::init()
 {
-    auto opt_max_torque = FoxgloveServer::instance().get_param<float>("LoadCellTorqueController/max_torque");
-    auto opt_max_regen_torque = FoxgloveServer::instance().get_param<float>("LoadCellTorqueController/max_regen_torque");
-    auto opt_rear_torque_scale = FoxgloveServer::instance().get_param<float>("LoadCellTorqueController/rear_torque_scale");
-    auto opt_regen_torque_scale = FoxgloveServer::instance().get_param<float>("LoadCellTorqueController/regen_torque_scale");
-    auto opt_positive_speed_set = FoxgloveServer::instance().get_param<float>("LoadCellTorqueController/positive_speed_set");
-    auto opt_max_power_kw = FoxgloveServer::instance().get_param<float>("LoadCellTorqueController/max_power_kw");
-    auto opt_dt_rate_hz = FoxgloveServer::instance().get_param<float>("LoadCellTorqueController/dt_rate_hz");
-    auto opt_apply_vectoring_in_regen = FoxgloveServer::instance().get_param<bool>("LoadCellTorqueController/apply_vectoring_in_regen");
+    auto opt_max_torque = FoxgloveServer::instance().get_param<float>("loadcelltorquecontroller/max_torque");
+    auto opt_max_regen_torque = FoxgloveServer::instance().get_param<float>("loadcelltorquecontroller/max_regen_torque");
+    auto opt_rear_torque_scale = FoxgloveServer::instance().get_param<float>("loadcelltorquecontroller/rear_torque_scale");
+    auto opt_regen_torque_scale = FoxgloveServer::instance().get_param<float>("loadcelltorquecontroller/regen_torque_scale");
+    auto opt_positive_speed_set = FoxgloveServer::instance().get_param<float>("loadcelltorquecontroller/positive_speed_set");
+    auto opt_max_power_kw = FoxgloveServer::instance().get_param<float>("loadcelltorquecontroller/max_power_kw");
+    auto opt_dt_rate_hz = FoxgloveServer::instance().get_param<float>("loadcelltorquecontroller/dt_rate_hz");
+    auto opt_apply_vectoring_in_regen = FoxgloveServer::instance().get_param<bool>("loadcelltorquecontroller/apply_vectoring_in_regen");
     
     bool all_loaded = true;
     if (!opt_max_torque)              { spdlog::error("Missing param: LoadCellTorqueController/max_torque");              all_loaded = false; }

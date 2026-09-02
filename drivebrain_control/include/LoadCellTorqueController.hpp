@@ -4,9 +4,7 @@
 #include <StateTracker.hpp>
 #include <Literals.hpp>
 #include <FoxgloveServer.hpp>
-
 #include <hytech_msgs.pb.h>
-
 #include <utility>
 #include <mutex>
 

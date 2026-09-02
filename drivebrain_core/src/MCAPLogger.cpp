@@ -5,8 +5,6 @@
 
 #include <MCAPLogger.hpp>
 
-#include <MatlabModelProtoRegHelper.hpp>
-
 /****************************************************************
  * HELPER METHODS
  ****************************************************************/
@@ -137,7 +135,11 @@ void core::MCAPLogger::destroy() {
 int core::MCAPLogger::open_new_mcap() {
     std::string mcap_name = get_logfile_name();
     spdlog::info("Attempting to open new MCAP file: {}", mcap_name);
+#if HOOTL_ENABLED
+    _log_name = "sim_data.mcap";
+#else
     _log_name = "/home/nixos/recordings/" + get_logfile_name(); 
+#endif
 
     const auto res = _writer.open(_log_name, _options);
     if (!res.ok()) {
@@ -146,10 +148,6 @@ int core::MCAPLogger::open_new_mcap() {
     }
 
     std::vector<std::string> proto_names = {"hytech_msgs.proto", "hytech.proto"};
-    proto_names.insert(
-        proto_names.end(),
-        matlab_model_gen::matlab_model_gend_protos.begin(),
-        matlab_model_gen::matlab_model_gend_protos.end());
 
     auto descriptors = get_pb_descriptors(proto_names);
 

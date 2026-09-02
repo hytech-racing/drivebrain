@@ -14,6 +14,8 @@
 
 #include "hytech_msgs.pb.h"
 #include "hytech.pb.h"
+#include "FzEstimator.h"
+#include "Telemetry.hpp"
 
 /**
  * The state tracker acts 
@@ -29,6 +31,7 @@ namespace core {
      */
     template <typename T>
     struct veh_vec {
+
         T FL;
         T FR;
         T RL;
@@ -155,14 +158,6 @@ namespace core {
     };
 
     /**
-     * @struct Collection of different outputs
-     */
-    struct MatlabMathResult {
-        TireDynamics tire_dynamics;
-        TorqueVectoringStatus torque_vectoring_status;
-    };
-
-    /**
      * @struct Collection of desired speed and torques
      */
     struct SpeedControlOut {
@@ -231,7 +226,6 @@ namespace core {
         ControllerOutput prev_controller_output;
         TireDynamics tire_dynamics;
         veh_vec<float> driver_torque;
-        ControllerTorqueOut matlab_math_temp_out;
         veh_vec<float> suspension_potentiometers_mm;
         Position vehicle_position;
         veh_vec<float> loadcells;
@@ -329,6 +323,8 @@ namespace core {
 
             void _receive_inverter_states(std::shared_ptr<google::protobuf::Message> message);
 
+            void _update_estimators();
+
             VehicleState _vehicle_state = { };
             RawInputData _raw_input_data = { };
             std::mutex _state_mutex;
@@ -344,5 +340,7 @@ namespace core {
             /* Singleton instance */
             inline static std::atomic<StateTracker*> _s_instance; 
 
+            /* Estimators */
+            estimation::FzEstimator _fz_estimator;
     };
 }
