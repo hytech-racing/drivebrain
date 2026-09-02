@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <foxglove/FrameTransform.pb.h>
 #include <random>
 #include <vector>
@@ -8,6 +9,7 @@
 
 #include <StateTracker.hpp>
 #include "dv_msgs.pb.h"
+#include "hytech_msgs.pb.h"
 #include <delaunator.hpp>
 
 // left side = blue
@@ -23,14 +25,15 @@ namespace planning {
     @return The planned path, map frame
   */  
 
-  inline constexpr double pi = 3.14159265358979323846;
+
+  inline constexpr double pi = 3.14159265358979323846; 
 
   // Returns the next set of coordinates for the car to follow as a path
   inline std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones) {
     
     /* Initializations */
     std::vector<core::xyz_vec<float>> path_points; // The final set of points to be followed
-    path_points.clear();
+    //path_points.clear();
     
     if (cones.cones_size() < 3) {
       spdlog::error("not enough cones");
@@ -38,19 +41,22 @@ namespace planning {
     }
 
     std::vector<core::xyz_vec<float>> midpoints; // Set of midpoints generated based on range filter
-    midpoints.clear();
+    //midpoints.clear();
 
     std::vector<double> coords; // Cone coordinates used to make the delaunay triangulation
-    coords.clear();
+    //coords.clear();
 
     float px = 0.0f;
     float py = 0.0f;
 
-    float max_range = 100.0f;
+    float max_range_squared = 100.0f;
 
+    // FrameTransform is actually the position of the lidar relative to the map frame but the lidar is technically mounted towards the front of the car
     float vehicle_x = static_cast<float>(foxglove::FrameTransform::default_instance().translation().x());
     float vehicle_y = static_cast<float>(foxglove::FrameTransform::default_instance().translation().y());
     
+    // Using FRD over FLU to avoid sign flips/conversions
+    double vehicle_yaw = hytech_msgs::EkfState::default_instance().yaw_vehicle_frd_rad();
 
     coords.reserve(cones.cones_size()*2); // Allocate enough memory to store the x and y coordinates of each cone
 
@@ -59,25 +65,41 @@ namespace planning {
 
       px = cone.position().x() - vehicle_x;
       py = cone.position().y() - vehicle_y;
-      float magnitude = (px * px) + (py * py);
-      std::vector<float> point_to_vehicle = {px, py}; // vector between the 
-      float vector_angle = atan2(point_to_vehicle[1], point_to_vehicle[0]); // heading angle between the point and the car
+      float relative_distance = (px * px) + (py * py);
+      float angle_diff = std::atan2(py, px) - vehicle_yaw; //calculated in radians
 
-      if (vector_angle < pi/3.0 && magnitude < max_range) {
+      // Restrict the angle range to be between -pi and +pi
+      while (angle_diff > pi) {
+        angle_diff -= 2.0f * pi; // subtract 2*pi (2 rad) to get back within the range (too positive of an angle)
+      }
+      
+      while (angle_diff < pi) {
+        angle_diff += 2.0f * pi; // add 2*pi to get into the range (too negative of an angle)
+      }
+
+      // check for positive and negative angles
+      if (std::abs(angle_diff) < pi/3.0 && relative_distance < max_range_squared) {
         coords.push_back(cone.position().x());
         coords.push_back(cone.position().y());
       }
     }
 
-    delaunator::Delaunator delaunay(coords); // Triangulation occurs on construction
+
+    try {
+      delaunator::Delaunator delaunay(coords);
+    }
+    catch (const std::runtime_error& e) {
+      std::cerr << "Triangulation failed: " << e.what() << '\n';
+    }
+     // Triangulation occurs on construction
 
     std::size_t invalid_index = static_cast<std::size_t>(-1);
 
     for (std::size_t i = 0; i < delaunay.triangles.size(); i++) {
 
       // If the edge is a boundary (-1) or a twin edge already iterated over, skip it
-      if (delaunay.halfedges[i] == invalid_index || delaunay.halfedges[i] > i) {
-        continue;
+      if (delaunay.halfedges[i] == invalid_index || delaunay.halfedges[i] < i) {
+        continue; // double check if it should be > i or < i
       }
 
       std::size_t curr_edge = delaunay.triangles[i];
@@ -99,36 +121,22 @@ namespace planning {
     float min_distance = 100.0f;
 
     std::sort(midpoints.begin(), midpoints.end(), 
-      [&](const auto& point_a, const auto& point_b){
-        float ax = point_a.x - vehicle_x;
-        float ay = point_a.y - vehicle_y;
-        float bx = point_b.x - vehicle_x;
-        float by = point_b.y - vehicle_y;
+    [&](const auto& a, const auto& b) {
+        float ax = a.x - vehicle_x;
+        float ay = a.y - vehicle_y;
+
+        float bx = b.x - vehicle_x;
+        float by = b.y - vehicle_y;
 
         float dist_a = (ax * ax) + (ay * ay);
         float dist_b = (bx * bx) + (by * by);
 
         return dist_a < dist_b;
-
-      });
-
+    });
 
     for (const auto& midpoint : midpoints) {
       path_points.push_back({midpoint.x, midpoint.y, 0.0f});
     }
-
-      
-    // for (const auto& midpoint : midpoints) {
-    //   float mp_to_veh_x = midpoint.x - vehicle_x;
-    //   float mp_to_veh_y = midpoint.y - vehicle_y;
-
-    //   float mp_to_veh = (mp_to_veh_x * mp_to_veh_x) + (mp_to_veh_y * mp_to_veh_y);
-    //   if (mp_to_veh < min_distance) {
-    //     min_distance = mp_to_veh;
-    //     path_points.push_back({midpoint.x, midpoint.y, 0.0f});
-    //   }
-    // }
-
 
 
     /* Below is a hardcoded, randomized set of points that renders a small path in Foxglove.
