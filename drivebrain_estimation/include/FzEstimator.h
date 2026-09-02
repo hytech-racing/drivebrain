@@ -8,24 +8,24 @@
 #include <FoxgloveServer.hpp>  
 #include "InterpolatingTable.h"
 
-// dFz_fl, fFz_fr, dFz_rl, dFz_rr
-#define FZ_STATE_SIZE 4
+// dFz_fl, dFz_fr, dFz_rl, dFz_rr
+constexpr int FZ_STATE_SIZE = 4;
 
 // ax, ay
-#define FZ_CONTROL_INPUT_SIZE 2
+constexpr int FZ_CONTROL_INPUT_SIZE = 2;
 
 // dFz_fl, dFz_fr, dFz_rl, dFz_rr
-#define FZ_MEASUREMENT_SIZE 4
+constexpr int FZ_MEASUREMENT_SIZE = 4;
 
-#define FZ_M_B 276.7
-#define FZ_CG_Z 0.29
-#define FZ_WHEELBASE 1.53
-#define FZ_TRACK_WIDTH 1.2
+constexpr double FZ_M_B = 276.7;
+constexpr double FZ_CG_Z = 0.29;
+constexpr double FZ_WHEELBASE = 1.53;
+constexpr double FZ_TRACK_WIDTH = 1.2;
 
-#define FZ_FL_STATIC 707.1
-#define FZ_FR_STATIC 707.1
-#define FZ_RL_STATIC 650.1
-#define FZ_RR_STATIC 650.1
+constexpr double FZ_FL_STATIC = 707.1;
+constexpr double FZ_FR_STATIC = 707.1;
+constexpr double FZ_RL_STATIC = 650.1;
+constexpr double FZ_RR_STATIC = 650.1;
 
 using namespace core;
 
@@ -67,9 +67,9 @@ class FzEstimator {
         fz_measurement_covariance _R; 
 
         fz_estimates _fz_static;
-
         mutable std::mutex _kf_mutex;
 
+        // Maps raw analog load cell measurements --> normal force (N) on each wheel
 
         InterpolatingTable fl_load_cell_to_fz{{
             {673, 422.55}, {924, 615.63}, {982, 701.76}, {1019, 705.49},

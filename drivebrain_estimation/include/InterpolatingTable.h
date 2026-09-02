@@ -23,6 +23,10 @@ class InterpolatingTable {
                 throw std::runtime_error("Interpolation table is empty.");
             }
 
+            if (std::isnan(x)) {
+                throw std::runtime_error("Input value to interpolating table is NaN.");
+            }
+
             if (x <= _table.front().first) {
                 return _table.front().second;
             }

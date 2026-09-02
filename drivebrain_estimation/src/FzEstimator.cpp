@@ -58,7 +58,11 @@ void FzEstimator::update(double load_cell_fl, double load_cell_fr, double load_c
     double fz_rr = rr_load_cell_to_fz.interpolate(load_cell_rr);
 
     fz_measurement_vector z;
-    z << FZ_FL_STATIC - fz_fl, FZ_FR_STATIC - fz_fr, FZ_RL_STATIC - fz_rl, FZ_RR_STATIC - fz_rr;
+    z << 
+        fz_fl - FZ_FL_STATIC, 
+        fz_fr - FZ_FR_STATIC, 
+        fz_rl - FZ_RL_STATIC, 
+        fz_rr - FZ_RR_STATIC;
 
     fz_measurement_vector y = z - _H * _state;
     fz_measurement_covariance S = _H * _P * _H.transpose() + _R;
