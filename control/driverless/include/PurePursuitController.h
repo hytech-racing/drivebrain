@@ -1,18 +1,29 @@
 #ifndef PURE_PURSUIT_CONTROLLER_H
 #define PURE_PURSUIT_CONTROLLER_H
 
+#include "autonomy_msgs.pb.h"
 #include <StateTracker.hpp>
 #include <Controller.hpp>
 
+#include <memory>
 #include <vector>
+
+#include <autonomy_msgs.pb.h>
 
 namespace control {
 namespace driverless {
 
 
 class PurePursuitController : public Controller<core::ControllerOutput, core::VehicleState> {
-
 public:
+struct LoggingData {
+    std::vector<core::xy_vec<float>> path;
+    core::xy_vec<float> vehicle_pos;
+    core::xy_vec<float> target_point;
+    float curvature;
+    float steering_command;
+};
+
 bool init();
 
 core::ControllerOutput step_controller(const core::VehicleState& in) override;
@@ -48,8 +59,18 @@ std::vector<core::xy_vec<float>> getGoalPointCandidates(const std::vector<core::
 
     std::vector<core::xy_vec<float>> loadPathFromCsv(const std::string& filename);
 
+    std::shared_ptr<hytech_msgs::PlannerVisualization> getLoggingData() const;
+
+    void setLoggingData(const LoggingData& data) {
+        logging_data_ = data;
+    }
+
+    float get_dt_sec() override {
+        return 0.1f; // Assuming a control loop of 10 Hz
+    }
 private:
-    float lookahead_distance_{2.0f};
+    LoggingData logging_data_;
+    float lookahead_distance_{2.5f};
     float wheelbase_{1.0f};
     float k_p_speed_to_lookahead_{1.0f};
 };
