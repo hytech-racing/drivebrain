@@ -8,6 +8,7 @@
 #include <numbers>
 
 #include <StateTracker.hpp>
+#include "base_msgs.pb.h"
 #include "dv_msgs.pb.h"
 #include "hytech_msgs.pb.h"
 #include <delaunator.hpp>
@@ -39,14 +40,24 @@ namespace planning {
 
     std::vector<double> coords; // Cone coordinates used to make the delaunay triangulation
 
-    float max_range_squared = 100.0f;
+    float max_range_squared = 300.0f;
 
     // FrameTransform is actually the position of the lidar relative to the map frame but the lidar is technically mounted towards the front of the car
     float vehicle_x = static_cast<float>(foxglove::FrameTransform::default_instance().translation().x());
     float vehicle_y = static_cast<float>(foxglove::FrameTransform::default_instance().translation().y());
     
     // Using FRD over FLU to avoid sign flips/conversions
-    double vehicle_yaw = hytech_msgs::EkfState::default_instance().yaw_vehicle_frd_rad();
+    //double vehicle_yaw = hytech_msgs::EkfState::default_instance().yaw_vehicle_frd_rad();
+
+    float w = hytech_msgs::pose::default_instance().orientation().w();
+    float x = hytech_msgs::pose::default_instance().orientation().x();
+    float y = hytech_msgs::pose::default_instance().orientation().y();
+    float z = hytech_msgs::pose::default_instance().orientation().z();
+
+    float sin_yaw = 2.0 * (w * z + x * y);
+    float cos_yaw = 1.0 - 2.0 * (y * y + z * z);
+
+    float vehicle_yaw = std::atan2(sin_yaw, cos_yaw);
 
     coords.reserve(cones.cones_size()*2); // Allocate enough memory to store the x and y coordinates of each cone
     std::vector<std::size_t> index_map; 
@@ -71,10 +82,9 @@ namespace planning {
         angle_diff += 2.0f * pi; // add 2*pi to get into the range (too negative of an angle)
       }
 
-      //std::abs(angle_diff) < pi/2.0 &&
 
       // check for positive and negative angles
-      if ( relative_distance < max_range_squared) {
+      if (std::abs(angle_diff) < pi/1.5 && relative_distance < max_range_squared) {
         coords.push_back(cone.position().x());
         coords.push_back(cone.position().y());
         index_map.push_back(original_index);
@@ -115,8 +125,7 @@ namespace planning {
       }
     }
 
-    float min_distance = 100.0f;
-
+    // try doing nearet neighbor orting next - midpoint to midpoint
     std::sort(midpoints.begin(), midpoints.end(), 
     [&](const auto& a, const auto& b) {
         float ax = a.x - vehicle_x;
