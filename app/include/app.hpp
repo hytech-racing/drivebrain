@@ -93,5 +93,5 @@ private:
 
   /* Driverless autonomy stack */
   core::Autonomy _autonomy;
-  DrivingMode _driving_mode = DrivingMode::TELEOP;
+  DrivingMode _driving_mode = DrivingMode::DRIVERLESS;
 };

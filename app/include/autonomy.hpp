@@ -6,6 +6,7 @@
 
 #include <StateTracker.hpp>
 #include <GraphSLAM.hpp>
+#include <PurePursuitController.h>
 
 namespace core {
 
@@ -52,6 +53,7 @@ private:
   std::atomic<bool> _running{false};
 
   slam::GraphSlam _slam;
+  control::driverless::PurePursuitController _controller;
 
   // Rate of OS1 LiDAR
   static constexpr std::chrono::milliseconds _period{100}; 

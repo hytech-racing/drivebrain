@@ -1,5 +1,7 @@
 #include <StateTracker.hpp>
+#include <base_msgs.pb.h>
 #include <foxglove/PointCloud.pb.h>
+#include <foxglove/Pose.pb.h>
 #include <foxglove/websocket/parameter.hpp>
 
 using namespace core; 
@@ -85,6 +87,25 @@ void StateTracker::handle_receive_protobuf_message(std::shared_ptr<google::proto
         }
     } else if (msg->GetDescriptor() == foxglove::PointCloud::descriptor()) {
         // UPDATE driverless vehicle state
+    } else if (msg->GetDescriptor() == hytech_msgs::pose::descriptor()) {
+        auto in_msg = std::static_pointer_cast<hytech_msgs::pose>(msg);
+        {
+            std::unique_lock lk(_state_mutex);
+            _vehicle_state.vehicle_position_map_frame.x = in_msg->position().x();
+            _vehicle_state.vehicle_position_map_frame.y = in_msg->position().y();
+            const auto orientation = in_msg->orientation();
+            const auto Qx = orientation.x();
+            const auto Qy = orientation.y();
+            const auto Qz = orientation.z();
+            const auto Qw = orientation.w();
+            const float heading = std::atan2(
+                2.0 * (Qz * Qw + Qx * Qy),
+                -1.0 + 2.0 * (Qw * Qw + Qx * Qx)
+            );
+            _vehicle_state.vehicle_heading_map_frame_unit_vector = {
+                std::cos(heading), std::sin(heading)
+            };
+        }
     } else {
         _receive_low_level_state(msg);
     }
