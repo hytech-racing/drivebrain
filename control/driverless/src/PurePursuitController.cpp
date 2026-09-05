@@ -55,26 +55,30 @@ std::vector<core::xy_vec<float>> PurePursuitController::getGoalPointCandidates(c
 }
 
 core::xy_vec<float> PurePursuitController::selectGoalPoint(const std::vector<core::xy_vec<float>>& goal_point_candidates, core::xy_vec<float> vehicle_pos, core::xy_vec<float> vehicle_heading) {
-    // TODO!: vehicle heading might be needed for a stable algo
-    // assuming track is wide enough and we receive the path in front of the car, just get the closest one for now
-    // float vehicle_x = static_cast<float>(foxglove::FrameTransform::default_instance().translation().x());
-    // float vehicle_y = static_cast<float>(foxglove::FrameTransform::default_instance().translation().y());
     core::xy_vec<float> closest_point;
-
-    auto dist = [vehicle_pos](const core::xy_vec<float>& point) {
-        const float dx = point.x - vehicle_pos.x;
-        const float dy = point.y - vehicle_pos.y;
-        return dx * dx + dy * dy;
+ 
+    auto colinearity = [vehicle_pos, vehicle_heading](const core::xy_vec<float>& point) {
+        const float dx{point.x - vehicle_pos.x};
+        const float dy{point.y - vehicle_pos.y};
+        const core::xy_vec<float> target_vector{dx, dy};
+        auto dot = vehicle_heading * target_vector;
+        auto cos = dot / (vehicle_heading.length() * target_vector.length());
+        return cos;
     };
-
-    auto it = std::min_element(
+ 
+    // std::cout << "Evaluating colinearity of goal points:\n";
+    // for (const auto& p : goal_point_candidates) {
+    //     std::cout << "Point (" << p.x << ", " << p.y << ") has colinearity: " << colinearity(p) << "\n";
+    // }
+ 
+    auto it = std::max_element(
         goal_point_candidates.begin(),
         goal_point_candidates.end(),
         [&](const auto& a, const auto& b) {
-            return dist(a) < dist(b);
+            return colinearity(a) < colinearity(b);
         }
     );
-    std::cout << "Selected goal point: (" << it->x << ", " << it->y << ")\n";
+    // std::cout << "Selected goal point: (" << it->x << ", " << it->y << ")\n";
     if (it != goal_point_candidates.end()) {
         closest_point = *it;
     }
