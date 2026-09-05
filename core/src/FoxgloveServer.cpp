@@ -227,7 +227,7 @@ core::FoxgloveServer::FoxgloveServer(std::string file_name) {
 
             auto fdset_str = SerializeFdSet(message_descriptor);
             server_channel.schema = foxglove::base64Encode(fdset_str);
-            _name_to_id_map[server_channel.topic] = running_index;
+            _topic_to_id_map[server_channel.topic] = running_index;
             channels.push_back(server_channel);
             running_index++;
         }
@@ -321,20 +321,52 @@ core::DBParam core::FoxgloveServer::_get_db_param(foxglove::Parameter param) {
     }
 }
 
+uint32_t core::FoxgloveServer::_get_or_add_channel(
+    const std::string& topic,
+    const google::protobuf::Descriptor* descriptor)
+{
+    if (auto it = _topic_to_id_map.find(topic); it != _topic_to_id_map.end()) {
+        return it->second;
+    }
+
+    foxglove::ChannelWithoutId channel;
+    channel.topic = topic;
+    channel.encoding = "protobuf";
+    channel.schemaName = descriptor->full_name();
+    channel.schema = foxglove::base64Encode(SerializeFdSet(descriptor));
+
+    auto channel_ids = _server->addChannels({channel});
+    if (channel_ids.empty()) {
+        return 0;
+    }
+
+    const uint32_t channel_id = channel_ids.front();
+    _topic_to_id_map[topic] = channel_id;
+    return channel_id;
+}
+
 void core::FoxgloveServer::send_live_telem_msg(std::shared_ptr<const google::protobuf::Message> msg) {
-    /* find() is a non-mutating lookup — safe for concurrent callers (main loop, eth,
-       sim state/lidar threads). operator[] would insert-on-miss and race a rehash. */
-    auto it = _name_to_id_map.find(msg->GetDescriptor()->name());
-    if (it == _name_to_id_map.end()) {
+    send_live_telem_msg(msg->GetDescriptor()->name(), msg);
+}
+
+void core::FoxgloveServer::send_live_telem_msg(
+    const std::string& topic,
+    std::shared_ptr<const google::protobuf::Message> msg)
+{
+    if (!msg) {
         return;
     }
 
-    OutgoingMsg out;
-    out.channel_id = it->second;
-    out.timestamp = nanosecondsSinceEpoch();
-    out.data = msg->SerializeAsString();
     {
         std::unique_lock lock(_send_mutex);
+        OutgoingMsg out;
+        out.channel_id = _get_or_add_channel(topic, msg->GetDescriptor());
+        if (out.channel_id == 0) {
+            return;
+        }
+        out.timestamp = nanosecondsSinceEpoch();
+        out.data = msg->SerializeAsString();
+
         if (_send_queue.size() >= MAX_SEND_QUEUE) {
             _send_queue.pop_front();
         }
@@ -361,6 +393,4 @@ void core::FoxgloveServer::_broadcast_loop() {
         batch.clear();
     }
 }
-
-
 

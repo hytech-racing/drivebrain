@@ -9,29 +9,26 @@ find_package(Protobuf REQUIRED CONFIG)
 find_package(mcap REQUIRED)
 find_package(Eigen3 REQUIRED)
 
-#################################
+# ##############################################################################
 # core
-#################################
-add_library(core
-    src/FoxgloveServer.cpp
-    src/MCAPLogger.cpp
-    src/StateTracker.cpp
-    src/DrivebrainControllerInterface.cpp
-)
+# ##############################################################################
+add_library(core src/FoxgloveServer.cpp src/MCAPLogger.cpp src/StateTracker.cpp
+                 src/DrivebrainControllerInterface.cpp)
 
 target_include_directories(core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
-target_link_libraries(core PUBLIC
-    spdlog::spdlog
-    boost::boost
-    nlohmann_json::nlohmann_json
-    foxglove-websocket::foxglove-websocket
-    foxglove-schemas-protobuf::foxglove-schemas-protobuf
-    mcap::mcap
-    protobuf::libprotobuf
-    hytech_msgs_cpp_lib
-    hytech_can_msgs_cpp_lib
-    Eigen3::Eigen
-    matlab_model
-    simulink_automation_msgs_proto_cpp
-)
+target_link_libraries(
+  core
+  PUBLIC spdlog::spdlog
+         boost::boost
+         nlohmann_json::nlohmann_json
+         foxglove-websocket::foxglove-websocket
+         foxglove-schemas-protobuf::foxglove-schemas-protobuf
+         mcap::mcap
+         protobuf::libprotobuf
+         hytech_msgs_cpp_lib
+         hytech_can_msgs_cpp_lib
+         Eigen3::Eigen
+         matlab_model
+         simulink_automation_msgs_proto_cpp
+         transforms)

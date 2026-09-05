@@ -21,6 +21,7 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+#include <unordered_map>
 #include <spdlog/spdlog.h>
 
 #include "hytech_msgs.pb.h"
@@ -80,6 +81,10 @@ namespace core {
              */
             void send_live_telem_msg(std::shared_ptr<const google::protobuf::Message> msg);
 
+            void send_live_telem_msg(
+                const std::string& topic,
+                std::shared_ptr<const google::protobuf::Message> msg);
+
             /**
              * Registers a callback function to be run whenever a parameter is updated in Foxglove.
              * @param The function to be reigstered, which takes the form of (const string, param) -> void
@@ -126,6 +131,10 @@ namespace core {
             /* Drains the broadcast queue and sends to clients. */
             void _broadcast_loop();
 
+            uint32_t _get_or_add_channel(
+                const std::string& topic,
+                const google::protobuf::Descriptor* descriptor);
+
             /* Singleton move semantics */
             FoxgloveServer(const FoxgloveServer&) = delete;
             FoxgloveServer& operator=(const FoxgloveServer&) = delete;
@@ -146,7 +155,7 @@ namespace core {
             DBParam _get_db_param(foxglove::Parameter foxglove_parameter);
             
             std::unordered_map<std::string, DBParam> _foxglove_params_map; 
-            std::unordered_map<std::string, uint32_t> _name_to_id_map;
+            std::unordered_map<std::string, uint32_t> _topic_to_id_map;
             
             std::unique_ptr<foxglove::ServerInterface<websocketpp::connection_hdl>> _server;
             foxglove::ServerOptions _server_options;
@@ -161,4 +170,3 @@ namespace core {
             bool _send_running = false;
     };
 }
-

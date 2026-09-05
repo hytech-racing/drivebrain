@@ -1,97 +1,142 @@
-#include "ETHRecvComms.hpp"
 #include "CANComms.hpp"
+#include "DriverlessEstimatorRunner.hpp"
+#include "ETHRecvComms.hpp"
+#include "LatestEstimate.hpp"
+#include "common/LatestPlannerMap.hpp"
+#include "PerceptionFrontendRunner.hpp"
+#include "SlamBackendRunner.hpp"
 #if HOOTL_ENABLED
-# include "SimComms.hpp"
+#include "SimComms.hpp"
 #endif
+#include <EstimatorManager.hpp>
 #include <MCAPLogger.hpp>
+#include <MatlabModelAddHelper.hpp>
 #include <boost/asio.hpp>
 #include <memory>
-#include <EstimatorManager.hpp>
-#include <MatlabModelAddHelper.hpp>
 
-#include "ETHRecvComms.hpp"
 #include "CANComms.hpp"
-#include "SimComms.hpp"
+#include "ETHRecvComms.hpp"
 #include "LoadCellTorqueController.hpp"
+#include "SimComms.hpp"
 #include "VNComms.hpp"
 #include "autonomy.hpp"
 #include "hytech_msgs.pb.h"
 
-enum class DrivingMode { DRIVERED, DRIVERLESS, TELEOP };
+enum class DrivingMode
+{
+    DRIVERED,
+    DRIVERLESS,
+    TELEOP
+};
 
-class DrivebrainApp {
-public:
-  /**
-   * Creates a new instance of Drivebrain
-   *
-   * @param json_params_path The path to the JSON parameters file
-   * @param dbc_path The path to the DBC file
-  */
-   DrivebrainApp(const std::string& json_params_path, const std::string& dbc_path);
-  ~DrivebrainApp();
+class DrivebrainApp
+{
+   public:
+    /**
+     * Creates a new instance of Drivebrain
+     *
+     * @param json_params_path The path to the JSON parameters file
+     * @param dbc_path The path to the DBC file
+     */
+    DrivebrainApp(const std::string& json_params_path,
+                  const std::string& dbc_path);
+    ~DrivebrainApp();
 
-  DrivebrainApp& operator=(DrivebrainApp&&) = delete;
-  DrivebrainApp(DrivebrainApp&&) = delete;
+    DrivebrainApp& operator=(DrivebrainApp&&) = delete;
+    DrivebrainApp(DrivebrainApp&&) = delete;
 
-  /**
-   * Starts running the Drivebrain main loop
-  */
-  void run();
+    /**
+     * Starts running the Drivebrain main loop
+     */
+    void run();
 
-private:
-  /**
-   * Processes one loop iteration of Drivebrain
-  */
-  void _loop();
+   private:
+    /**
+     * Processes one loop iteration of Drivebrain
+     */
+    void _loop();
 
-  /**
-   * Sends a controller output to the inverters and steering over both CAN buses,
-   * and logs what was sent.
-   *
-   * @param out the controller output to command
-  */
-  void _actuate(const core::ControllerOutput& out);
+    /**
+     * Sends a controller output to the inverters and steering over both CAN
+     * buses, and logs what was sent.
+     *
+     * @param out the controller output to command
+     */
+    void _actuate(const core::ControllerOutput& out);
 
-  /**
-   * Maps a teleop twist onto torque and steering.
-   *
-   * @param command the latest teleop command
-   * @return the controller output to send
-  */
-  core::ControllerOutput _teleop_command(const core::TeleopCommand& command);
+    /**
+     * Maps a teleop twist onto torque and steering.
+     *
+     * @param command the latest teleop command
+     * @return the controller output to send
+     */
+    core::ControllerOutput _teleop_command(const core::TeleopCommand& command);
 
-private:
-  boost::asio::io_context _io_context;
+   private:
+    // event based callback
+    void _route_received_message(
+        std::shared_ptr<google::protobuf::Message> message);
 
-  /* Threads */
-  std::thread _loop_thread;
-  std::thread _io_context_thread;
+   private:
+    boost::asio::io_context _io_context;
 
-  /* Config paths */
-  const std::string _json_params_path;
-  const std::string _dbc_path;
+    /* Threads */
+    std::thread _loop_thread;
+    std::thread _io_context_thread;
 
-  /* CAN drivers */
-  std::unique_ptr<comms::CANComms> _telem_can;
-  std::unique_ptr<comms::CANComms> _aux_can;
+    /* Config paths */
+    const std::string _json_params_path;
+    const std::string _dbc_path;
 
-  /* Ethernet drivers */
-  std::unique_ptr<comms::ETHRecvComms<hytech_msgs::ACUAllData>> _acu_eth_driver;
-  std::unique_ptr<comms::ETHRecvComms<hytech_msgs::ACUCoreData>> _acu_core_eth_driver;
-  std::unique_ptr<comms::ETHRecvComms<hytech_msgs::VCRData_s>> _vcr_eth_driver;
-  std::unique_ptr<comms::ETHRecvComms<hytech_msgs::VCFData_s>> _vcf_eth_driver;
+    /* CAN drivers */
+    std::unique_ptr<comms::CANComms> _telem_can;
+    std::unique_ptr<comms::CANComms> _aux_can;
 
-  /* Controllers */
-  std::shared_ptr<control::LoadCellTorqueController> _mode1;
-  std::vector<std::shared_ptr<MatlabModel>> _gend_controllers;
+    /* Ethernet drivers */
+    std::unique_ptr<comms::ETHRecvComms<hytech_msgs::ACUAllData>>
+        _acu_eth_driver;
+    std::unique_ptr<comms::ETHRecvComms<hytech_msgs::ACUCoreData>>
+        _acu_core_eth_driver;
+    std::unique_ptr<comms::ETHRecvComms<hytech_msgs::VCRData_s>>
+        _vcr_eth_driver;
+    std::unique_ptr<comms::ETHRecvComms<hytech_msgs::VCFData_s>>
+        _vcf_eth_driver;
 
-  /* Vectornav */
-  std::unique_ptr<comms::VNDriver> _vn_driver;
+    /* Controllers */
+    std::shared_ptr<control::LoadCellTorqueController> _mode1;
+    std::vector<std::shared_ptr<MatlabModel>> _gend_controllers;
 
-  /* Estimator Manager */
-  std::shared_ptr<estimation::EstimatorManager> _estim_manager;
+    /* Vectornav */
+    std::unique_ptr<comms::VNDriver> _vn_driver;
 
-  /* Driverless autonomy stack */
-  core::Autonomy _autonomy;
-  DrivingMode _driving_mode = DrivingMode::TELEOP;
+    /* Estimator Manager */
+    std::shared_ptr<estimation::EstimatorManager> _estim_manager;
+
+    /* Driverless autonomy stack */
+    core::Autonomy _autonomy;
+    DrivingMode _driving_mode = DrivingMode::TELEOP;
+
+   private:
+    // driverless estimator
+    std::shared_ptr<estimation::LatestEstimate> _latest_estimate;
+    std::unique_ptr<runtime::DriverlessEstimatorRunner>
+        _driverless_estimator_runner;
+
+   private:
+    // shared map_state between perception frontend and slam backend
+    std::shared_ptr<slam::LatestMapState> _latest_map_state;
+    std::shared_ptr<slam::LatestPlannerMap> _latest_planner_map;
+
+   private:
+    // perception frontend
+    std::unique_ptr<runtime::PerceptionFrontendRunner>
+        _perception_frontend_runner;
+
+   private:
+    // slam backend
+    std::unique_ptr<runtime::SlamBackendRunner> _slam_backend_runner;
+
+   private:
+    // transform buffer
+    std::shared_ptr<transforms::TransformBuffer> _transform_buffer;
 };

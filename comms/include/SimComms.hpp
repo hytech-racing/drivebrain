@@ -11,6 +11,9 @@
 
 namespace comms {
 
+using ReceiveHandler = 
+    std::function<void(std::shared_ptr<google::protobuf::Message>)>;
+
 class SimComms {
     public:
         /**
@@ -22,14 +25,14 @@ class SimComms {
         
         bool send_message(std::shared_ptr<google::protobuf::Message> message);
 
-        static void create();
+        static void create(ReceiveHandler receive_handler);
 
         static SimComms& instance();
 
         static void destroy();
 
     private: 
-        SimComms();
+        SimComms(ReceiveHandler receive_handler);
 
         SimComms(const SimComms&) = delete;
         SimComms& operator=(const SimComms&) = delete;
@@ -61,5 +64,9 @@ class SimComms {
         std::thread _veh_recv_thread;
         std::thread _lidar_recv_thread;
         std::atomic<bool> _running{false};
+
+    private:
+        ReceiveHandler _on_message_received;
+
 };
 }

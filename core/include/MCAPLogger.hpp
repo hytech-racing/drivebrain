@@ -8,17 +8,20 @@
 #include <cassert>
 #include <queue> 
 #include <chrono>
+#include <memory>
 #include <mcap/writer.hpp>
 #include <google/protobuf/descriptor.pb.h>
 #include <foxglove/websocket/base64.hpp>
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
+#include <string>
+#include <unordered_map>
 
 namespace core {
 
     struct RawMessage_s {
         std::string serialized_data;
-        std::string message_name;
+        uint32_t channel_id{};
         mcap::Timestamp log_time;
     };
 
@@ -108,6 +111,8 @@ namespace core {
              */
             int log_msg(MsgType message); 
 
+            int log_msg(const std::string& topic, MsgType message);
+
             /**
              * Logs the json params to the current MCAP file
              *
@@ -126,6 +131,10 @@ namespace core {
              * Logs all queued messages to a file. 
              */
             void _handle_log_to_file();     
+
+            uint32_t _get_or_add_channel(
+                const std::string& topic,
+                const google::protobuf::Descriptor* descriptor);
 
             /* Singleton move semantics */
             MCAPLogger(const MCAPLogger&) = delete;
@@ -152,7 +161,8 @@ namespace core {
             /* State */
             nlohmann::json _params_schema_json;
             nlohmann::json _initial_params;
-            std::unordered_map<std::string, uint32_t> _name_to_id_map;
+            std::unordered_map<std::string, uint32_t> _topic_to_id_map;
+            std::unordered_map<std::string, mcap::SchemaId> _schema_name_to_id_map;
             std::string _base_dir;
             std::string _log_name = "NONE";
             bool _logging = false;
