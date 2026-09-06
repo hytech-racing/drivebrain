@@ -51,6 +51,11 @@
         "Q_gain": 0.1,
         "R_gain": 0.1
     },
+    "NavEstimator": {
+        "min_initialization_samples": 1000,
+        "Q_gain": 0.1,
+        "R_gain": 0.1
+    },
     "use_vectornav": false,
     "use_fake_vn": false,
     "use_surrey_aero": false,

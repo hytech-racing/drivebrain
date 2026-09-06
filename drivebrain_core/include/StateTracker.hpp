@@ -342,5 +342,6 @@ namespace core {
 
             /* Estimators */
             estimation::FzEstimator _fz_estimator;
+            estimation::NavEstimator _nav_estimator;
     };
 }
