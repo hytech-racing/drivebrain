@@ -318,6 +318,11 @@ namespace core {
     inline const LidarPoint* points(const foxglove::PointCloud& pc) { return reinterpret_cast<const LidarPoint*>(pc.data().data()); }
     inline uint64_t num_points(const foxglove::PointCloud& pc) { return pc.data().size() / sizeof(LidarPoint); }
 
+    struct PIDGains {
+        float kp;
+        float ki;
+        float kd;
+    };
 
     /**
      * @struct Contains driverless data representing the entire internal
@@ -328,6 +333,8 @@ namespace core {
         bool lidar_is_valid;
         std::shared_ptr<const dv_msgs::Cones> cone_observations;
         std::shared_ptr<const std::vector<xyz_vec<float>>> path;
+
+        PIDGains velocity_controller_pid_gains;
 
         /* Returns the latest LiDAR point cloud in a clean struct */
         const LidarPoint* points() const { return lidar_cloud ? core::points(*lidar_cloud) : nullptr; }

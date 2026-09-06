@@ -105,14 +105,13 @@ bool PurePursuitController::init() {
     return true;
 } 
 
-core::ControllerOutput PurePursuitController::step_controller(const core::VehicleState& in) {
+std::optional<float> PurePursuitController::step_controller(const core::VehicleState& in) {
     const core::xy_vec<float> vehicle_pos{in.vehicle_position_map_frame.x, in.vehicle_position_map_frame.y};
     const core::xy_vec<float> vehicle_heading{in.vehicle_heading_map_frame_unit_vector};
     std::cout << vehicle_pos.x << ", " << vehicle_pos.y << ", " << vehicle_heading.x << ", " << vehicle_heading.y << "\n";
     const std::vector<core::xy_vec<float>> path = loadPathFromCsv("path.csv"); // TEMPORARY UNTIL WE GET WORKING PLANNER
     
-    core::ControllerOutput output{};
-    output.out = std::monostate{};
+    std::optional<float> output{};
 
     std::vector<core::xy_vec<float>> goal_point_candidates = getGoalPointCandidates(path, vehicle_pos, lookahead_distance_);
     if (goal_point_candidates.empty()) {
@@ -124,13 +123,9 @@ core::ControllerOutput PurePursuitController::step_controller(const core::Vehicl
     const float curvature = getCurvature(vehicle_pos, vehicle_heading, target);
     std::cout << "Curvature: " << curvature << "\n";
     const float steering_command = getSteeringCommand(curvature, wheelbase_);
-    if (std::isfinite(steering_command)) {
-        core::TorqueControlOut torque;
-        torque.desired_torques_nm = {0.8f, 0.8f, 0.8f, 0.8f};
-        
-        output.desired_steering_deg =
-            steering_command * 180.0f / static_cast<float>(M_PI);
-        output.out = torque;
+    
+    if (std::isfinite(steering_command)) {        
+        output.emplace( steering_command * 180.0f / static_cast<float>(M_PI)); 
     }
 
     LoggingData data {

@@ -14,7 +14,7 @@ namespace control {
 namespace driverless {
 
 
-class PurePursuitController : public Controller<core::ControllerOutput, core::VehicleState> {
+class PurePursuitController : public Controller<std::optional<float>, core::VehicleState> {
 public:
 struct LoggingData {
     std::vector<core::xy_vec<float>> path;
@@ -26,7 +26,7 @@ struct LoggingData {
 
 bool init();
 
-core::ControllerOutput step_controller(const core::VehicleState& in) override;
+std::optional<float> step_controller(const core::VehicleState& in) override;
 
 /** 
     * Calculates the intersection points of the circle of radius lookahead_distance centered at vehicle_pos with the polyline path
@@ -66,7 +66,7 @@ std::vector<core::xy_vec<float>> getGoalPointCandidates(const std::vector<core::
     }
 
     float get_dt_sec() override {
-        return 0.1f; // Assuming a control loop of 10 Hz
+        return 0.01f; // currently stepping at 100Hz, but this should be configurable
     }
 private:
     LoggingData logging_data_;

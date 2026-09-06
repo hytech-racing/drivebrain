@@ -53,15 +53,23 @@ bool Autonomy::is_valid() {
 ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
 
   static uint8_t prescale_counter = 0;
+  auto dv = StateTracker::instance().dv_state();
   ControllerOutput out;
+
   if (++prescale_counter < PRESCALE_COUNTER) {
     return out;
   }
   prescale_counter = 0;
-  // run control loop 
-  out =_controller.step_controller(vehicle_state);
-  // fetch logs
-  auto msg = _controller.getLoggingData();
+
+  // update PID gains for longitudinal controller
+  _longitudinal_controller.setGains(dv.velocity_controller_pid_gains);
+  
+  // run control loops
+  out.desired_steering_deg = _lateral_controller.step_controller(vehicle_state);
+  out.out = _longitudinal_controller.step_controller(vehicle_state);
+
+  // fetch pure pursuit logs
+  auto msg = _lateral_controller.getLoggingData();
   
 #if HOOTL_ENABLED
   // std::cout << msg.
