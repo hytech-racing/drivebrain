@@ -39,11 +39,11 @@ TEST(SlamFrontendAssociationTest, EmptyInputsReturnNoAssociations)
     const SlamFrontend frontend(make_test_params());
 
     EXPECT_TRUE(frontend.associate_points_one_to_one(
-                            {}, {transforms::Point2D{1.0, 0.0}}, 1.0)
+                            {}, {core::geometry::Point2D{1.0, 0.0}}, 1.0)
                     .empty());
 
     EXPECT_TRUE(frontend.associate_points_one_to_one(
-                            {transforms::Point2D{1.0, 0.0}}, {}, 1.0)
+                            {core::geometry::Point2D{1.0, 0.0}}, {}, 1.0)
                     .empty());
 }
 
@@ -53,8 +53,8 @@ TEST(SlamFrontendAssociationTest, GateBoundaryIsInclusive)
 
     const std::vector<AcceptedAssociation> associations =
         frontend.associate_points_one_to_one(
-            {transforms::Point2D{0.0, 0.0}},
-            {transforms::Point2D{0.3, 0.4}}, 0.5);
+            {core::geometry::Point2D{0.0, 0.0}},
+            {core::geometry::Point2D{0.3, 0.4}}, 0.5);
 
     ASSERT_EQ(associations.size(), 1U);
     expect_association(associations.front(), 0U, 0U, 0.5);
@@ -66,9 +66,9 @@ TEST(SlamFrontendAssociationTest, ClosestOneToOnePairsWin)
 
     const std::vector<AcceptedAssociation> associations =
         frontend.associate_points_one_to_one(
-            {transforms::Point2D{0.0, 0.0}, transforms::Point2D{0.4, 0.0},
-             transforms::Point2D{5.0, 0.0}},
-            {transforms::Point2D{0.1, 0.0}, transforms::Point2D{5.2, 0.0}},
+            {core::geometry::Point2D{0.0, 0.0}, core::geometry::Point2D{0.4, 0.0},
+             core::geometry::Point2D{5.0, 0.0}},
+            {core::geometry::Point2D{0.1, 0.0}, core::geometry::Point2D{5.2, 0.0}},
             1.0);
 
     ASSERT_EQ(associations.size(), 2U);

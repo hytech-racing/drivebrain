@@ -22,7 +22,6 @@ add_subdirectory(planning)
 add_subdirectory(perception)
 add_subdirectory(slam)
 add_subdirectory(transforms)
-add_subdirectory(adapters)
 add_subdirectory(runtime)
 
 # Aliases so external FetchContent deps (mostly db simulink models) that link

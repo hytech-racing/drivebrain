@@ -13,8 +13,8 @@ namespace
 slam::PoseEstimate make_pose_estimate()
 {
     slam::PoseEstimate pose;
-    pose.initial_pose_map_from_base = transforms::Pose2D{1.0, 2.0, 0.1};
-    pose.optimized_pose_map_from_base = transforms::Pose2D{3.0, 4.0, 0.2};
+    pose.initial_pose_map_from_base = core::geometry::Pose2D{1.0, 2.0, 0.1};
+    pose.optimized_pose_map_from_base = core::geometry::Pose2D{3.0, 4.0, 0.2};
     return pose;
 }
 
@@ -22,8 +22,8 @@ slam::LandmarkEstimate make_landmark_estimate()
 {
     slam::LandmarkEstimate landmark;
     landmark.landmark_id = 42U;
-    landmark.initial_position_map = transforms::Point2D{1.0, 2.0};
-    landmark.optimized_position_map = transforms::Point2D{3.0, 4.0};
+    landmark.initial_position_map = core::geometry::Point2D{1.0, 2.0};
+    landmark.optimized_position_map = core::geometry::Point2D{3.0, 4.0};
     return landmark;
 }
 
@@ -31,7 +31,7 @@ slam::FrontendResult make_frontend_result()
 {
     slam::LandmarkObservation observation;
     observation.landmark_id = 7U;
-    observation.measurement_base_m = transforms::Point2D{5.0, 6.0};
+    observation.measurement_base_m = core::geometry::Point2D{5.0, 6.0};
     observation.association = slam::LandmarkAssociation::ExistingMapLandmark;
     observation.residual_m = 0.25;
 
@@ -76,7 +76,7 @@ TEST(SlamVisualizationAdaptersTest, PoseMarkersKeepNewestTenThousandPoints)
     for (std::size_t pose_index = 0; pose_index < 10001U; ++pose_index)
     {
         slam::PoseEstimate pose;
-        pose.optimized_pose_map_from_base = transforms::Pose2D{
+        pose.optimized_pose_map_from_base = core::geometry::Pose2D{
             static_cast<double>(pose_index), 0.0, 0.0};
         poses.push_back(pose);
     }
@@ -138,7 +138,7 @@ TEST(SlamVisualizationAdaptersTest, FrontendAssociationMarkersUseAssociationColo
 TEST(SlamVisualizationAdaptersTest, MapOdomTransformMapsEveryField)
 {
     const auto transform = to_foxglove_map_odom_transform(
-        transforms::Pose2D{1.0, 2.0, 0.5}, 123);
+        core::geometry::Pose2D{1.0, 2.0, 0.5}, 123);
 
     ASSERT_NE(transform, nullptr);
     EXPECT_EQ(transform->parent_frame_id(), "map");

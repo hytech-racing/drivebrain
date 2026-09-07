@@ -18,24 +18,24 @@ namespace slam::backend
 namespace
 {
 
-gtsam::Pose2 to_gtsam_pose(const transforms::Pose2D& pose)
+gtsam::Pose2 to_gtsam_pose(const core::geometry::Pose2D& pose)
 {
     return gtsam::Pose2{pose.x_m, pose.y_m, pose.yaw_rad};
 }
 
-gtsam::Point2 to_gtsam_point(const transforms::Point2D& point)
+gtsam::Point2 to_gtsam_point(const core::geometry::Point2D& point)
 {
     return gtsam::Point2{point.x_m, point.y_m};
 }
 
-transforms::Pose2D to_transform_pose(const gtsam::Pose2& pose)
+core::geometry::Pose2D to_transform_pose(const gtsam::Pose2& pose)
 {
-    return transforms::Pose2D{pose.x(), pose.y(), pose.theta()};
+    return core::geometry::Pose2D{pose.x(), pose.y(), pose.theta()};
 }
 
-transforms::Point2D to_transform_point(const gtsam::Point2& point)
+core::geometry::Point2D to_transform_point(const gtsam::Point2& point)
 {
-    return transforms::Point2D{point.x(), point.y()};
+    return core::geometry::Point2D{point.x(), point.y()};
 }
 
 }  // namespace

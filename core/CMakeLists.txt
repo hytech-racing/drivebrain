@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.10)
 
+add_library(core_geometry INTERFACE)
+target_include_directories(core_geometry INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+
 find_package(spdlog REQUIRED)
 find_package(Boost REQUIRED)
 find_package(nlohmann_json REQUIRED)
@@ -19,7 +22,8 @@ target_include_directories(core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 target_link_libraries(
   core
-  PUBLIC spdlog::spdlog
+  PUBLIC core_geometry
+         spdlog::spdlog
          boost::boost
          nlohmann_json::nlohmann_json
          foxglove-websocket::foxglove-websocket
@@ -32,3 +36,5 @@ target_link_libraries(
          matlab_model
          simulink_automation_msgs_proto_cpp
          transforms)
+
+add_subdirectory(adapters)

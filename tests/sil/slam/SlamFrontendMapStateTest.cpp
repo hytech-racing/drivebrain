@@ -29,13 +29,13 @@ MapLandmark make_landmark(const std::uint64_t landmark_id,
                           const double x_map_m = 100.0,
                           const double y_map_m = 100.0)
 {
-    return MapLandmark{landmark_id, transforms::Point2D{x_map_m, y_map_m}};
+    return MapLandmark{landmark_id, core::geometry::Point2D{x_map_m, y_map_m}};
 }
 
 MapState make_map_state(const std::uint64_t sequence,
                         const std::int64_t timestamp_ns,
                         std::vector<MapLandmark> landmarks = {},
-                        const transforms::Pose2D& pose_map_from_odom = {})
+                        const core::geometry::Pose2D& pose_map_from_odom = {})
 {
     MapState state;
     state.sequence = sequence;
@@ -48,7 +48,7 @@ MapState make_map_state(const std::uint64_t sequence,
 ConeDetection make_detection(const double x_base_m,
                              const double y_base_m = 0.0)
 {
-    return ConeDetection{transforms::Point2D{x_base_m, y_base_m}, 1.0};
+    return ConeDetection{core::geometry::Point2D{x_base_m, y_base_m}, 1.0};
 }
 
 ConeFrame make_frame(const std::int64_t timestamp_ns,

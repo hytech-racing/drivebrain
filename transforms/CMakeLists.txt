@@ -7,4 +7,4 @@ add_library(transforms src/TransformBuffer.cpp)
 target_include_directories(transforms
                            PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
-target_link_libraries(transforms PUBLIC Eigen3::Eigen)
+target_link_libraries(transforms PUBLIC core_geometry Eigen3::Eigen)

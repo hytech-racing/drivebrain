@@ -296,7 +296,7 @@ void DriverlessEstimatorRunner::_publish_estimate(const StateEstimate& estimate,
         _latest_estimate->store(estimate);
     }
 
-    const transforms::Pose2D T_odom_base{estimate.x_odom_m, estimate.y_odom_m,
+    const core::geometry::Pose2D T_odom_base{estimate.x_odom_m, estimate.y_odom_m,
                                          estimate.yaw_odom_rad};
 
     _transform_buffer->insert_T_odom_base(estimate.timestamp_ns, T_odom_base);

@@ -28,7 +28,7 @@ ReferencePath make_square_path()
 TEST(ReferencePathProjectionTest, ProjectsOntoSegmentInterior)
 {
     const ReferencePath path = make_square_path();
-    const Point2D vehicle_position{4.0, -3.0};
+    const core::geometry::Point2D vehicle_position{4.0, -3.0};
 
     const auto projection = project_onto_path(vehicle_position, path);
 
@@ -41,7 +41,7 @@ TEST(ReferencePathProjectionTest, ProjectsOntoSegmentInterior)
 TEST(ReferencePathProjectionTest, ClampsProjectionBeforeSegmentStart)
 {
     const ReferencePath path = make_square_path();
-    const Point2D vehicle_position{-2.0, -1.0};
+    const core::geometry::Point2D vehicle_position{-2.0, -1.0};
 
     const auto projection = project_onto_path(vehicle_position, path);
 
@@ -54,7 +54,7 @@ TEST(ReferencePathProjectionTest, ClampsProjectionBeforeSegmentStart)
 TEST(ReferencePathProjectionTest, ClampsProjectionAfterSegmentEnd)
 {
     const ReferencePath path = make_square_path();
-    const Point2D vehicle_position{12.0, -1.0};
+    const core::geometry::Point2D vehicle_position{12.0, -1.0};
 
     const auto projection = project_onto_path(vehicle_position, path);
 
@@ -67,7 +67,7 @@ TEST(ReferencePathProjectionTest, ClampsProjectionAfterSegmentEnd)
 TEST(ReferencePathProjectionTest, ProjectsOntoClosingSegment)
 {
     const ReferencePath path = make_square_path();
-    const Point2D vehicle_position{-1.0, 5.0};
+    const core::geometry::Point2D vehicle_position{-1.0, 5.0};
 
     const auto projection = project_onto_path(vehicle_position, path);
 
@@ -80,7 +80,7 @@ TEST(ReferencePathProjectionTest, ProjectsOntoClosingSegment)
 TEST(ReferencePathProjectionTest, EmptyPathReturnsNoProjection)
 {
     const ReferencePath path;
-    const Point2D vehicle_position{0.0, 0.0};
+    const core::geometry::Point2D vehicle_position{0.0, 0.0};
 
     EXPECT_FALSE(project_onto_path(vehicle_position, path).has_value());
 }

@@ -12,11 +12,11 @@ constexpr double PI = 3.14159265358979323846;
 
 inline double deg_to_rad(double degrees) { return degrees * (PI / 180.0); }
 
-Point2D transform_world_to_body(const Point2D& world_delta, double yaw_rad)
+core::geometry::Point2D transform_world_to_body(const core::geometry::Point2D& world_delta, double yaw_rad)
 {
     const double cy = std::cos(yaw_rad);
     const double sy = std::sin(yaw_rad);
-    return Point2D{cy * world_delta.x_m + sy * world_delta.y_m,
+    return core::geometry::Point2D{cy * world_delta.x_m + sy * world_delta.y_m,
                    -sy * world_delta.x_m + cy * world_delta.y_m};
 }
 }  // namespace
@@ -41,11 +41,11 @@ std::optional<PurePursuitResult> compute_pure_pursuit(
 
     PurePursuitResult result;
 
-    const Point2D delta_world{
+    const core::geometry::Point2D delta_world{
         input.target_pos_world.x_m - input.vehicle_pos_world.x_m,
         input.target_pos_world.y_m - input.vehicle_pos_world.y_m};
 
-    const Point2D target_pos_body =
+    const core::geometry::Point2D target_pos_body =
         transform_world_to_body(delta_world, input.vehicle_yaw_world_rad);
 
     // target behind car, return null

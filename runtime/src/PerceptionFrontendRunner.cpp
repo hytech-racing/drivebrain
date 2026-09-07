@@ -31,8 +31,8 @@ std::uint32_t to_debug_count(const std::size_t count)
 
 slam::ConeFrame cone_candidates_to_cone_frame(
     const std::vector<perception::ConeCandidate>& cone_candidates,
-    const transforms::Pose3D pose_odom_from_base,
-    const transforms::Pose3D pose_base_from_lidar,
+    const core::geometry::Pose3D pose_odom_from_base,
+    const core::geometry::Pose3D pose_base_from_lidar,
     const std::int64_t timestamp_ns)
 {
     slam::ConeFrame cone_frame;
@@ -54,9 +54,9 @@ slam::ConeFrame cone_candidates_to_cone_frame(
         detection.color = slam::ConeColor::Unknown;
         detection.color_confidence = 0.0;
 
-        const transforms::Point3D point_lidar{
+        const core::geometry::Point3D point_lidar{
             candidate.position.x, candidate.position.y, candidate.position.z};
-        const transforms::Point3D point_base =
+        const core::geometry::Point3D point_base =
             pose_base_from_lidar * point_lidar;
 
         detection.position_base_m.x_m = point_base.x_m;
@@ -318,7 +318,7 @@ bool PerceptionFrontendRunner::_process_point_cloud(
         return false;
     }
 
-    const transforms::Pose3D pose_base_from_lidar =
+    const core::geometry::Pose3D pose_base_from_lidar =
         _transform_buffer->T_base_lidar3d();
 
     // TODO: After adding camera/vision, adjust cone_candidates_to_cone_frame to

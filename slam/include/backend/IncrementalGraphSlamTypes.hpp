@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "common/SlamInterfaces.hpp"
-#include "RigidTransform2D.hpp"
+#include "geometry/Pose2D.hpp"
 
 namespace slam::backend
 {
@@ -99,16 +99,16 @@ struct IncrementalPoseResult
     std::int64_t timestamp_ns{};
 
     // T_odom_base from the incoming frame
-    transforms::Pose2D recorded_pose_odom_from_base{};
+    core::geometry::Pose2D recorded_pose_odom_from_base{};
 
     // initial guess inserted for X(k)
-    transforms::Pose2D initial_pose_map_from_base{};
+    core::geometry::Pose2D initial_pose_map_from_base{};
 
     // current estimate of X(k) after the isam2 update
-    transforms::Pose2D optimized_pose_map_from_base{};
+    core::geometry::Pose2D optimized_pose_map_from_base{};
 
     // T_map_odom calculated from the optimized and recorded poses
-    transforms::Pose2D pose_map_from_odom{};
+    core::geometry::Pose2D pose_map_from_odom{};
 };
 
 struct IncrementalGraphSlamDebug
@@ -146,8 +146,8 @@ struct PoseMetadata
     std::uint64_t frame_index{};
     std::int64_t timestamp_ns{};
 
-    transforms::Pose2D recorded_pose_odom_from_base{};
-    transforms::Pose2D initial_pose_map_from_base{};
+    core::geometry::Pose2D recorded_pose_odom_from_base{};
+    core::geometry::Pose2D initial_pose_map_from_base{};
 };
 
 struct IncrementalGraphSlamSnapshot
@@ -161,6 +161,6 @@ struct IncrementalGraphSlamSnapshot
     std::vector<slam::PoseEstimate> poses{};
     std::vector<slam::LandmarkEstimate> landmarks{};
 
-    std::optional<transforms::Pose2D> latest_pose_map_from_odom{};
+    std::optional<core::geometry::Pose2D> latest_pose_map_from_odom{};
 };
 }  // namespace slam::backend

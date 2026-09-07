@@ -2,7 +2,7 @@
 #pragma once
 #include <Eigen/Dense>
 
-#include "RigidTransform2D.hpp"
+#include "geometry/Pose2D.hpp"
 
 namespace estimation
 {

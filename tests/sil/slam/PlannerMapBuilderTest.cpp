@@ -14,14 +14,14 @@ MapState make_map_state()
     MapState state;
     state.sequence = 10U;
     state.timestamp_ns = 1000;
-    state.pose_map_from_odom = transforms::Pose2D{10.0, 20.0, 0.5};
+    state.pose_map_from_odom = core::geometry::Pose2D{10.0, 20.0, 0.5};
     return state;
 }
 
 TEST(PlannerMapBuilderTest, BuildsOptimizedLandmarksWithColor)
 {
     MapState state = make_map_state();
-    state.landmarks.push_back(MapLandmark{2U, transforms::Point2D{1.0, 2.0}});
+    state.landmarks.push_back(MapLandmark{2U, core::geometry::Point2D{1.0, 2.0}});
 
     std::unordered_map<std::uint64_t, ColorEvidence> color_by_id;
     color_by_id[2U].yellow = 0.75;
@@ -39,11 +39,11 @@ TEST(PlannerMapBuilderTest, BuildsOptimizedLandmarksWithColor)
 TEST(PlannerMapBuilderTest, TransformsPendingLandmarksIntoMap)
 {
     MapState state = make_map_state();
-    state.pose_map_from_odom = transforms::Pose2D{10.0, 20.0, 0.0};
+    state.pose_map_from_odom = core::geometry::Pose2D{10.0, 20.0, 0.0};
 
     const PendingPlannerLandmark pending{
         3U,
-        transforms::Point2D{1.0, 2.0},
+        core::geometry::Point2D{1.0, 2.0},
         LandmarkColorEstimate{ConeColor::Blue, 0.9},
     };
 
@@ -61,12 +61,12 @@ TEST(PlannerMapBuilderTest, TransformsPendingLandmarksIntoMap)
 TEST(PlannerMapBuilderTest, OptimizedLandmarkWinsOverPendingSameIdAndSorts)
 {
     MapState state = make_map_state();
-    state.landmarks.push_back(MapLandmark{5U, transforms::Point2D{5.0, 0.0}});
-    state.landmarks.push_back(MapLandmark{1U, transforms::Point2D{1.0, 0.0}});
+    state.landmarks.push_back(MapLandmark{5U, core::geometry::Point2D{5.0, 0.0}});
+    state.landmarks.push_back(MapLandmark{1U, core::geometry::Point2D{1.0, 0.0}});
 
     const PendingPlannerLandmark duplicate_pending{
         5U,
-        transforms::Point2D{50.0, 0.0},
+        core::geometry::Point2D{50.0, 0.0},
         LandmarkColorEstimate{ConeColor::Blue, 1.0},
     };
 

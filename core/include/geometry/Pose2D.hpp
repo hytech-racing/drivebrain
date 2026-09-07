@@ -1,17 +1,12 @@
 #pragma once
 
 #include <cmath>
+#include "geometry/Point2D.hpp"
 
-namespace transforms
+namespace core::geometry
 {
 
 struct Pose3D;
-
-struct Point2D
-{
-    double x_m{};
-    double y_m{};
-};
 
 struct Pose2D
 {
@@ -88,4 +83,4 @@ struct Pose2D
     [[nodiscard]] Pose3D to_pose3d() const noexcept;
 };
 
-}  // namespace transforms
+}  // namespace core::geometry

@@ -63,10 +63,10 @@ std::size_t config_size_or(const std::string& name,
     return default_value;
 }
 
-transforms::Pose3D load_pose3d_or(const std::string& prefix,
-                                  const transforms::Pose3D& default_value)
+core::geometry::Pose3D load_pose3d_or(const std::string& prefix,
+                                  const core::geometry::Pose3D& default_value)
 {
-    transforms::Pose3D pose;
+    core::geometry::Pose3D pose;
     pose.x_m = config_double_or(prefix + "/x_m", default_value.x_m);
     pose.y_m = config_double_or(prefix + "/y_m", default_value.y_m);
     pose.z_m = config_double_or(prefix + "/z_m", default_value.z_m);
@@ -84,19 +84,19 @@ StaticTransformParams load_static_transform_params()
 {
     StaticTransformParams params;
     params.T_base_imu = load_pose3d_or(
-        "StaticTransforms/T_base_imu", transforms::Pose3D::identity());
+        "StaticTransforms/T_base_imu", core::geometry::Pose3D::identity());
     params.T_base_gss = load_pose3d_or(
         "StaticTransforms/T_base_gss",
-        transforms::Pose3D{1.0, 0.25, 0.0, transforms::Quaternion{}});
+        core::geometry::Pose3D{1.0, 0.25, 0.0, core::geometry::Quaternion{}});
     params.T_base_lidar = load_pose3d_or(
         "StaticTransforms/T_base_lidar",
-        transforms::Pose3D{0.75, 0.0, 0.15, transforms::Quaternion{}});
+        core::geometry::Pose3D{0.75, 0.0, 0.15, core::geometry::Quaternion{}});
     params.T_base_camera_wide = load_pose3d_or(
         "StaticTransforms/T_base_camera_wide",
-        transforms::Pose3D{0.0, 0.0, 1.0, transforms::Quaternion{}});
+        core::geometry::Pose3D{0.0, 0.0, 1.0, core::geometry::Quaternion{}});
     params.T_base_camera_narrow = load_pose3d_or(
         "StaticTransforms/T_base_camera_narrow",
-        transforms::Pose3D{0.0, 0.0, 1.0, transforms::Quaternion{}});
+        core::geometry::Pose3D{0.0, 0.0, 1.0, core::geometry::Quaternion{}});
     return params;
 }
 

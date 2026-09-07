@@ -42,7 +42,7 @@ slam::LandmarkObservation make_observation(const std::uint64_t landmark_id,
 {
     slam::LandmarkObservation observation;
     observation.landmark_id = landmark_id;
-    observation.measurement_base_m = transforms::Point2D{x_base_m, y_base_m};
+    observation.measurement_base_m = core::geometry::Point2D{x_base_m, y_base_m};
     observation.association = slam::LandmarkAssociation::NewLandmark;
     return observation;
 }
@@ -54,7 +54,7 @@ slam::LandmarkFrame make_frame(
     slam::LandmarkFrame frame;
     frame.frame_index = frame_index;
     frame.timestamp_ns = timestamp_ns;
-    frame.recorded_pose_odom_from_base = transforms::Pose2D{};
+    frame.recorded_pose_odom_from_base = core::geometry::Pose2D{};
     frame.observations = std::move(observations);
     return frame;
 }

@@ -26,16 +26,16 @@ double wrap_to_pi(double theta)
     return theta - pi;
 }
 
-Pose3D interpolate_pose(const Pose3D& start, const Pose3D& end,
+core::geometry::Pose3D interpolate_pose(const core::geometry::Pose3D& start, const core::geometry::Pose3D& end,
                         const double alpha)
 {
-    return Pose3D{lerp(start.x_m, end.x_m, alpha),
+    return core::geometry::Pose3D{lerp(start.x_m, end.x_m, alpha),
                   lerp(start.y_m, end.y_m, alpha),
                   lerp(start.z_m, end.z_m, alpha),
-                  Quaternion::slerp(start.q, end.q, alpha)};
+                  core::geometry::Quaternion::slerp(start.q, end.q, alpha)};
 }
 
-Pose3D normalized_pose(Pose3D pose)
+core::geometry::Pose3D normalized_pose(core::geometry::Pose3D pose)
 {
     pose.q = pose.q.normalized();
     return pose;
@@ -49,20 +49,20 @@ TransformBuffer::TransformBuffer(const std::uint64_t history_duration_ns)
 }
 
 bool TransformBuffer::insert_T_odom_base(const std::uint64_t timestamp_ns,
-                                          const Pose2D& transform)
+                                          const core::geometry::Pose2D& transform)
 {
     return insert_T_odom_base3d(timestamp_ns, transform.to_pose3d());
 }
 
 bool TransformBuffer::insert_T_odom_base3d(const std::uint64_t timestamp_ns,
-                                           const Pose3D& transform)
+                                           const core::geometry::Pose3D& transform)
 {
     if (timestamp_ns == 0 || !_transform_is_finite(transform))
     {
         return false;
     }
 
-    const Pose3D normalized_transform = normalized_pose(transform);
+    const core::geometry::Pose3D normalized_transform = normalized_pose(transform);
 
     {
         std::scoped_lock lock(_mutex);
@@ -95,20 +95,20 @@ bool TransformBuffer::insert_T_odom_base3d(const std::uint64_t timestamp_ns,
 }
 
 bool TransformBuffer::insert_T_map_odom(const std::uint64_t timestamp_ns,
-                                         const Pose2D& transform)
+                                         const core::geometry::Pose2D& transform)
 {
     return insert_T_map_odom3d(timestamp_ns, transform.to_pose3d());
 }
 
 bool TransformBuffer::insert_T_map_odom3d(const std::uint64_t timestamp_ns,
-                                          const Pose3D& transform)
+                                          const core::geometry::Pose3D& transform)
 {
     if (timestamp_ns == 0 || !_transform_is_finite(transform))
     {
         return false;
     }
 
-    const Pose3D normalized_transform = normalized_pose(transform);
+    const core::geometry::Pose3D normalized_transform = normalized_pose(transform);
 
     {
         std::scoped_lock lock(_mutex);
@@ -140,141 +140,141 @@ bool TransformBuffer::insert_T_map_odom3d(const std::uint64_t timestamp_ns,
     return true;
 }
 
-bool TransformBuffer::set_T_base_imu(const Pose2D& transform)
+bool TransformBuffer::set_T_base_imu(const core::geometry::Pose2D& transform)
 {
     return set_T_base_imu3d(transform.to_pose3d());
 }
 
-bool TransformBuffer::set_T_base_imu3d(const Pose3D& transform)
+bool TransformBuffer::set_T_base_imu3d(const core::geometry::Pose3D& transform)
 {
     if (!_transform_is_finite(transform))
     {
         return false;
     }
 
-    const Pose3D normalized_transform = normalized_pose(transform);
+    const core::geometry::Pose3D normalized_transform = normalized_pose(transform);
     std::scoped_lock lock(_mutex);
 
     _T_base_imu = normalized_transform;
     return true;
 }
 
-bool TransformBuffer::set_T_base_gss(const Pose2D& transform)
+bool TransformBuffer::set_T_base_gss(const core::geometry::Pose2D& transform)
 {
     return set_T_base_gss3d(transform.to_pose3d());
 }
 
-bool TransformBuffer::set_T_base_gss3d(const Pose3D& transform)
+bool TransformBuffer::set_T_base_gss3d(const core::geometry::Pose3D& transform)
 {
     if (!_transform_is_finite(transform))
     {
         return false;
     }
 
-    const Pose3D normalized_transform = normalized_pose(transform);
+    const core::geometry::Pose3D normalized_transform = normalized_pose(transform);
     std::scoped_lock lock(_mutex);
 
     _T_base_gss = normalized_transform;
     return true;
 }
 
-bool TransformBuffer::set_T_base_lidar(const Pose2D& transform)
+bool TransformBuffer::set_T_base_lidar(const core::geometry::Pose2D& transform)
 {
     return set_T_base_lidar3d(transform.to_pose3d());
 }
 
-bool TransformBuffer::set_T_base_lidar3d(const Pose3D& transform)
+bool TransformBuffer::set_T_base_lidar3d(const core::geometry::Pose3D& transform)
 {
     if (!_transform_is_finite(transform))
     {
         return false;
     }
 
-    const Pose3D normalized_transform = normalized_pose(transform);
+    const core::geometry::Pose3D normalized_transform = normalized_pose(transform);
     std::scoped_lock lock(_mutex);
 
     _T_base_lidar = normalized_transform;
     return true;
 }
 
-bool TransformBuffer::set_T_base_camera_wide3d(const Pose3D& transform)
+bool TransformBuffer::set_T_base_camera_wide3d(const core::geometry::Pose3D& transform)
 {
     if (!_transform_is_finite(transform))
     {
         return false;
     }
 
-    const Pose3D normalized_transform = normalized_pose(transform);
+    const core::geometry::Pose3D normalized_transform = normalized_pose(transform);
     std::scoped_lock lock(_mutex);
 
     _T_base_camera_wide = normalized_transform;
     return true;
 }
 
-bool TransformBuffer::set_T_base_camera_narrow3d(const Pose3D& transform)
+bool TransformBuffer::set_T_base_camera_narrow3d(const core::geometry::Pose3D& transform)
 {
     if (!_transform_is_finite(transform))
     {
         return false;
     }
 
-    const Pose3D normalized_transform = normalized_pose(transform);
+    const core::geometry::Pose3D normalized_transform = normalized_pose(transform);
     std::scoped_lock lock(_mutex);
 
     _T_base_camera_narrow = normalized_transform;
     return true;
 }
 
-Pose2D TransformBuffer::T_base_imu() const
+core::geometry::Pose2D TransformBuffer::T_base_imu() const
 {
     std::scoped_lock lock(_mutex);
     return _T_base_imu.to_pose2d();
 }
 
-Pose2D TransformBuffer::T_base_gss() const
+core::geometry::Pose2D TransformBuffer::T_base_gss() const
 {
     std::scoped_lock lock(_mutex);
     return _T_base_gss.to_pose2d();
 }
 
-Pose2D TransformBuffer::T_base_lidar() const
+core::geometry::Pose2D TransformBuffer::T_base_lidar() const
 {
     std::scoped_lock lock(_mutex);
     return _T_base_lidar.to_pose2d();
 }
 
-Pose3D TransformBuffer::T_base_imu3d() const
+core::geometry::Pose3D TransformBuffer::T_base_imu3d() const
 {
     std::scoped_lock lock(_mutex);
     return _T_base_imu;
 }
 
-Pose3D TransformBuffer::T_base_gss3d() const
+core::geometry::Pose3D TransformBuffer::T_base_gss3d() const
 {
     std::scoped_lock lock(_mutex);
     return _T_base_gss;
 }
 
-Pose3D TransformBuffer::T_base_lidar3d() const
+core::geometry::Pose3D TransformBuffer::T_base_lidar3d() const
 {
     std::scoped_lock lock(_mutex);
     return _T_base_lidar;
 }
 
-Pose3D TransformBuffer::T_base_camera_wide3d() const
+core::geometry::Pose3D TransformBuffer::T_base_camera_wide3d() const
 {
     std::scoped_lock lock(_mutex);
     return _T_base_camera_wide;
 }
 
-Pose3D TransformBuffer::T_base_camera_narrow3d() const
+core::geometry::Pose3D TransformBuffer::T_base_camera_narrow3d() const
 {
     std::scoped_lock lock(_mutex);
     return _T_base_camera_narrow;
 }
 
 void TransformBuffer::_remove_stale_transforms(
-    std::deque<std::pair<Pose3D, std::uint64_t>>& buffer)
+    std::deque<std::pair<core::geometry::Pose3D, std::uint64_t>>& buffer)
 {
     if (buffer.empty())
     {
@@ -290,7 +290,7 @@ void TransformBuffer::_remove_stale_transforms(
     }
 }
 
-std::optional<Pose3D> TransformBuffer::_lookup_T_odom_base_unlocked(
+std::optional<core::geometry::Pose3D> TransformBuffer::_lookup_T_odom_base_unlocked(
     std::uint64_t query_timestamp_ns) const
 {
     if (_timestamp_out_of_buffer_bound(_T_odom_base_buffer, query_timestamp_ns))
@@ -301,7 +301,7 @@ std::optional<Pose3D> TransformBuffer::_lookup_T_odom_base_unlocked(
     auto it =
         std::lower_bound(_T_odom_base_buffer.begin(), _T_odom_base_buffer.end(),
                          query_timestamp_ns,
-                         [](const std::pair<Pose3D, std::uint64_t>& element,
+                         [](const std::pair<core::geometry::Pose3D, std::uint64_t>& element,
                             std::uint64_t query_stamp_ns)
                          { return element.second < query_stamp_ns; });
 
@@ -324,7 +324,7 @@ std::optional<Pose3D> TransformBuffer::_lookup_T_odom_base_unlocked(
 
 // Does not interpolate T_map_odom, instead, returns latest T_map_odom within
 // bound
-std::optional<Pose3D> TransformBuffer::_lookup_T_map_odom_unlocked(
+std::optional<core::geometry::Pose3D> TransformBuffer::_lookup_T_map_odom_unlocked(
     std::uint64_t query_timestamp_ns) const
 {
     if (_timestamp_out_of_buffer_bound(_T_map_odom_buffer, query_timestamp_ns))
@@ -336,22 +336,22 @@ std::optional<Pose3D> TransformBuffer::_lookup_T_map_odom_unlocked(
         std::upper_bound(_T_map_odom_buffer.begin(), _T_map_odom_buffer.end(),
                           query_timestamp_ns,
                           [](std::uint64_t query_stamp_ns,
-                             const std::pair<Pose3D, std::uint64_t>& element)
+                             const std::pair<core::geometry::Pose3D, std::uint64_t>& element)
                           { return query_stamp_ns < element.second; });
 
     return std::prev(it_after)->first;
 }
 
-std::optional<Pose3D> TransformBuffer::_get_T_odom_frame_unlocked(
+std::optional<core::geometry::Pose3D> TransformBuffer::_get_T_odom_frame_unlocked(
     const FrameId frame, const std::uint64_t timestamp_ns) const
 {
-    Pose3D T_base_sensor;
+    core::geometry::Pose3D T_base_sensor;
     bool is_static_sensor = true;
 
     switch (frame)
     {
         case FrameId::Baselink:
-            T_base_sensor = Pose3D::identity();
+            T_base_sensor = core::geometry::Pose3D::identity();
             break;
         case FrameId::Imu:
             T_base_sensor = _T_base_imu;
@@ -376,7 +376,7 @@ std::optional<Pose3D> TransformBuffer::_get_T_odom_frame_unlocked(
     if (is_static_sensor)
     {
         // T_odom_sensor = T_odom_base * T_base_sensor
-        std::optional<Pose3D> T_odom_base =
+        std::optional<core::geometry::Pose3D> T_odom_base =
             _lookup_T_odom_base_unlocked(timestamp_ns);
         if (!T_odom_base) return std::nullopt;
 
@@ -385,17 +385,17 @@ std::optional<Pose3D> TransformBuffer::_get_T_odom_frame_unlocked(
 
     if (frame == FrameId::Odom)
     {
-        return Pose3D::identity();
+        return core::geometry::Pose3D::identity();
     }
 
     return std::nullopt;
 }
 
-std::optional<Pose2D> TransformBuffer::lookup(
+std::optional<core::geometry::Pose2D> TransformBuffer::lookup(
     const FrameId target, const FrameId source,
     const std::uint64_t timestamp_ns, std::chrono::nanoseconds timeout) const
 {
-    const std::optional<Pose3D> pose3d =
+    const std::optional<core::geometry::Pose3D> pose3d =
         lookup3d(target, source, timestamp_ns, timeout);
     if (!pose3d)
     {
@@ -405,13 +405,13 @@ std::optional<Pose2D> TransformBuffer::lookup(
     return pose3d->to_pose2d();
 }
 
-std::optional<Pose3D> TransformBuffer::_lookup_unlocked(
+std::optional<core::geometry::Pose3D> TransformBuffer::_lookup_unlocked(
     const FrameId target, const FrameId source,
     const std::uint64_t timestamp_ns) const
 {
     if (target == source)
     {
-        return Pose3D::identity();
+        return core::geometry::Pose3D::identity();
     }
 
     // If neither frame is map, then we can use the higher-frequency T_odom_base
@@ -462,7 +462,7 @@ std::optional<Pose3D> TransformBuffer::_lookup_unlocked(
     }
 }
 
-std::optional<Pose3D> TransformBuffer::lookup3d(
+std::optional<core::geometry::Pose3D> TransformBuffer::lookup3d(
     const FrameId target, const FrameId source,
     const std::uint64_t timestamp_ns, std::chrono::nanoseconds timeout) const
 {
@@ -530,7 +530,7 @@ bool TransformBuffer::_frame_requires_odom_buffer(const FrameId frame) const
            frame == FrameId::CameraWide || frame == FrameId::CameraNarrow;
 }
 
-bool TransformBuffer::_transform_is_finite(const Pose3D& transform) const
+bool TransformBuffer::_transform_is_finite(const core::geometry::Pose3D& transform) const
 {
     return std::isfinite(transform.x_m) && std::isfinite(transform.y_m) &&
            std::isfinite(transform.z_m) && std::isfinite(transform.q.w) &&
@@ -539,7 +539,7 @@ bool TransformBuffer::_transform_is_finite(const Pose3D& transform) const
 }
 
 bool TransformBuffer::_timestamp_out_of_buffer_bound(
-    const std::deque<std::pair<Pose3D, std::uint64_t>>& buffer,
+    const std::deque<std::pair<core::geometry::Pose3D, std::uint64_t>>& buffer,
     std::uint64_t query_timestamp_ns) const
 {
     if (buffer.empty())

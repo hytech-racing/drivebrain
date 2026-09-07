@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "FrameId.hpp"
-#include "RigidTransform3D.hpp"
+#include "geometry/Pose3D.hpp"
 
 namespace perception
 {
@@ -23,7 +23,7 @@ using PointCloud = std::vector<PointXYZI>;
 struct StampedLidarPose
 {
     std::int64_t stamp_ns{};
-    transforms::Pose3D pose{};
+    core::geometry::Pose3D pose{};
 };
 
 struct StampedPointCloud
@@ -41,7 +41,7 @@ struct DeskewResult
     StampedPointCloud stamped_point_cloud;
 };
 
-[[nodiscard]] PointXYZI transform_point(const transforms::Pose3D& transform,
+[[nodiscard]] PointXYZI transform_point(const core::geometry::Pose3D& transform,
                                         const PointXYZI& point) noexcept;
 
 }  // namespace perception

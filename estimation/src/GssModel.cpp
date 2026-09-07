@@ -6,7 +6,7 @@ namespace estimation
 
 [[nodiscard]] GssMeasurementEigen predict_gss_measurement(
     const InternalEstimatorState& state, double yaw_rate_vehicle_flu_radps,
-    const transforms::Pose2D& T_base_gss)
+    const core::geometry::Pose2D& T_base_gss)
 {
     GssMeasurementEigen gss_meas;
 
@@ -19,7 +19,7 @@ namespace estimation
 }
 
 [[nodiscard]] GssMeasurementJacobian compute_gss_measurement_jacobian(
-    const transforms::Pose2D& T_base_gss)
+    const core::geometry::Pose2D& T_base_gss)
 {
     GssMeasurementJacobian gss_jacobian = GssMeasurementJacobian::Zero();
 

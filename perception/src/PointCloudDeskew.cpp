@@ -6,10 +6,10 @@
 namespace perception
 {
 
-PointXYZI transform_point(const transforms::Pose3D& transform,
+PointXYZI transform_point(const core::geometry::Pose3D& transform,
                           const PointXYZI& point) noexcept
 {
-    const transforms::Quaternion& q = transform.q;
+    const core::geometry::Quaternion& q = transform.q;
 
     double num1 = q.x * 2.0;
     double num2 = q.y * 2.0;
@@ -66,7 +66,7 @@ DeskewResult deskew_point_cloud(const StampedPointCloud& stamped_point_cloud,
 
     for (std::size_t i = 0; i < stamped_point_cloud.points.size(); ++i)
     {
-        const transforms::Pose3D T_to_ref_from_i =
+        const core::geometry::Pose3D T_to_ref_from_i =
             T_odom_reference.pose.inverse().compose(T_odom_i[i].pose);
 
         result.stamped_point_cloud.points.push_back(

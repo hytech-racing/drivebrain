@@ -74,7 +74,7 @@ std::optional<ReferencePath> load_reference_path_csv(
 }
 
 std::optional<PathProjection> project_onto_path(
-    const Point2D& vehicle_position_world, const ReferencePath& path)
+    const core::geometry::Point2D& vehicle_position_world, const ReferencePath& path)
 {
     if (path.points.empty())
     {
@@ -101,8 +101,8 @@ std::optional<PathProjection> project_onto_path(
         const ReferencePathPoint& a = path.points[i];
         const ReferencePathPoint& b = path.points[next_i];
 
-        Point2D ab = {b.x_m - a.x_m, b.y_m - a.y_m};
-        Point2D ap = {vehicle_position_world.x_m - a.x_m,
+        core::geometry::Point2D ab = {b.x_m - a.x_m, b.y_m - a.y_m};
+        core::geometry::Point2D ap = {vehicle_position_world.x_m - a.x_m,
                       vehicle_position_world.y_m - a.y_m};
 
         double dot_ap_ab = (ap.x_m * ab.x_m) + (ap.y_m * ab.y_m);

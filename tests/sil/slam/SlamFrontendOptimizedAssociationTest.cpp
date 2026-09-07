@@ -33,12 +33,12 @@ SlamFrontendParams make_test_params(
 ConeDetection make_detection(const double x_base_m,
                              const double y_base_m = 0.0)
 {
-    return ConeDetection{transforms::Point2D{x_base_m, y_base_m}, 1.0};
+    return ConeDetection{core::geometry::Point2D{x_base_m, y_base_m}, 1.0};
 }
 
 ConeFrame make_frame(const std::int64_t timestamp_ns,
                      std::vector<ConeDetection> detections,
-                     const transforms::Pose2D& pose_odom_from_base = {})
+                     const core::geometry::Pose2D& pose_odom_from_base = {})
 {
     ConeFrame frame;
     frame.timestamp_ns = timestamp_ns;
@@ -51,13 +51,13 @@ MapLandmark make_landmark(const std::uint64_t landmark_id,
                           const double x_map_m,
                           const double y_map_m = 0.0)
 {
-    return MapLandmark{landmark_id, transforms::Point2D{x_map_m, y_map_m}};
+    return MapLandmark{landmark_id, core::geometry::Point2D{x_map_m, y_map_m}};
 }
 
 MapState make_map_state(const std::uint64_t sequence,
                         const std::int64_t timestamp_ns,
                         std::vector<MapLandmark> landmarks,
-                        const transforms::Pose2D& pose_map_from_odom = {})
+                        const core::geometry::Pose2D& pose_map_from_odom = {})
 {
     MapState state;
     state.sequence = sequence;
@@ -117,14 +117,14 @@ TEST(SlamFrontendOptimizedAssociationTest,
 {
     SlamFrontend frontend(make_test_params());
 
-    const transforms::Pose2D pose_map_from_odom{10.0, 5.0, kPi / 2.0};
+    const core::geometry::Pose2D pose_map_from_odom{10.0, 5.0, kPi / 2.0};
     ASSERT_TRUE(frontend
                     .update_map_state(make_map_state(
                         1U, 100, {make_landmark(77U, 11.0, 10.0)},
                         pose_map_from_odom))
                     .accepted);
 
-    const transforms::Pose2D pose_odom_from_base{2.0, 0.0, 0.0};
+    const core::geometry::Pose2D pose_odom_from_base{2.0, 0.0, 0.0};
     const FrontendResult result = frontend.process_frame(
         make_frame(200, {make_detection(3.2, -1.0)}, pose_odom_from_base));
 
@@ -233,7 +233,7 @@ TEST(SlamFrontendOptimizedAssociationTest,
                     .accepted);
 
     const ConeDetection invalid_detection{
-        transforms::Point2D{std::numeric_limits<double>::quiet_NaN(), 0.0},
+        core::geometry::Point2D{std::numeric_limits<double>::quiet_NaN(), 0.0},
         1.0};
 
     const FrontendResult result = frontend.process_frame(

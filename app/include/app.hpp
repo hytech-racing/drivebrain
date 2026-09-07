@@ -77,7 +77,6 @@ class DrivebrainApp
     void _route_received_message(
         std::shared_ptr<google::protobuf::Message> message);
 
-   private:
     boost::asio::io_context _io_context;
 
     /* Threads */
@@ -116,27 +115,22 @@ class DrivebrainApp
     core::Autonomy _autonomy;
     DrivingMode _driving_mode = DrivingMode::TELEOP;
 
-   private:
     // driverless estimator
     std::shared_ptr<estimation::LatestEstimate> _latest_estimate;
     std::unique_ptr<runtime::DriverlessEstimatorRunner>
         _driverless_estimator_runner;
 
-   private:
     // shared map_state between perception frontend and slam backend
     std::shared_ptr<slam::LatestMapState> _latest_map_state;
     std::shared_ptr<slam::LatestPlannerMap> _latest_planner_map;
 
-   private:
     // perception frontend
     std::unique_ptr<runtime::PerceptionFrontendRunner>
         _perception_frontend_runner;
 
-   private:
     // slam backend
     std::unique_ptr<runtime::SlamBackendRunner> _slam_backend_runner;
 
-   private:
     // transform buffer
     std::shared_ptr<transforms::TransformBuffer> _transform_buffer;
 };

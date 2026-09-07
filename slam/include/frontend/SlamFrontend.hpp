@@ -30,8 +30,8 @@ class SlamFrontend
     // Test file only, do not call unless for testing
     [[nodiscard]]
     std::vector<AcceptedAssociation> associate_points_one_to_one(
-        const std::vector<transforms::Point2D>& detections,
-        const std::vector<transforms::Point2D>& targets,
+        const std::vector<core::geometry::Point2D>& detections,
+        const std::vector<core::geometry::Point2D>& targets,
         const double gate_m) const;
 
    private:
@@ -53,7 +53,7 @@ class SlamFrontend
     [[nodiscard]] std::vector<PredictedLandmarkMeasurement>
     _predict_optimized_landmarks_in_base(
         const slam::MapState& map_state,
-        const transforms::Pose2D& pose_odom_from_base) const;
+        const core::geometry::Pose2D& pose_odom_from_base) const;
 
     // Pure association decisions
     [[nodiscard]]

@@ -2,7 +2,7 @@
 
 #include "EstimatorTypes.hpp"
 #include "LidarProcessor.hpp"
-#include "RigidTransform3D.hpp"
+#include "geometry/Pose3D.hpp"
 #include "backend/IncrementalGraphSlamTypes.hpp"
 #include "frontend/SlamFrontendTypes.hpp"
 
@@ -17,11 +17,11 @@ struct DriverlessEstimatorRunnerParams
 
 struct StaticTransformParams
 {
-    transforms::Pose3D T_base_imu;
-    transforms::Pose3D T_base_gss;
-    transforms::Pose3D T_base_lidar;
-    transforms::Pose3D T_base_camera_wide;
-    transforms::Pose3D T_base_camera_narrow;
+    core::geometry::Pose3D T_base_imu;
+    core::geometry::Pose3D T_base_gss;
+    core::geometry::Pose3D T_base_lidar;
+    core::geometry::Pose3D T_base_camera_wide;
+    core::geometry::Pose3D T_base_camera_narrow;
 };
 
 StaticTransformParams load_static_transform_params();

@@ -45,7 +45,7 @@ backend::IncrementalGraphSlamParams make_backend_params()
 
 ConeDetection make_detection(const double x_base_m, const double y_base_m = 0.0)
 {
-    return ConeDetection{transforms::Point2D{x_base_m, y_base_m}, 1.0};
+    return ConeDetection{core::geometry::Point2D{x_base_m, y_base_m}, 1.0};
 }
 
 ConeFrame make_cone_frame(const std::int64_t timestamp_ns,
@@ -53,7 +53,7 @@ ConeFrame make_cone_frame(const std::int64_t timestamp_ns,
 {
     ConeFrame frame;
     frame.timestamp_ns = timestamp_ns;
-    frame.pose_odom_from_base = transforms::Pose2D{};
+    frame.pose_odom_from_base = core::geometry::Pose2D{};
     frame.detections = std::move(detections);
     return frame;
 }

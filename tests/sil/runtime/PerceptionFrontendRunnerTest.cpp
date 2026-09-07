@@ -19,9 +19,9 @@ PerceptionFrontendRunner make_runner()
 {
     auto transform_buffer =
         std::make_shared<transforms::TransformBuffer>(1000000);
-    transform_buffer->set_T_base_lidar(transforms::Pose2D{});
-    transform_buffer->insert_T_odom_base(1, transforms::Pose2D{});
-    transform_buffer->insert_T_odom_base(1000000, transforms::Pose2D{});
+    transform_buffer->set_T_base_lidar(core::geometry::Pose2D{});
+    transform_buffer->insert_T_odom_base(1, core::geometry::Pose2D{});
+    transform_buffer->insert_T_odom_base(1000000, core::geometry::Pose2D{});
 
     auto latest_map_state = std::make_shared<slam::LatestMapState>();
 

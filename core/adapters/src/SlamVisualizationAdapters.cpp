@@ -67,14 +67,14 @@ void set_color(foxglove::Color* color, const double r, const double g,
     color->set_a(a);
 }
 
-transforms::Pose2D pose_for_estimate(const slam::PoseEstimate& pose,
+core::geometry::Pose2D pose_for_estimate(const slam::PoseEstimate& pose,
                                      const bool optimized)
 {
     return optimized ? pose.optimized_pose_map_from_base
                      : pose.initial_pose_map_from_base;
 }
 
-transforms::Point2D point_for_estimate(const slam::LandmarkEstimate& landmark,
+core::geometry::Point2D point_for_estimate(const slam::LandmarkEstimate& landmark,
                                        const bool optimized)
 {
     return optimized ? landmark.optimized_position_map
@@ -82,7 +82,7 @@ transforms::Point2D point_for_estimate(const slam::LandmarkEstimate& landmark,
 }
 
 void add_pose_marker(foxglove::LinePrimitive* line,
-                     const transforms::Pose2D& pose)
+                     const core::geometry::Pose2D& pose)
 {
     auto* point = line->add_points();
     point->set_x(pose.x_m);
@@ -91,7 +91,7 @@ void add_pose_marker(foxglove::LinePrimitive* line,
 }
 
 void add_landmark_marker(foxglove::SceneEntity* entity,
-                         const transforms::Point2D& position_map,
+                         const core::geometry::Point2D& position_map,
                          const bool optimized)
 {
     auto* sphere = entity->add_spheres();
@@ -305,7 +305,7 @@ std::shared_ptr<foxglove::SceneUpdate> to_foxglove_slam_landmark_text(
     auto* entity = add_entity(scene.get(), kMapFrame, entity_id, timestamp_ns);
     for (const slam::LandmarkEstimate& landmark : landmarks)
     {
-        const transforms::Point2D position = landmark.optimized_position_map;
+        const core::geometry::Point2D position = landmark.optimized_position_map;
         auto* text = entity->add_texts();
         auto* text_position = text->mutable_pose()->mutable_position();
         text_position->set_x(position.x_m);
@@ -450,7 +450,7 @@ std::shared_ptr<foxglove::SceneUpdate> to_foxglove_planner_landmark_text(
 }
 
 std::shared_ptr<foxglove::FrameTransform> to_foxglove_map_odom_transform(
-    const transforms::Pose2D& pose_map_from_odom,
+    const core::geometry::Pose2D& pose_map_from_odom,
     const std::int64_t timestamp_ns)
 {
     auto transform = std::make_shared<foxglove::FrameTransform>();

@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#include "RigidTransform2D.hpp"
+#include "geometry/Pose2D.hpp"
 
 namespace slam
 {
@@ -22,7 +22,7 @@ enum class ConeColor
 // Step 1: Perception (LidarProcessor and/or cameras) -> frontend
 struct ConeDetection
 {
-    transforms::Point2D position_base_m{};
+    core::geometry::Point2D position_base_m{};
 
     // Overall/fused confidence that this detection should be considered by the
     // frontend. Lidar-only detections can provide this directly (will be
@@ -39,7 +39,7 @@ struct ConeDetection
 struct ConeFrame
 {
     std::int64_t timestamp_ns{};
-    transforms::Pose2D pose_odom_from_base{};
+    core::geometry::Pose2D pose_odom_from_base{};
     std::vector<ConeDetection> detections{};
 };
 
@@ -47,7 +47,7 @@ struct ConeFrame
 struct MapLandmark
 {
     std::uint64_t landmark_id{};
-    transforms::Point2D position_map_m{};
+    core::geometry::Point2D position_map_m{};
 };
 
 // Producer: SLAM backend snapshot/update output
@@ -56,7 +56,7 @@ struct MapState
 {
     std::uint64_t sequence{};
     std::int64_t timestamp_ns{};
-    transforms::Pose2D pose_map_from_odom{};
+    core::geometry::Pose2D pose_map_from_odom{};
 
     // Complete current optimized map, not an incremental delta
     std::vector<MapLandmark> landmarks{};
@@ -73,7 +73,7 @@ enum class LandmarkAssociation
 struct LandmarkObservation
 {
     std::uint64_t landmark_id{};
-    transforms::Point2D measurement_base_m{};
+    core::geometry::Point2D measurement_base_m{};
 
     // Consumed by the backend to decide whether this observation may create a
     // new graph landmark or must reference an existing graph landmark
@@ -107,7 +107,7 @@ struct FrontendResult
     std::string message{};
 
     std::int64_t timestamp_ns{};
-    transforms::Pose2D pose_odom_from_base{};
+    core::geometry::Pose2D pose_odom_from_base{};
 
     std::vector<LandmarkObservation> landmark_observations{};
 
@@ -127,7 +127,7 @@ struct LandmarkFrame
     std::int64_t timestamp_ns{};
 
     // Raw measured T_odom_base used as odometry input to graph
-    transforms::Pose2D recorded_pose_odom_from_base{};
+    core::geometry::Pose2D recorded_pose_odom_from_base{};
 
     std::vector<LandmarkObservation> observations{};
 };
@@ -168,16 +168,16 @@ struct PoseEstimate
     std::uint64_t frame_index{};
     std::int64_t timestamp_ns{};
 
-    transforms::Pose2D initial_pose_map_from_base{};
-    transforms::Pose2D recorded_pose_odom_from_base{};
-    transforms::Pose2D optimized_pose_map_from_base{};
+    core::geometry::Pose2D initial_pose_map_from_base{};
+    core::geometry::Pose2D recorded_pose_odom_from_base{};
+    core::geometry::Pose2D optimized_pose_map_from_base{};
 };
 
 struct LandmarkEstimate
 {
     std::uint64_t landmark_id{};
-    transforms::Point2D initial_position_map{};
-    transforms::Point2D optimized_position_map{};
+    core::geometry::Point2D initial_position_map{};
+    core::geometry::Point2D optimized_position_map{};
 };
 
 }  // namespace slam

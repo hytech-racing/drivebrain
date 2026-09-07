@@ -461,7 +461,7 @@ std::optional<PlannerMap> SlamFrontend::planner_map(
 std::vector<PredictedLandmarkMeasurement>
 SlamFrontend::_predict_optimized_landmarks_in_base(
     const MapState& map_state,
-    const transforms::Pose2D& pose_odom_from_base) const
+    const core::geometry::Pose2D& pose_odom_from_base) const
 {
     std::vector<PredictedLandmarkMeasurement> predicted_landmark_measurements;
 
@@ -470,9 +470,9 @@ SlamFrontend::_predict_optimized_landmarks_in_base(
         return predicted_landmark_measurements;
     }
 
-    const transforms::Pose2D pose_map_from_base =
+    const core::geometry::Pose2D pose_map_from_base =
         map_state.pose_map_from_odom.compose(pose_odom_from_base);
-    const transforms::Pose2D pose_base_from_map = pose_map_from_base.inverse();
+    const core::geometry::Pose2D pose_base_from_map = pose_map_from_base.inverse();
 
     for (const MapLandmark& landmark : map_state.landmarks)
     {
@@ -508,14 +508,14 @@ SlamFrontend::_build_optimized_association_candidates(
     {
         const ValidDetection& valid_detection =
             valid_detections[valid_detection_index];
-        const transforms::Point2D& measurement_base_m =
+        const core::geometry::Point2D& measurement_base_m =
             valid_detection.measurement_base_m;
 
         for (std::size_t target_view_index = 0;
              target_view_index < predicted_landmarks.size();
              ++target_view_index)
         {
-            const transforms::Point2D& prediction_base_m =
+            const core::geometry::Point2D& prediction_base_m =
                 predicted_landmarks[target_view_index]
                     .predicted_measurement_base_m;
 
@@ -551,12 +551,12 @@ std::vector<AssociationCandidate> SlamFrontend::_build_association_candidates(
 
     for (std::size_t i = 0; i < valid_detections.size(); ++i)
     {
-        const transforms::Point2D& detection_point =
+        const core::geometry::Point2D& detection_point =
             valid_detections[i].position_odom_m;
 
         for (std::size_t j = 0; j < targets.size(); ++j)
         {
-            const transforms::Point2D& target_point =
+            const core::geometry::Point2D& target_point =
                 targets[j].position_odom_m;
             const double distance_m =
                 std::hypot(target_point.x_m - detection_point.x_m,
@@ -669,7 +669,7 @@ void SlamFrontend::_apply_tentative_track_associations(
             tentative_targets.at(association.target_view_index);
         LocalLandmarkTrack& local_track =
             _local_tracks.at(target.local_track_index);
-        const transforms::Point2D& detection_odom = detection.position_odom_m;
+        const core::geometry::Point2D& detection_odom = detection.position_odom_m;
 
         const double old_x = local_track.position_odom_m.x_m;
         const double old_y = local_track.position_odom_m.y_m;
@@ -706,7 +706,7 @@ void SlamFrontend::_apply_pending_track_associations(
             pending_targets.at(association.target_view_index);
         LocalLandmarkTrack& local_track =
             _local_tracks.at(target.local_track_index);
-        const transforms::Point2D& detection_odom = detection.position_odom_m;
+        const core::geometry::Point2D& detection_odom = detection.position_odom_m;
 
         const double old_x = local_track.position_odom_m.x_m;
         const double old_y = local_track.position_odom_m.y_m;
@@ -754,7 +754,7 @@ void SlamFrontend::_create_tentative_tracks(
     {
         const ValidDetection& detection =
             valid_detections[valid_detection_index];
-        const transforms::Point2D& position_odom_m = detection.position_odom_m;
+        const core::geometry::Point2D& position_odom_m = detection.position_odom_m;
 
         LocalLandmarkTrack track{
             _next_local_track_id++,
@@ -846,8 +846,8 @@ void SlamFrontend::_remove_stale_local_tracks(std::int64_t current_timestamp_ns,
 
 // only used in test file
 std::vector<AcceptedAssociation> SlamFrontend::associate_points_one_to_one(
-    const std::vector<transforms::Point2D>& detections,
-    const std::vector<transforms::Point2D>& targets, const double gate_m) const
+    const std::vector<core::geometry::Point2D>& detections,
+    const std::vector<core::geometry::Point2D>& targets, const double gate_m) const
 {
     std::vector<ValidDetection> valid_detections;
     valid_detections.reserve(detections.size());

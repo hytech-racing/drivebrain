@@ -31,7 +31,7 @@ ConeDetection make_detection(const double x_base_m,
                              const double y_base_m = 0.0,
                              const double confidence = 1.0)
 {
-    return ConeDetection{transforms::Point2D{x_base_m, y_base_m}, confidence};
+    return ConeDetection{core::geometry::Point2D{x_base_m, y_base_m}, confidence};
 }
 
 ConeFrame make_frame(const std::int64_t timestamp_ns,
@@ -83,7 +83,7 @@ TEST(SlamFrontendTrackingTest, FilteredDetectionKeepsSourceIndexStable)
     SlamFrontend frontend(make_test_params(3U));
 
     const ConeDetection invalid_detection{
-        transforms::Point2D{std::numeric_limits<double>::quiet_NaN(), 0.0},
+        core::geometry::Point2D{std::numeric_limits<double>::quiet_NaN(), 0.0},
         1.0};
 
     ASSERT_TRUE(frontend.process_frame(make_frame(
@@ -239,7 +239,7 @@ TEST(SlamFrontendTrackingTest, RejectedFrameDoesNotConsumeTimestamp)
     SlamFrontend frontend(make_test_params());
 
     const ConeDetection invalid_detection{
-        transforms::Point2D{std::numeric_limits<double>::quiet_NaN(), 0.0},
+        core::geometry::Point2D{std::numeric_limits<double>::quiet_NaN(), 0.0},
         1.0};
 
     ConeFrame rejected_frame = make_frame(100, {invalid_detection});

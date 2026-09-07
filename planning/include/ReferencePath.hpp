@@ -1,17 +1,13 @@
 #pragma once
 
+#include "geometry/Point2D.hpp"
+
 #include <optional>
 #include <string>
 #include <vector>
 
 namespace planning
 {
-
-struct Point2D
-{
-    double x_m{};
-    double y_m{};
-};
 
 struct ReferencePathPoint
 {
@@ -38,7 +34,7 @@ std::optional<ReferencePath> load_reference_path_csv(
     const std::string& csv_path);
 
 std::optional<PathProjection> project_onto_path(
-    const Point2D& vehicle_position_world, const ReferencePath& reference_path);
+    const core::geometry::Point2D& vehicle_position_world, const ReferencePath& reference_path);
 
 std::optional<ReferencePathPoint> interpolate_at_s(const ReferencePath& path,
                                                    double requested_s_m);

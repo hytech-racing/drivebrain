@@ -1,5 +1,7 @@
 #pragma once
 
+#include "geometry/Point2D.hpp"
+
 #include <Controller.hpp>
 #include <StateTracker.hpp>
 
@@ -23,18 +25,12 @@ class PurePursuitController : public Controller<ControllerOutput, VehicleState>
 namespace control
 {
 
-struct Point2D
-{
-    double x_m{};
-    double y_m{};
-};
-
 struct PurePursuitInput
 {
-    Point2D vehicle_pos_world{};
+    core::geometry::Point2D vehicle_pos_world{};
     double vehicle_yaw_world_rad{};
 
-    Point2D target_pos_world{};
+    core::geometry::Point2D target_pos_world{};
 };
 
 struct PurePursuitParams
@@ -45,7 +41,7 @@ struct PurePursuitParams
 
 struct PurePursuitResult
 {
-    Point2D target_pos_body{};
+    core::geometry::Point2D target_pos_body{};
     double curvature_inv_m{};
     double steering_rad{};
 };

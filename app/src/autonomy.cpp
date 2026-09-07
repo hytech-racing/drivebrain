@@ -171,7 +171,7 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state)
 
     const std::optional<planning::PathProjection> projection =
         planning::project_onto_path(
-            planning::Point2D{truth.x_world_m, truth.y_world_m},
+            core::geometry::Point2D{truth.x_world_m, truth.y_world_m},
             _sil_reference_path);
 
     if (!projection)
@@ -191,9 +191,9 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state)
     const std::optional<control::PurePursuitResult> pure_pursuit =
         control::compute_pure_pursuit(
             control::PurePursuitInput{
-                control::Point2D{truth.x_world_m, truth.y_world_m},
+                core::geometry::Point2D{truth.x_world_m, truth.y_world_m},
                 truth.yaw_world_rad,
-                control::Point2D{target->x_m, target->y_m}},
+                core::geometry::Point2D{target->x_m, target->y_m}},
             control::PurePursuitParams{1.53, 20.0});
 
     if (!pure_pursuit)
@@ -249,7 +249,7 @@ void Autonomy::_run()
 
         if (truth_valid && _sil_reference_path_loaded)
         {
-            const planning::Point2D vehicle_position_world{truth.x_world_m,
+            const core::geometry::Point2D vehicle_position_world{truth.x_world_m,
                                                            truth.y_world_m};
 
             const auto projection = planning::project_onto_path(

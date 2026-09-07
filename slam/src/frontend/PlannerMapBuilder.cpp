@@ -8,7 +8,7 @@ namespace slam::frontend
 {
 namespace
 {
-bool finite_position(const transforms::Point2D& p)
+bool finite_position(const core::geometry::Point2D& p)
 {
     return std::isfinite(p.x_m) && std::isfinite(p.y_m);
 }

@@ -26,7 +26,7 @@ struct LocalLandmarkTrack
 
     // Empty while tentative; assigned at promotion
     std::optional<std::uint64_t> landmark_id{};
-    transforms::Point2D position_odom_m{};
+    core::geometry::Point2D position_odom_m{};
 
     std::size_t observation_count{};
     std::int64_t first_seen_ns{};
@@ -40,8 +40,8 @@ struct ValidDetection
     // index into frame.observations
     std::size_t source_observation_index{};
 
-    transforms::Point2D measurement_base_m{};
-    transforms::Point2D position_odom_m{};
+    core::geometry::Point2D measurement_base_m{};
+    core::geometry::Point2D position_odom_m{};
 
     double confidence{};
     ConeColor color{ConeColor::Unknown};
@@ -51,7 +51,7 @@ struct ValidDetection
 struct LocalTrackTarget
 {
     std::size_t local_track_index{};
-    transforms::Point2D position_odom_m{};
+    core::geometry::Point2D position_odom_m{};
 };
 
 struct AssociationCandidate
@@ -81,7 +81,7 @@ struct AcceptedAssociation
 struct PredictedLandmarkMeasurement
 {
     std::uint64_t landmark_id{};
-    transforms::Point2D predicted_measurement_base_m{};
+    core::geometry::Point2D predicted_measurement_base_m{};
 };
 
 struct MapStateUpdateResult
@@ -109,7 +109,7 @@ struct SlamFrontendParams
 struct PendingPlannerLandmark
 {
     std::uint64_t landmark_id{};
-    transforms::Point2D position_odom_m{};
+    core::geometry::Point2D position_odom_m{};
     LandmarkColorEstimate color_estimate{};
 };
 

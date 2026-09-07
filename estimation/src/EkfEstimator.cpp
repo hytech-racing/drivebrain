@@ -31,7 +31,7 @@ double wrap_angle(double angle_rad)
 
 EkfEstimator::EkfEstimator(const EkfParams& params,
                            const GssSensorConfig& optical_sensor_config,
-                           const transforms::Pose2D& T_base_gss)
+                           const core::geometry::Pose2D& T_base_gss)
     : _params(params),
       _gss_sensor_config(optical_sensor_config),
       _T_base_gss(T_base_gss)

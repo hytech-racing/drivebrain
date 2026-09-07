@@ -8,7 +8,7 @@
 #include <string_view>
 #include <vector>
 
-#include "RigidTransform2D.hpp"
+#include "geometry/Pose2D.hpp"
 #include "common/PlannerMap.hpp"
 #include "common/SlamInterfaces.hpp"
 
@@ -45,6 +45,6 @@ std::shared_ptr<foxglove::SceneUpdate> to_foxglove_planner_landmark_text(
     std::string_view entity_id = "planner_landmark_labels");
 
 std::shared_ptr<foxglove::FrameTransform> to_foxglove_map_odom_transform(
-    const transforms::Pose2D& pose_map_from_odom, std::int64_t timestamp_ns);
+    const core::geometry::Pose2D& pose_map_from_odom, std::int64_t timestamp_ns);
 
 }  // namespace adapters

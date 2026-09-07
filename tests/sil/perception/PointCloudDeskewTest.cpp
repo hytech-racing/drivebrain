@@ -17,14 +17,14 @@ TEST(PointCloudDeskewTest, EmitsOnePointPerInputPoint)
 
     StampedLidarPose reference;
     reference.stamp_ns = 200;
-    reference.pose = transforms::Pose3D{};
+    reference.pose = core::geometry::Pose3D{};
 
     std::vector<StampedLidarPose> poses;
     poses.resize(cloud.points.size());
     for (std::size_t i = 0; i < poses.size(); ++i)
     {
         poses[i].stamp_ns = static_cast<std::int64_t>(i + 1);
-        poses[i].pose = transforms::Pose3D{};
+        poses[i].pose = core::geometry::Pose3D{};
     }
 
     const DeskewResult result = deskew_point_cloud(cloud, reference, poses);
@@ -44,11 +44,11 @@ TEST(PointCloudDeskewTest, AppliesMatchingPoseToEachPoint)
 
     StampedLidarPose reference;
     reference.stamp_ns = 200;
-    reference.pose = transforms::Pose3D{};
+    reference.pose = core::geometry::Pose3D{};
 
     std::vector<StampedLidarPose> poses = {
-        StampedLidarPose{100, transforms::Pose3D{10.0, 0.0, 0.0, {}}},
-        StampedLidarPose{200, transforms::Pose3D{20.0, 0.0, 0.0, {}}}};
+        StampedLidarPose{100, core::geometry::Pose3D{10.0, 0.0, 0.0, {}}},
+        StampedLidarPose{200, core::geometry::Pose3D{20.0, 0.0, 0.0, {}}}};
 
     const DeskewResult result = deskew_point_cloud(cloud, reference, poses);
 
