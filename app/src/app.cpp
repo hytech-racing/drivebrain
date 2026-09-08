@@ -36,6 +36,9 @@ DrivebrainApp::DrivebrainApp(const std::string& json_param_path, const std::stri
 
 DrivebrainApp::~DrivebrainApp() {
   running = false;
+#ifdef DRIVEBRAIN_FLIR_ENABLED
+  _flir_driver.reset();
+#endif
 
   core::MCAPLogger::instance().destroy();
   core::FoxgloveServer::instance().destroy();
@@ -75,6 +78,14 @@ void DrivebrainApp::run() {
   if (vn_init_not_successful) {
     spdlog::error("Failed to initialize vectornav driver");
   }
+
+#ifdef DRIVEBRAIN_FLIR_ENABLED
+  if (core::FoxgloveServer::instance().get_param<bool>("flir_driver/enabled").value_or(false)) {
+    bool flir_init_not_successful = false;
+    _flir_driver = std::make_unique<comms::FLIRDriver>(flir_init_not_successful);
+    if (flir_init_not_successful) spdlog::error("Failed to initialize FLIR driver");
+  }
+#endif
 
   // CAN device names are defined in the drivebrain JSON config
   _telem_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("telem_can_device").value(), _dbc_path);

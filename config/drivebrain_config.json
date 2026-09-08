@@ -35,6 +35,19 @@
         "dt_rate_hz": 1000.0,
         "apply_vectoring_in_regen": true
     },
+    "flir_driver": {
+        "enabled": false,
+        "device_name": "192.168.1.10",
+        "model_path": "models/yolo26s.onnx",
+        "device": "gpu",
+        "gpu_fallback": false,
+        "fp16": true,
+        "pixel_format": "BayerRG8",
+        "fps": 15.0,
+        "confidence": 0.25,
+        "jpeg_quality": 80,
+        "frame_id": "flir_camera"
+    },
     "vn_driver": {
         "device_name": "/dev/ttyUSB0",
         "baud_rate": 921600, 

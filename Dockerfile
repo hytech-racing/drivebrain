@@ -14,18 +14,32 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     python3-setuptools \
     python3-venv \
+    ca-certificates \
     && apt-get clean
 
     
 CMD ["/bin/bash"]
 
-# Simulation layer
-FROM dev-base as dev-sim
-RUN wget https://packages.osrfoundation.org/gazebo.gpg -O /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg \
-    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable jammy main" \
-    > /etc/apt/sources.list.d/gazebo-stable.list \
-    && apt-get update && apt-get install -y \
-    libgz-transport13-dev \
-    libgz-msgs10-dev \
-    && apt-get clean
+# Jetson Orin AGX deps
+
+FROM dev-base AS dev-inference
+ARG CUDA_TOOLKIT_VERSION=12-5
+ARG CUDA_TOOLKIT_PACKAGE_VERSION=12.5.1-1
+ARG TENSORRT_VERSION=10.3.0.26-1+cuda12.5
+RUN test "$(dpkg --print-architecture)" = amd64 \
+    && wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb -O /tmp/cuda-keyring.deb \
+    && echo 'd93190d50b98ad4699ff40f4f7af50f16a76dac3bb8da1eaaf366d47898ff8df  /tmp/cuda-keyring.deb' | sha256sum -c - \
+    && dpkg -i /tmp/cuda-keyring.deb \
+    && rm /tmp/cuda-keyring.deb \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+       "cuda-toolkit-${CUDA_TOOLKIT_VERSION}=${CUDA_TOOLKIT_PACKAGE_VERSION}" \
+       "libnvinfer10=${TENSORRT_VERSION}" \
+       "libnvinfer-headers-dev=${TENSORRT_VERSION}" \
+       "libnvinfer-dev=${TENSORRT_VERSION}" \
+       "libnvonnxparsers10=${TENSORRT_VERSION}" \
+       "libnvonnxparsers-dev=${TENSORRT_VERSION}" \
+    && apt-mark hold libnvinfer10 libnvinfer-headers-dev libnvinfer-dev libnvonnxparsers10 libnvonnxparsers-dev \
+    && rm -rf /var/lib/apt/lists/*
+ENV PATH="/usr/local/cuda/bin:${PATH}"
 

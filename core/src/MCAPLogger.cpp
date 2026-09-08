@@ -1,3 +1,5 @@
+#include <foxglove/CompressedImage.pb.h>
+#include <foxglove/ImageAnnotations.pb.h>
 #define MCAP_IMPLEMENTATION
 #include <atomic>
 #include <mutex>
@@ -144,7 +146,9 @@ int core::MCAPLogger::open_new_mcap() {
         return -1;
     }
 
-    std::vector<std::string> proto_names = {"hytech_msgs.proto", "hytech.proto", "dv_msgs.proto", "foxglove/PointCloud.proto", "foxglove/SceneUpdate.proto", "foxglove/FrameTransform.proto"};
+    foxglove::CompressedImage::descriptor();
+    foxglove::ImageAnnotations::descriptor();
+    std::vector<std::string> proto_names = {"hytech_msgs.proto", "hytech.proto", "dv_msgs.proto", "foxglove/PointCloud.proto", "foxglove/SceneUpdate.proto", "foxglove/FrameTransform.proto", "foxglove/CompressedImage.proto", "foxglove/ImageAnnotations.proto"};
     proto_names.insert(
         proto_names.end(),
         matlab_model_gen::matlab_model_gend_protos.begin(),

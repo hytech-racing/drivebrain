@@ -1,3 +1,6 @@
+#ifdef DRIVEBRAIN_FLIR_ENABLED
+#include "FLIRComms.hpp"
+#endif
 #include "ETHRecvComms.hpp"
 #include "CANComms.hpp"
 #if HOOTL_ENABLED
@@ -87,6 +90,9 @@ private:
 
   /* Vectornav */
   std::unique_ptr<comms::VNDriver> _vn_driver;
+#ifdef DRIVEBRAIN_FLIR_ENABLED
+  std::unique_ptr<comms::FLIRDriver> _flir_driver;
+#endif
 
   /* Estimator Manager */
   std::shared_ptr<estimation::EstimatorManager> _estim_manager;

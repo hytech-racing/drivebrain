@@ -1,0 +1,16 @@
+patches:
+  0.22.5:
+  - patch_description: relocatable autopoint with resources relative to script
+    patch_file: patches/0004-autopoint-relocatable.patch
+    url: https://raw.githubusercontent.com/conan-io/conan-center-index/4d5b5d6e5ad87dd6f0d6ed1bdf589fa4bf437a99/recipes/gettext/all/patches/0004-autopoint-relocatable.patch
+    sha256: 66cd81acd05ee9a0aa9c1b6450b32d8d5deb392a20cef1008e06037f4e5a5b2c
+  - patch_description: fix ability to crossbuild on macos and assume macOS newer than
+      10.4
+    patch_file: patches/0.22.5-0001-fix-macos-crossbuild.patch
+    url: https://raw.githubusercontent.com/conan-io/conan-center-index/4d5b5d6e5ad87dd6f0d6ed1bdf589fa4bf437a99/recipes/gettext/all/patches/0.22.5-0001-fix-macos-crossbuild.patch
+    sha256: 3c3311774e7fe31fed7e2db5d2f4e178c5047371cff833795b5e31e605936362
+sources:
+  0.22.5:
+    sha256: ec1705b1e969b83a9f073144ec806151db88127f5e40fe5a94cb6c8fa48996a0
+    url:
+    - https://ftp.gnu.org/gnu/gettext/gettext-0.22.5.tar.gz

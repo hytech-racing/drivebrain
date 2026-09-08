@@ -1,3 +1,5 @@
+#include <foxglove/CompressedImage.pb.h>
+#include <foxglove/ImageAnnotations.pb.h>
 #include <FoxgloveServer.hpp>
 #include <StateTracker.hpp>
 #include <foxglove/websocket/parameter.hpp>
@@ -206,7 +208,9 @@ core::FoxgloveServer::FoxgloveServer(std::string file_name) {
         _server->publishParameterValues(clientHandle, foxglove_params, request_id);
     };
 
-    std::vector<std::string> proto_names = {"hytech_msgs.proto", "hytech.proto", "dv_msgs.proto", "foxglove/PointCloud.proto", "foxglove/SceneUpdate.proto", "foxglove/FrameTransform.proto"};
+    foxglove::CompressedImage::descriptor();
+    foxglove::ImageAnnotations::descriptor();
+    std::vector<std::string> proto_names = {"hytech_msgs.proto", "hytech.proto", "dv_msgs.proto", "foxglove/PointCloud.proto", "foxglove/SceneUpdate.proto", "foxglove/FrameTransform.proto", "foxglove/CompressedImage.proto", "foxglove/ImageAnnotations.proto"};
     proto_names.insert(
         proto_names.end(),
         matlab_model_gen::matlab_model_gend_protos.begin(),
