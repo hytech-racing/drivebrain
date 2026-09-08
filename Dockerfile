@@ -28,4 +28,3 @@ RUN wget https://packages.osrfoundation.org/gazebo.gpg -O /usr/share/keyrings/pk
     libgz-transport13-dev \
     libgz-msgs10-dev \
     && apt-get clean
-

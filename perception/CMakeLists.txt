@@ -1,10 +1,18 @@
 cmake_minimum_required(VERSION 3.10)
 
-add_library(perception INTERFACE)
+find_package(spdlog REQUIRED)
 
-target_include_directories(perception INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+add_library(
+  perception
+  src/PointCloudDeskew.cpp
+  src/LidarProcessor.cpp
+  src/GroundRemoval.cpp
+  src/Clustering.cpp
+  src/ClusterFeatures.cpp
+  src/PointCloudFilters.cpp
+  src/ConeFilter.cpp)
 
-target_link_libraries(perception INTERFACE
-    core
-    hytech_msgs_cpp_lib
-)
+target_include_directories(perception
+                           PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+
+target_link_libraries(perception PUBLIC core hytech_msgs_cpp_lib spdlog::spdlog)
