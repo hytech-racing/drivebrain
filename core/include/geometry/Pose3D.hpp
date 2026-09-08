@@ -1,7 +1,7 @@
 #pragma once
 
 #include "geometry/Pose2D.hpp"
-#include "geometry/Point3D.hpp"
+#include "geometry/Point.hpp"
 #include "geometry/Quaternion.hpp"
 
 namespace core::geometry

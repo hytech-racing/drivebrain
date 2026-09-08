@@ -46,7 +46,7 @@ class IncrementalGraphSlam
     // std::set<std::uint64_t> confirmed_landmark_ids_;
     std::set<std::uint64_t> _initialized_landmark_ids;
 
-    std::size_t _next_pose_index{0U};
+    std::size_t _next_pose_index{0};
     std::optional<gtsam::Key> _previous_pose_key;
 
     std::optional<gtsam::Pose2> _reference_recorded_pose_odom_from_base;

@@ -29,10 +29,10 @@ class TransformBuffer
      * Pose definition: T_odom_base represents the pose of base_link
      * expresesd in odom
      */
-    bool insert_T_odom_base(const std::uint64_t timestamp_ns,
+    bool insert_T_odom_base(const uint64_t timestamp_ns,
                             const core::geometry::Pose2D& transform);
 
-    bool insert_T_odom_base3d(const std::uint64_t timestamp_ns,
+    bool insert_T_odom_base3d(const uint64_t timestamp_ns,
                               const core::geometry::Pose3D& transform);
 
     /**

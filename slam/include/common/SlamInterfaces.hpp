@@ -38,7 +38,7 @@ struct ConeDetection
 // Consumer: SlamFrontend::process_frame()
 struct ConeFrame
 {
-    std::int64_t timestamp_ns{};
+    int64_t timestamp_ns{};
     core::geometry::Pose2D pose_odom_from_base{};
     std::vector<ConeDetection> detections{};
 };
@@ -46,7 +46,7 @@ struct ConeFrame
 // Step 2: backend -> frontend feedback
 struct MapLandmark
 {
-    std::uint64_t landmark_id{};
+    uint64_t landmark_id{};
     core::geometry::Point2D position_map_m{};
 };
 
@@ -54,8 +54,8 @@ struct MapLandmark
 // Consumer: SlamFrontend::update_map_state()
 struct MapState
 {
-    std::uint64_t sequence{};
-    std::int64_t timestamp_ns{};
+    uint64_t sequence{};
+    int64_t timestamp_ns{};
     core::geometry::Pose2D pose_map_from_odom{};
 
     // Complete current optimized map, not an incremental delta

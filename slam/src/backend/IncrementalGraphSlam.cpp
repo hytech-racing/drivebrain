@@ -1,6 +1,7 @@
 
 #include "backend/IncrementalGraphSlam.hpp"
 
+#include <gtsam/geometry/Pose2.h>
 #include <gtsam/geometry/Rot2.h>
 #include <gtsam/inference/Symbol.h>
 #include <gtsam/linear/NoiseModel.h>
@@ -17,11 +18,6 @@ namespace slam::backend
 
 namespace
 {
-
-gtsam::Pose2 to_gtsam_pose(const core::geometry::Pose2D& pose)
-{
-    return gtsam::Pose2{pose.x_m, pose.y_m, pose.yaw_rad};
-}
 
 gtsam::Point2 to_gtsam_point(const core::geometry::Point2D& point)
 {
@@ -105,8 +101,7 @@ IncrementalGraphSlamResult IncrementalGraphSlam::process_frame(
     gtsam::NonlinearFactorGraph new_factors;
     gtsam::Values new_values;
 
-    const gtsam::Pose2 recorded_pose_odom_from_base =
-        to_gtsam_pose(frame.recorded_pose_odom_from_base);
+    const gtsam::Pose2 recorded_pose_odom_from_base = gtsam::Pose2{frame.recorded_pose_odom_from_base.x_m, frame.recorded_pose_odom_from_base.y_m, frame.recorded_pose_odom_from_base.yaw_rad};
 
     const std::size_t current_pose_index = _next_pose_index;
 

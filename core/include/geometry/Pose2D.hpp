@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cmath>
-#include "geometry/Point2D.hpp"
+#include "geometry/Point.hpp"
 
 namespace core::geometry
 {

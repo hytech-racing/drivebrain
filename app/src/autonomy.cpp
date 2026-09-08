@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "PurePursuitController.hpp"
+#include "geometry/Point2D.hpp"
 
 namespace core
 {
@@ -27,6 +28,8 @@ void Autonomy::start()
     {
         return;
     }
+
+// TODO: get rid of all of this bloat
 
 #if HOOTL_ENABLED
     auto path_param = FoxgloveServer::instance().get_param<std::string>(
@@ -120,12 +123,6 @@ void Autonomy::stop()
     spdlog::info("Autonomy stack stopped");
 }
 
-// bool Autonomy::is_valid()
-// {
-//     auto dv = StateTracker::instance().dv_state();
-//     return dv.lidar_is_valid && dv.path && !dv.path->empty();
-// }
-
 bool Autonomy::is_valid()
 {
 #if HOOTL_ENABLED
@@ -144,9 +141,7 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state)
     const auto [truth, truth_valid] =
         StateTracker::instance().simulation_ground_truth();
 
-    const ControllerOutput safe_output{
-
-        TorqueControlOut{veh_vec<float>{0.0, 0.0, 0.0, 0.0}}, 0.0};
+    const ControllerOutput safe_output{TorqueControlOut{veh_vec<float>{0.0, 0.0, 0.0, 0.0}}, 0.0};
 
     if (!truth_valid || !_sil_reference_path_loaded)
     {
@@ -227,12 +222,14 @@ void Autonomy::_run()
             // TODO: cone classifier needs to be invoked here
             auto path = planning::plan_path(
                 *StateTracker::instance().dv_state().cone_observations);
-            // render_path(path, "planned_path", "lidar");
+
             StateTracker::instance().set_dv_path(
                 std::make_shared<const std::vector<xyz_vec<float>>>(
                     std::move(path)));
         }
 
+        // TODO: why is this stamped here?
+        // nit: this run loop should be extremely clean. having a clusterfuck of logic here will make this method unreadable
         const auto now = std::chrono::steady_clock::now();
 
         if (_sil_reference_path_loaded &&
