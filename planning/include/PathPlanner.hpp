@@ -40,20 +40,21 @@ namespace planning {
 
     std::vector<double> coords; // Cone coordinates used to make the delaunay triangulation
 
-    float max_range_squared = 300.0f;
+    float max_range_squared = 500.0f;
 
     // FrameTransform is actually the position of the lidar relative to the map frame but the lidar is technically mounted towards the front of the car
     float vehicle_x = static_cast<float>(foxglove::FrameTransform::default_instance().translation().x());
     float vehicle_y = static_cast<float>(foxglove::FrameTransform::default_instance().translation().y());
-    
-    // Using FRD over FLU to avoid sign flips/conversions
-    //double vehicle_yaw = hytech_msgs::EkfState::default_instance().yaw_vehicle_frd_rad();
+
+
+    // apparently default instance doesn't work (it's empty) so what do i use....?
 
     float w = hytech_msgs::pose::default_instance().orientation().w();
     float x = hytech_msgs::pose::default_instance().orientation().x();
     float y = hytech_msgs::pose::default_instance().orientation().y();
     float z = hytech_msgs::pose::default_instance().orientation().z();
 
+    // Using the formula for finding yaw from quaternion orientation (first formula i got when I searched it up)
     float sin_yaw = 2.0 * (w * z + x * y);
     float cos_yaw = 1.0 - 2.0 * (y * y + z * z);
 
@@ -124,21 +125,40 @@ namespace planning {
         midpoints.push_back({mx, my, 0.0f});
       }
     }
+    
+    // Finding the first closest midpoint
+    float rel_dist_max = 500.0f;
+    float curr_dist = 0.0f;
+    std::size_t closest_midpoint_index = 0;
 
-    // try doing nearet neighbor orting next - midpoint to midpoint
+    for (std::size_t i = 0; i < midpoints.size(); i++) {
+      float x = midpoints.at(i).x - vehicle_x;
+      float y = midpoints.at(i).y - vehicle_y;
+      curr_dist = (x * x) + (y * y);
+      if (curr_dist < rel_dist_max) {
+        rel_dist_max = curr_dist;
+        closest_midpoint_index = i;
+      }
+    }
+
+    auto closest_midpoint = midpoints.at(closest_midpoint_index);
+
     std::sort(midpoints.begin(), midpoints.end(), 
-    [&](const auto& a, const auto& b) {
-        float ax = a.x - vehicle_x;
-        float ay = a.y - vehicle_y;
+      [closest_midpoint] (const auto& a, const auto& b) {
+        float ax = a.x - closest_midpoint.x;
+        float ay = a.y - closest_midpoint.y;
 
-        float bx = b.x - vehicle_x;
-        float by = b.y - vehicle_y;
-
+        float bx = b.x - closest_midpoint.x;
+        float by = b.y - closest_midpoint.y;
         float dist_a = (ax * ax) + (ay * ay);
         float dist_b = (bx * bx) + (by * by);
 
         return dist_a < dist_b;
-    });
+
+      });
+
+
+
 
     for (const auto& midpoint : midpoints) {
       path_points.push_back({midpoint.x, midpoint.y, 0.0f});
@@ -148,3 +168,19 @@ namespace planning {
     
   }
 }
+
+
+    // midpoint to vehicle filtering
+    // std::sort(midpoints.begin(), midpoints.end(), 
+    // [&](const auto& a, const auto& b) {
+    //     float ax = a.x - vehicle_x;
+    //     float ay = a.y - vehicle_y;
+
+    //     float bx = b.x - vehicle_x;
+    //     float by = b.y - vehicle_y;
+
+    //     float dist_a = (ax * ax) + (ay * ay);
+    //     float dist_b = (bx * bx) + (by * by);
+
+    //     return dist_a < dist_b;
+    // });
