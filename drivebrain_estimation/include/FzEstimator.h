@@ -31,18 +31,15 @@ using namespace core;
 
 namespace estimation {
 
-typedef Eigen::Matrix<double, FZ_STATE_SIZE, 1> fz_state_vector; // x
-typedef Eigen::Matrix<double, FZ_STATE_SIZE, FZ_STATE_SIZE> fz_state_covariance; // Q
-typedef Eigen::Matrix<double, FZ_MEASUREMENT_SIZE, FZ_MEASUREMENT_SIZE> fz_measurement_covariance; // R
-typedef Eigen::Matrix<double, FZ_MEASUREMENT_SIZE, FZ_STATE_SIZE> fz_measurement_matrix; // H 
-typedef Eigen::Matrix<double, FZ_STATE_SIZE, FZ_STATE_SIZE> fz_process_model_matrix; // A
-typedef Eigen::Matrix<double, FZ_STATE_SIZE, FZ_CONTROL_INPUT_SIZE> fz_control_input_matrix; // B
-typedef Eigen::Matrix<double, FZ_CONTROL_INPUT_SIZE, 1> fz_control_input_vector; // u
-typedef Eigen::Matrix<double, FZ_MEASUREMENT_SIZE, 1> fz_measurement_vector; // z
-typedef Eigen::Matrix<double, FZ_STATE_SIZE, 1> fz_estimates; 
-
-typedef Eigen::Matrix<double, FZ_MEASUREMENT_SIZE, FZ_MEASUREMENT_SIZE> identity; 
-
+using fz_state_vector = Eigen::Matrix<double, FZ_STATE_SIZE, 1>; // x
+using fz_state_covarianc = Eigen::Matrix<double, FZ_STATE_SIZE, FZ_STATE_SIZE> ; // Q
+using fz_measurement_covariance = Eigen::Matrix<double, FZ_MEASUREMENT_SIZE, FZ_MEASUREMENT_SIZE>; // R
+using fz_measurement_matrix = Eigen::Matrix<double, FZ_MEASUREMENT_SIZE, FZ_STATE_SIZE>; // H
+using fz_process_model_matrix = Eigen::Matrix<double, FZ_STATE_SIZE, FZ_STATE_SIZE>; // A
+using fz_control_input_matrix = Eigen::Matrix<double, FZ_STATE_SIZE, FZ_CONTROL_INPUT_SIZE>; // B
+using fz_control_input_vector = Eigen::Matrix<double, FZ_CONTROL_INPUT_SIZE, 1>; // u
+using fz_measurement_vector = Eigen::Matrix<double, FZ_MEASUREMENT_SIZE, 1>; // z
+using fz_estimates = Eigen::Matrix<double, FZ_STATE_SIZE, 1>;
 
 class FzEstimator {
 
