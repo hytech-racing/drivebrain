@@ -41,6 +41,8 @@ typedef Eigen::Matrix<double, FZ_CONTROL_INPUT_SIZE, 1> fz_control_input_vector;
 typedef Eigen::Matrix<double, FZ_MEASUREMENT_SIZE, 1> fz_measurement_vector; // z
 typedef Eigen::Matrix<double, FZ_STATE_SIZE, 1> fz_estimates; 
 
+typedef Eigen::Matrix<double, FZ_MEASUREMENT_SIZE, FZ_MEASUREMENT_SIZE> identity; 
+
 
 class FzEstimator {
 
@@ -63,8 +65,8 @@ class FzEstimator {
         fz_process_model_matrix _A; 
         fz_control_input_matrix _B;
         fz_measurement_matrix _H; 
-        fz_state_covariance _Q; 
-        fz_measurement_covariance _R; 
+        fz_state_covariance _Q; // process noise - uncertainty in the physical system model
+        fz_measurement_covariance _R; // measurement noise - inaccuracy/uncertainty of sensors
 
         fz_estimates _fz_static;
         mutable std::mutex _kf_mutex;

@@ -6,7 +6,7 @@ FzEstimator::FzEstimator() {
     // Set matricies and vectors
     _state.setZero();
     _A.setZero();
-    _P.setIdentity();
+    _P.setIdentity(); // setting the prediction covariance matrix to identity assumes that every state variable has an initial variance of 1 and that no state errors are correlated with each other (default)
     _H.setIdentity();
 
     std::optional<float> Q_gain = FoxgloveServer::instance().get_param<float>("FzEstimator/Q_gain");
@@ -66,7 +66,18 @@ void FzEstimator::update(double load_cell_fl, double load_cell_fr, double load_c
 
     fz_measurement_vector y = z - _H * _state;
     fz_measurement_covariance S = _H * _P * _H.transpose() + _R;
-    fz_state_covariance K = _P * _H.transpose() * S.inverse();
+    // fz_state_covariance K = _P * _H.transpose() * S.inverse();
+
+    /*
+        LDLT computes the Cholesky decomposition of a matrix, which breaks it down into a lower triangular matrix and its transpose (A = LDL_transpose)
+        The solver is able to compute the columns of the inverse using forward and backward substitution on each matrix in the decomposition.
+        The identity matrix is used as an input to compute the inverse of the original matrix. Essentially telling the solver AX = I, solve for X (aka A^-1)
+    */
+    Eigen::LDLT<fz_measurement_covariance> ldlt(S); // First have to turn S into an LDLT decomposition --> becomes (LDL_transpose)X = B
+
+    fz_measurement_covariance S_inverse = ldlt.solve(fz_measurement_covariance::Identity()); // solves for each column of the new matrix to get B (which is I in this case)
+    fz_state_covariance K = _P * _H.transpose() * S_inverse; 
+
     _state = _state + K * y;
     _P = (fz_state_covariance::Identity() - K * _H) * _P;
 }

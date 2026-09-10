@@ -4,6 +4,7 @@ services:
     volumes:
       - conan-cache:/root/.conan2
       - ./:/app
+      - /tmp:/tmp
       # - ../HT_proto:/HT_proto
     working_dir: /app
     tty: true
@@ -14,4 +15,4 @@ services:
 
 volumes:
   conan-cache:
-    - /tmp:/tmp
+    
