@@ -1,4 +1,5 @@
 #include "autonomy.hpp"
+#include "SimComms.hpp"
 
 #include <memory>
 #include <variant>
@@ -9,6 +10,12 @@
 #include <Telemetry.hpp>
 #include <StateTracker.hpp>
 #include <PathPlanner.hpp>
+#include <autonomy_msgs.pb.h>
+
+// todo: abstract this out to a config file or something, but for now just hardcode it to 25Hz
+#define LOOP_TIME 0.004 
+#define CONTROLLER_LOOP_TIME 0.01
+#define PRESCALE_COUNTER ((int)(CONTROLLER_LOOP_TIME / LOOP_TIME))
 
 namespace core {
 
@@ -37,21 +44,38 @@ void Autonomy::stop() {
 }
 
 bool Autonomy::is_valid() {
+  return true;
   auto dv = StateTracker::instance().dv_state();
   return dv.lidar_is_valid && dv.path && !dv.path->empty();
 }
 
-// TODO: Pure pursuit impl should be invoked here. Hardcoded for now to verify the
-// command path from drivebrain through to the sim's vehicle dynamics.
-ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
-  // TorqueControlOut torque;
-  // torque.desired_torques_nm = {2.0f, 2.0f, 2.0f, 2.0f};
 
+ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
+
+  static uint8_t prescale_counter = 0;
+  auto dv = StateTracker::instance().dv_state();
   ControllerOutput out;
-  out.out = std::monostate{};
-  // out.out = torque;
-  // out.desired_steering_deg = 10.0f;
-  return out;
+
+  if (++prescale_counter < PRESCALE_COUNTER) {
+    return out;
+  }
+  prescale_counter = 0;
+
+  // update PID gains for longitudinal controller
+  _longitudinal_controller.setGains(dv.velocity_controller_pid_gains);
+  
+  // run control loops
+  out.desired_steering_deg = _lateral_controller.step_controller(vehicle_state);
+  out.out = _longitudinal_controller.step_controller(vehicle_state);
+
+  // fetch pure pursuit logs
+  auto msg = _lateral_controller.getLoggingData();
+  
+#if HOOTL_ENABLED
+  // std::cout << msg.
+  comms::SimComms::instance().send_message(msg);
+#endif
+return out;
 }
 
 void Autonomy::_run() {
