@@ -19,6 +19,7 @@
 #include <spdlog/spdlog.h>
 
 #include "hytech_msgs.pb.h"
+#include <foxglove/CompressedImage.pb.h>
 
 namespace core {
 

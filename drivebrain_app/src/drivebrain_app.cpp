@@ -77,6 +77,10 @@ void DrivebrainApp::run() {
   _aux_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("aux_can_device").value(), _dbc_path);
   spdlog::info("Initialized CAN drivers");
 
+  _camera_driver = std::make_unique<comms::BlackflyComms>();
+  _camera_driver->start("", "BayerRG8", 15.0);
+
+
   // Initialize controllers
   const size_t num_controllers = 1 + matlab_model_gen::num_controllers;
     _mode1 = std::make_shared<control::LoadCellTorqueController>(); 

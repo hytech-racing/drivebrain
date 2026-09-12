@@ -11,7 +11,7 @@
  * HELPER METHODS
  ****************************************************************/
 static std::string get_logfile_name() {
-  std::string dir_path = "/home/nixos/recordings";
+  std::string dir_path = "/home/hytech/recordings";
   int max_file_number = 0;
   std::string largest_file_name; 
 
@@ -137,7 +137,7 @@ void core::MCAPLogger::destroy() {
 int core::MCAPLogger::open_new_mcap() {
     std::string mcap_name = get_logfile_name();
     spdlog::info("Attempting to open new MCAP file: {}", mcap_name);
-    _log_name = "/home/nixos/recordings/" + get_logfile_name(); 
+    _log_name = "/home/hytech/recordings/" + get_logfile_name(); 
 
     const auto res = _writer.open(_log_name, _options);
     if (!res.ok()) {
@@ -145,7 +145,7 @@ int core::MCAPLogger::open_new_mcap() {
         return -1;
     }
 
-    std::vector<std::string> proto_names = {"hytech_msgs.proto", "hytech.proto"};
+    std::vector<std::string> proto_names = {"hytech_msgs.proto", "hytech.proto", "foxglove/CompressedImage.proto"};
     proto_names.insert(
         proto_names.end(),
         matlab_model_gen::matlab_model_gend_protos.begin(),
