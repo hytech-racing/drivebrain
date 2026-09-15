@@ -32,7 +32,7 @@ using namespace core;
 namespace estimation {
 
 using fz_state_vector = Eigen::Matrix<double, FZ_STATE_SIZE, 1>; // x
-using fz_state_covarianc = Eigen::Matrix<double, FZ_STATE_SIZE, FZ_STATE_SIZE> ; // Q
+using fz_state_covariance = Eigen::Matrix<double, FZ_STATE_SIZE, FZ_STATE_SIZE> ; // Q
 using fz_measurement_covariance = Eigen::Matrix<double, FZ_MEASUREMENT_SIZE, FZ_MEASUREMENT_SIZE>; // R
 using fz_measurement_matrix = Eigen::Matrix<double, FZ_MEASUREMENT_SIZE, FZ_STATE_SIZE>; // H
 using fz_process_model_matrix = Eigen::Matrix<double, FZ_STATE_SIZE, FZ_STATE_SIZE>; // A
@@ -64,6 +64,8 @@ class FzEstimator {
         fz_measurement_matrix _H; 
         fz_state_covariance _Q; // process noise - uncertainty in the physical system model
         fz_measurement_covariance _R; // measurement noise - inaccuracy/uncertainty of sensors
+
+        fz_state_covariance _I; // Identity matrix for LDLT solving
 
         fz_estimates _fz_static;
         mutable std::mutex _kf_mutex;

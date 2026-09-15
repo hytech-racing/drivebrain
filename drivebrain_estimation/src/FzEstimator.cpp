@@ -79,7 +79,8 @@ void FzEstimator::update(double load_cell_fl, double load_cell_fr, double load_c
     fz_state_covariance K = _P * _H.transpose() * S_inverse; 
 
     _state = _state + K * y;
-    _P = (fz_state_covariance::Identity() - K * _H) * _P;
+    _I = fz_state_covariance::Identity();
+    _P = (_I - K * _H) * _P;    
 }
 
 fz_estimates FzEstimator::getEstimates() const {
