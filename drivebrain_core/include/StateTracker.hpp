@@ -230,6 +230,7 @@ namespace core {
         Position vehicle_position;
         veh_vec<float> loadcells;
         veh_vec<float> current_torques_nm;
+        veh_vec<float> fz_estimates;
         INSStatus ins_status;
         float old_energy_meter_kw;
         DrivetrainData dt_data;

@@ -60,6 +60,13 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(HT_CAN)
 
+FetchContent_Declare(
+    osqp-cpp
+    GIT_REPOSITORY https://github.com/google/osqp-cpp.git
+    GIT_TAG master
+)
+FetchContent_MakeAvailable(osqp-cpp)
+
 #################################
 # Linking to main app
 #################################
@@ -88,6 +95,7 @@ target_link_libraries(drivebrain PUBLIC
     drivebrain_comms
     drivebrain_control
     drivebrain_estimation
+
 )
 
 #################################
