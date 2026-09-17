@@ -75,12 +75,15 @@ set(BUILD_VIZ         OFF CACHE BOOL "" FORCE)
 set(BUILD_EXAMPLES    OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTING     OFF CACHE BOOL "" FORCE)
 set(BUILD_SENSOR      ON CACHE BOOL "" FORCE)
+set(BUILD_MAPPING     OFF CACHE BOOL "" FORCE)
+set(BUILD_PERCEPTION   ON CACHE BOOL "" FORCE)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "" FORCE)
+
 
 FetchContent_Declare(
     ouster_sdk
     GIT_REPOSITORY https://github.com/ouster-lidar/ouster-sdk.git
-    GIT_TAG        v0.16.2
+    GIT_TAG        v1.0.1
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(ouster_sdk)
@@ -88,9 +91,13 @@ FetchContent_MakeAvailable(ouster_sdk)
 #################################
 # Linking to main app
 #################################
+#add_executable(drivebrain
+#    drivebrain_app/src/main.cpp
+#    drivebrain_app/src/drivebrain_app.cpp
+#)
+
 add_executable(drivebrain
-    drivebrain_app/src/main.cpp
-    drivebrain_app/src/drivebrain_app.cpp
+    tests/hil/scripts/test_ouster.cpp
 )
 
 target_include_directories(drivebrain PUBLIC drivebrain_app/include)
@@ -107,15 +114,15 @@ target_link_libraries(drivebrain PUBLIC
     mcap::mcap
     protobuf::libprotobuf 
     boost::boost
-    hytech_msgs_cpp_lib
-    hytech_can_msgs_cpp_lib
+    #hytech_msgs_cpp_lib
+    #hytech_can_msgs_cpp_lib
     drivebrain_core
     drivebrain_comms
     drivebrain_control
-    matlab_model
-    -Wl,--whole-archive
-    simulink_automation_msgs_proto_cpp
-    -Wl,--no-whole-archive
+    #matlab_model
+    #-Wl,--whole-archive
+    #simulink_automation_msgs_proto_cpp
+    #-Wl,--no-whole-archive
     ouster_client
     ouster_sensor
 )
