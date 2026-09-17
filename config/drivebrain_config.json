@@ -55,7 +55,13 @@
     "use_fake_vn": false,
     "use_surrey_aero": false,
     "use_scale_comms": false,
-    "use_laptimer": false
-
+    "use_laptimer": false,
+    "kraken_comms": {
+        "device_id": 40,
+        "canbus_name": "can_steer",
+        "send_rate_hz": 200,
+        "gear_ratio": 1.0,
+        "min_angle_deg": -90.0,
+        "max_angle_deg": 90.0
+    }
 }
-

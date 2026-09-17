@@ -71,6 +71,13 @@ void DrivebrainApp::run() {
 
   spdlog::info("Initialized ethernet drivers");
 
+#if !HOOTL_ENABLED
+  _kraken_comms = std::make_unique<comms::KrakenComms>();
+  if (!_kraken_comms->init()) {
+    spdlog::error("Failed to initialize KrakenComms");
+  }
+#endif
+
   // CAN device names are defined in the drivebrain JSON config
   _telem_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("telem_can_device").value(), _dbc_path);
   _aux_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("aux_can_device").value(), _dbc_path);
@@ -140,6 +147,12 @@ void DrivebrainApp::_loop() {
     // spdlog::info("tick: get_state");
 
     auto state_and_validity = core::StateTracker::instance().get_latest_state_and_validity();
+
+#if !HOOTL_ENABLED
+    if (_kraken_comms && state_and_validity.second) {
+      _kraken_comms->set_angle(state_and_validity.first.steering_angle_deg);
+    }
+#endif
 
     // spdlog::info("tick: step_controller");
 
