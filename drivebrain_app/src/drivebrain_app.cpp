@@ -88,7 +88,8 @@ void DrivebrainApp::run() {
     spdlog::error("Failed to initialize mode 4");
   }
 
-  std::array<std::shared_ptr<control::Controller<core::ControllerOutput, core::VehicleState>>, num_controllers> controllers{_mode1, _mode4};
+  std::array<std::shared_ptr<control::Controller<core::ControllerOutput, core::VehicleState>>, num_controllers> controllers{_mode4
+  };
   
   // Create controller manager instance
   ControllerManager<control::Controller<ControllerOutput, VehicleState>, num_controllers>::create(controllers);
@@ -147,6 +148,7 @@ void DrivebrainApp::_loop() {
     auto state_and_validity = core::StateTracker::instance().get_latest_state_and_validity();
 
     // spdlog::info("tick: step_controller");
+
 
     auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, 1>::instance();
     auto out_struct = controller_manager.step_active_controller(state_and_validity.first);

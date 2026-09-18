@@ -8,7 +8,7 @@
         "regen_torque_scale": 0.6,
         "positive_speed_set" : 45,
         "max_power_kw": 63.0,
-        "dt_rate_hz": 1000
+        "dt_rate_hz": 1000.0
     },
     "LoadCellTorqueController": {
         "max_torque": 21.0,
@@ -19,6 +19,16 @@
         "max_power_kw": 63.0,
         "dt_rate_hz": 1000.0,
         "apply_vectoring_in_regen": true
+    },
+    "BasicQP": {
+        "omega": 0.0,
+        "alpha": 1.0,
+        "lambda": 0.01,
+        "dt_rate_hz": 250.0,
+        "yaw_kp": 1.0,
+        "yaw_ki": 0.0,
+        "yaw_kd": 0.0,
+        "mu": 0.8
     },
     "vn_driver": {
         "device_name": "/dev/ttyUSB0",

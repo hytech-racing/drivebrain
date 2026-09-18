@@ -275,6 +275,7 @@ void StateTracker::_update_estimators() {
     fz_estimate->set_fr_fz_estimate(estimates(1));
     fz_estimate->set_rl_fz_estimate(estimates(2));
     fz_estimate->set_rr_fz_estimate(estimates(3));
+    fz_estimate->set_tot_fz_estimate(estimates(0) + estimates(1) + estimates(2) + estimates(3));
 
     _vehicle_state.fz_estimates.FL = estimates(0);
     _vehicle_state.fz_estimates.FR = estimates(1);
