@@ -25,6 +25,12 @@ void control::BasicQP::_handle_param_updates(const std::unordered_map<std::strin
         _config.p_dirty = true; // Tells the solver to update the objective matrix
     }
 
+    if (auto v = process_param_update<float>(new_param_map, "basicqp/gamma")) {
+        std::unique_lock lk(_config_mutex);
+        _config.gamma = v.value();
+        _config.p_dirty = true; // Tells the solver to update the objective matrix
+    }
+
     if (auto v = process_param_update<float>(new_param_map, "basicqp/dt_rate_hz")) {
         std::unique_lock lk(_config_mutex);
         _config.dt_rate_hz = v.value();
@@ -54,7 +60,8 @@ void control::BasicQP::_handle_param_updates(const std::unordered_map<std::strin
 void control::BasicQP::_build_objective_matrix() {
     std::unique_lock lk(_config_mutex);
     double omega = _config.omega;
-    double lamda = _config.lambda;
+    double lambda = _config.lambda;
+    double gamma = _config.gamma;
 
     static double b = QP_TRACK_WIDTH / 2.0;
     static Eigen::Matrix<double, 4, 1> c;
@@ -62,7 +69,8 @@ void control::BasicQP::_build_objective_matrix() {
         -b / QP_WHEEL_RADIUS, b / QP_WHEEL_RADIUS, -b / QP_WHEEL_RADIUS, b / QP_WHEEL_RADIUS;
     
     _P = 2 * omega * (c * c.transpose());
-    _P += 2 * lamda * Eigen::Matrix<double, 4, 4>::Identity();
+    _P += 2 * lambda * Eigen::Matrix<double, 4, 4>::Identity();
+    _P += 2 * gamma * Eigen::Matrix<double, 4, 4>::Identity();
 }
 
 void control::BasicQP::_build_constraint_matrix() {
@@ -77,7 +85,7 @@ void control::BasicQP::_build_constraint_matrix() {
     _A.row(8) << 0, 0, 0, 1;
 }
 
-double control::BasicQP::_pid_update(const VehicleState &in)
+double control::BasicQP::_pid_update(const VehicleState &in, std::shared_ptr<hytech_msgs::QPAllocator> qp_allocator_msg)
 {
     std::unique_lock lk(_config_mutex);
     double dt = 1.0 / _config.dt_rate_hz;
@@ -87,7 +95,7 @@ double control::BasicQP::_pid_update(const VehicleState &in)
 
     double target_yaw_rate_ref = (in.current_body_vel_ms.x / QP_WHEELBASE) * std::tan(in.steering_angle_deg * M_PI / 180.0);
 
-    double yaw_rate_error = target_yaw_rate_ref - in.current_angular_rate_rads.x; // TODO check that this should be the x component
+    double yaw_rate_error = target_yaw_rate_ref - in.current_angular_rate_rads.z;
     yaw_rate_integral_error += yaw_rate_error * dt;
     double yaw_rate_derivative_error = (yaw_rate_error - previous_yaw_rate_error) / dt;
     previous_yaw_rate_error = yaw_rate_error;
@@ -95,6 +103,12 @@ double control::BasicQP::_pid_update(const VehicleState &in)
     double des_yaw_moment = _config.yaw_kp * yaw_rate_error +
                                      _config.yaw_ki * yaw_rate_integral_error +
                                      _config.yaw_kd * yaw_rate_derivative_error;
+
+    
+    qp_allocator_msg->set_yaw_rate_reference(target_yaw_rate_ref);
+    qp_allocator_msg->set_des_mz(des_yaw_moment);
+    qp_allocator_msg->set_yaw_rate_meas(in.current_angular_rate_rads.z);
+
     return des_yaw_moment;
 }
 
@@ -105,6 +119,7 @@ bool control::BasicQP::init()
     auto opt_omega = FoxgloveServer::instance().get_param<float>("basicqp/omega");
     auto opt_alpha = FoxgloveServer::instance().get_param<float>("basicqp/alpha");
     auto opt_lambda = FoxgloveServer::instance().get_param<float>("basicqp/lambda");
+    auto opt_gamma = FoxgloveServer::instance().get_param<float>("basicqp/gamma");
     auto opt_dt_rate_hz = FoxgloveServer::instance().get_param<float>("basicqp/dt_rate_hz");
     auto opt_yaw_kp = FoxgloveServer::instance().get_param<float>("basicqp/yaw_kp");
     auto opt_yaw_ki = FoxgloveServer::instance().get_param<float>("basicqp/yaw_ki");
@@ -115,6 +130,7 @@ bool control::BasicQP::init()
     if (!opt_omega)        { spdlog::error("Missing param: basicqp/omega");        all_loaded = false; }
     if (!opt_alpha)        { spdlog::error("Missing param: basicqp/alpha");        all_loaded = false; }
     if (!opt_lambda)       { spdlog::error("Missing param: basicqp/lambda");       all_loaded = false; }
+    if (!opt_gamma)        { spdlog::error("Missing param: basicqp/gamma");        all_loaded = false; }
     if (!opt_dt_rate_hz)   { spdlog::error("Missing param: basicqp/dt_rate_hz");   all_loaded = false; }
     if (!opt_yaw_kp)       { spdlog::error("Missing param: basicqp/yaw_kp");       all_loaded = false; }
     if (!opt_yaw_ki)       { spdlog::error("Missing param: basicqp/yaw_ki");       all_loaded = false; }
@@ -129,6 +145,7 @@ bool control::BasicQP::init()
     _config.omega = opt_omega.value();
     _config.alpha = opt_alpha.value();
     _config.lambda = opt_lambda.value();
+    _config.gamma = opt_gamma.value();
     _config.dt_rate_hz = opt_dt_rate_hz.value();
     _config.yaw_kp = opt_yaw_kp.value();
     _config.yaw_ki = opt_yaw_ki.value();
@@ -175,17 +192,18 @@ ControllerOutput control::BasicQP::step_controller(const VehicleState &in)
     std::shared_ptr<hytech_msgs::QPAllocator> qp_allocator_msg = std::make_shared<hytech_msgs::QPAllocator>();
 
     // Yaw rate objective vector construction
-    double des_yaw_moment = _pid_update(in);
+    double des_yaw_moment = _pid_update(in, qp_allocator_msg);
 
     static double b = QP_TRACK_WIDTH / 2.0;
 
-    double omega, alpha, lambda, mu; 
+    double omega, alpha, lambda, gamma, mu; 
     bool p_dirty;
     {
         std::unique_lock<std::mutex> lock(_config_mutex);
         omega = _config.omega;
         alpha = _config.alpha;
         lambda = _config.lambda;
+        gamma = _config.gamma;
         mu = _config.mu;
         p_dirty = _config.p_dirty;
         _config.p_dirty = false;
@@ -208,6 +226,20 @@ ControllerOutput control::BasicQP::step_controller(const VehicleState &in)
     }
     _q += -2 * lambda * _x_prev;
 
+    double fz_total = in.fz_estimates.FL + in.fz_estimates.FR + in.fz_estimates.RL + in.fz_estimates.RR;
+    double requested_total_torque = QP_MAX_TORQUE * 4.0 * intent * QP_GR;
+
+    if (fz_total > 0.0) {
+        Eigen::Matrix<double, 4, 1> Tref;
+        Tref <<
+            requested_total_torque * in.fz_estimates.FL / fz_total,
+            requested_total_torque * in.fz_estimates.FR / fz_total,
+            requested_total_torque * in.fz_estimates.RL / fz_total,
+            requested_total_torque * in.fz_estimates.RR / fz_total;
+
+        _q += -2 * gamma * Tref;
+    }
+    
     // Constraints
 
     SpeedControlOut type_set = {};

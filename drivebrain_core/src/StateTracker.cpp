@@ -261,6 +261,8 @@ void StateTracker::_receive_inverter_states(std::shared_ptr<google::protobuf::Me
 
 void StateTracker::_update_estimators() {
     std::unique_lock lk(_state_mutex);
+
+    // FZ update
     estimation::fz_control_input_vector u;
     u <<
         _vehicle_state.current_body_accel_mss.x, _vehicle_state.current_body_accel_mss.y;
@@ -281,7 +283,10 @@ void StateTracker::_update_estimators() {
     _vehicle_state.fz_estimates.FR = estimates(1);
     _vehicle_state.fz_estimates.RL = estimates(2);
     _vehicle_state.fz_estimates.RR = estimates(3);
-        
+
+    // Steering update
+    // TODO
+
     core::log(fz_estimate);
 }
 

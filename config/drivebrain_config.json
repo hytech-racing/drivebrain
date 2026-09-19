@@ -22,8 +22,9 @@
     },
     "BasicQP": {
         "omega": 0.0,
-        "alpha": 1.0,
+        "alpha": 0.0,
         "lambda": 0.01,
+        "gamma": 1.0,
         "dt_rate_hz": 250.0,
         "yaw_kp": 1.0,
         "yaw_ki": 0.0,

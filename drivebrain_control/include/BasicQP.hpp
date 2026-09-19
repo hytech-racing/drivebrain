@@ -41,6 +41,7 @@ class BasicQP : public Controller<core::ControllerOutput, core::VehicleState> {
             double alpha; // Tractive force
             double lambda; // Regularization factor
             double omega; // Yaw rate
+            double gamma; // Weighting factor for the traction distribution term in the objective function
             double dt_rate_hz; // TODO don't use this calculate it
             double mu;
             bool p_dirty = true;
@@ -75,7 +76,7 @@ class BasicQP : public Controller<core::ControllerOutput, core::VehicleState> {
     private:
 
         void _handle_param_updates(const std::unordered_map<std::string, DBParam> &new_param_map);
-        double _pid_update(const VehicleState &in);
+        double _pid_update(const VehicleState &in, std::shared_ptr<hytech_msgs::QPAllocator> qp_allocator_msg);
 
         void _build_constraint_matrix();
         void _build_objective_matrix();
