@@ -12,7 +12,7 @@
 #include "ouster/sensor/sensor_frame_set_source.h"
 #endif
 #include "ouster/perception/detection_engine.h"
-#include "ouster/perception/object.h"
+#include "ouster/core/object.h"
 
 using namespace ouster::sdk;
 

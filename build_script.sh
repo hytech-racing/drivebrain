@@ -39,12 +39,13 @@ cd "$build_folder"
 
 cmake .. \
   -DCMAKE_BUILD_TYPE=Release \
+  $compiler_flags \
   -DCMAKE_TOOLCHAIN_FILE=../cmake/conan_toolchain.cmake \
   -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
   -DCMAKE_EXE_LINKER_FLAGS="-static" \
   $hootl
 
-make -j
+make -j1
 
 # run unit tests
 if [ "$1" = "--test" ]; then

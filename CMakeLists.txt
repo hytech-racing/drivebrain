@@ -83,11 +83,16 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "" FORCE)
 FetchContent_Declare(
     ouster_sdk
     GIT_REPOSITORY https://github.com/ouster-lidar/ouster-sdk.git
-    GIT_TAG        v1.0.1
+    GIT_TAG        v1.0.0
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(ouster_sdk)
 
+set_source_files_properties(
+    ${ouster_sdk_SOURCE_DIR}/ouster_core/src/zrb.cpp
+    TARGET_DIRECTORY ouster_core
+    PROPERTIES COMPILE_OPTIONS "-O0;-g0;-fno-var-tracking;--param=ggc-min-expand=10;--param=ggc-min-heapsize=16384")
+    
 #################################
 # Linking to main app
 #################################
@@ -114,17 +119,18 @@ target_link_libraries(drivebrain PUBLIC
     mcap::mcap
     protobuf::libprotobuf 
     boost::boost
-    #hytech_msgs_cpp_lib
+    hytech_msgs_cpp_lib
     #hytech_can_msgs_cpp_lib
     drivebrain_core
-    drivebrain_comms
-    drivebrain_control
+    #drivebrain_comms
+    #drivebrain_control
     #matlab_model
     #-Wl,--whole-archive
     #simulink_automation_msgs_proto_cpp
     #-Wl,--no-whole-archive
     ouster_client
     ouster_sensor
+    ouster_perception
 )
 
 #################################
