@@ -1,19 +1,27 @@
 #!/usr/bin/env sh
 set -e
 
+for a in "$@"; do
+  case "$a" in
+    --test) shouldTest=1 ;;
+    --clean) shouldClean=1 ;;
+  esac
+done
+
 profile="rpi_profile"
 build_folder="build-arm"
 
 hootl=""
-if [ "$1" = "--test" ]; then
+if [ "$shouldTest" = 1 ]; then
   profile="default"
   build_folder="build-native"
   hootl="-DHOOTL=ON"
 fi
 
-rm -rf .venv
-# rm -rf "$build_folder"
-rm -rf cmake
+if [ "$shouldClean" = 1 ]; then
+  rm -rf .venv
+  rm -rf cmake
+fi
 
 python3 -m venv .venv
 . .venv/bin/activate
@@ -42,12 +50,13 @@ cmake .. \
   -DCMAKE_TOOLCHAIN_FILE=../cmake/conan_toolchain.cmake \
   -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
   -DCMAKE_EXE_LINKER_FLAGS="-static" \
-  $hootl
+  $hootl \
+  --log-level=NOTICE
 
 make -j
 
 # run unit tests
-if [ "$1" = "--test" ]; then
+if [ "$shouldTest" = 1 ]; then
   ctest --rerun-failed --output-on-failure
 fi
 
