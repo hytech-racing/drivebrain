@@ -22,6 +22,15 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(delaunator)
 
+FetchContent_Declare(
+    geometric_tools
+    GIT_REPOSITORY https://github.com/davideberly/GeometricTools.git
+    GIT_TAG GTE-version-8.2 
+    GIT_SHALLOW TRUE
+    SOURCE_SUBDIR none
+)
+FetchContent_MakeAvailable(geometric_tools)
+
 #################################
 # Custom libs
 #################################
