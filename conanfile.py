@@ -14,7 +14,6 @@ class DrivebrainSoftware(ConanFile):
 
     def build(self):
         cmake = CMake(self)
-        cmake.configure()
         cmake.build()
         cmake.install()
 
