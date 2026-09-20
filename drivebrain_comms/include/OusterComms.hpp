@@ -1,8 +1,8 @@
 #pragma once
 
+#include "StateTracker.hpp"
 #include <ouster/client.h> 
 #include <ouster/chanfield.h>
-#include <ouster/slam_engine.h>
 #include <ouster/slam_engine.h>
 
 namespace comms {

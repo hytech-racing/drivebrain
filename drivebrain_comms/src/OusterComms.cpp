@@ -28,9 +28,10 @@ int comms::OusterComms::_init(const std::string &sensor_hostname) {
     // LiDAR Slam setup
     _slam_config.backend = "kiss";
     _slam_config.deskew_method = "auto";
-    // TODO make these configurable
+
+    // TODO make these configurable - through foxglove?
     _slam_config.min_range = 0.5; 
-    _slam_config.max_range = 100.0/ 
+    _slam_config.max_range = 100.0; 
 
     _slam_engine(_source.sensor_info(), _slam_config);
 
@@ -60,6 +61,6 @@ void _loop() {
             spdlog::warn("incomplete scan received from Ouster sensor, skipping");
         }
 
-        for
+        
     }
 }

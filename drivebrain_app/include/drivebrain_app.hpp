@@ -9,6 +9,7 @@
 #include <foxglove/websocket/base64.hpp>
 #include "LoadCellTorqueController.hpp"
 #include "VNComms.hpp"
+#include "OusterComms.hpp"
 
 #include "hytech_msgs.pb.h"
 #include <EstimatorManager.hpp>
