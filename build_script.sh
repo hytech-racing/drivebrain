@@ -24,6 +24,11 @@ unset CC
 unset CXX
 unset CMAKE_TOOLCHAIN_FILE
 
+conan remote add artifactory \
+  "http://54.198.162.181:8082/artifactory/api/conan/conan" \
+  --force
+
+
 conan profile detect --force
 
 conan install . \

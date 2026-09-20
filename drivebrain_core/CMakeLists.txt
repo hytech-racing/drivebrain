@@ -24,6 +24,6 @@ target_link_libraries(drivebrain_core PUBLIC
     foxglove-websocket::foxglove-websocket
     mcap::mcap
     protobuf::libprotobuf
-    hytech_msgs_cpp_lib
-    hytech_can_msgs_cpp_lib
+    ht_proto::hytech_msgs_cpp_lib
+    ht_can::hytech_can_msgs_cpp_lib
 )

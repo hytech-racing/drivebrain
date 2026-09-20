@@ -26,6 +26,8 @@ class DrivebrainSoftware(ConanFile):
         self.requires("dbcppp/3.2.6")
         self.requires("cppzmq/4.11.0")
         self.requires("eigen/3.4.0", transitive_headers=True)
+        self.requires("ht_can/conan1.2", transitive_headers=True)
+        self.requires("ht_proto/conan", transitive_headers=True)
         
     def build_requirements(self): 
         if not self.settings_build.get_safe("cross_build"):

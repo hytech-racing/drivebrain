@@ -21,7 +21,7 @@ target_link_libraries(drivebrain_estimation PUBLIC
     boost::boost
     foxglove-websocket::foxglove-websocket 
     protobuf::libprotobuf
-    hytech_msgs_cpp_lib
+    ht_proto::hytech_msgs_cpp_lib
     libvncxx
     Eigen3::Eigen
     dbcppp::dbcppp
