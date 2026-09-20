@@ -1,4 +1,5 @@
-FROM ubuntu:22.04
+ARG BASE_PLATFORM=linux/amd64
+FROM --platform=${BASE_PLATFORM} ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -21,7 +22,8 @@ RUN apt-get update && apt-get install -y \
     patchelf \
     && apt-get clean
 
-RUN dpkg --add-architecture arm64 \
+RUN sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list \
+    && dpkg --add-architecture arm64 \
     && echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy main universe" > /etc/apt/sources.list.d/arm64-ports.list \
     && echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main universe" >> /etc/apt/sources.list.d/arm64-ports.list \
     && echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-security main universe" >> /etc/apt/sources.list.d/arm64-ports.list \
