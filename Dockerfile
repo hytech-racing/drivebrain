@@ -22,9 +22,12 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean
 
 RUN dpkg --add-architecture arm64 \
+    && echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy main universe" > /etc/apt/sources.list.d/arm64-ports.list \
+    && echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main universe" >> /etc/apt/sources.list.d/arm64-ports.list \
+    && echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-security main universe" >> /etc/apt/sources.list.d/arm64-ports.list \
     && curl -fsSL --compressed -o /usr/share/keyrings/ctr-pubkey.gpg "https://deb.ctr-electronics.com/ctr-pubkey.gpg" \
     && echo "deb [signed-by=/usr/share/keyrings/ctr-pubkey.gpg] https://deb.ctr-electronics.com/libs/2026 stable main" > /etc/apt/sources.list.d/ctr2026.list \
-    && apt-get -o Dir::Etc::sourcelist="/etc/apt/sources.list.d/ctr2026.list" -o Dir::Etc::sourceparts="/dev/null" -o APT::Get::List-Cleanup="0" update \
+    && apt-get update \
     && apt-get install -y phoenix6:arm64 \
     && apt-get clean \
     && sed -i \
