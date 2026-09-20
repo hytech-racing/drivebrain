@@ -67,7 +67,7 @@ FetchContent_Declare(
     URL "https://github.com/hytech-racing/drivebrain_simulink_models/releases/download/rel57/codegen_outputs.tar.gz"
 )
 FetchContent_MakeAvailable(drivebrain_simulink_models)
-
+ 
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(BUILD_PCAP        OFF CACHE BOOL "" FORCE)
 set(BUILD_OSF         ON CACHE BOOL "" FORCE)
