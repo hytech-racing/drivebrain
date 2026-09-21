@@ -68,7 +68,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(drivebrain_simulink_models)
  
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS ON CACHE BOOL "" FORCE)
 set(BUILD_PCAP        OFF CACHE BOOL "" FORCE)
 set(BUILD_OSF         ON CACHE BOOL "" FORCE)
 set(BUILD_VIZ         OFF CACHE BOOL "" FORCE)
@@ -84,16 +84,11 @@ set(Eigen3_DIR "/usr/share/eigen3/cmake")
 FetchContent_Declare(
     ouster_sdk
     GIT_REPOSITORY https://github.com/ouster-lidar/ouster-sdk.git
-    GIT_TAG        v0.16.2 #v1.0.0 # version matches the example in test_ouster.cpp, comms was build using v0.16.2
+    GIT_TAG        v1.0.0 #v1.0.0 #version matches the example in test_ouster.cpp, comms was build using v0.16.2
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(ouster_sdk)
 
-#set_source_files_properties(
-#    ${ouster_sdk_SOURCE_DIR}/ouster_core/src/zrb.cpp
-#    TARGET_DIRECTORY ouster_core
-#    PROPERTIES COMPILE_OPTIONS "-O0;-g0;-fno-var-tracking;--param=ggc-min-expand=10;--param=ggc-min-heapsize=16384")
-    
 #################################
 # Linking to main app
 #################################

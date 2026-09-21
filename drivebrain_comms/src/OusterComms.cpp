@@ -1,4 +1,3 @@
-
 #include "OusterComms.hpp"
 
 /****************************************************************
@@ -6,7 +5,7 @@
  ****************************************************************/
 comms::OusterComms::OusterComms(const std::string &device_name) {
     // Initialize the Ouster interface
-    int rc = _init();
+    int rc = _init(device_name);
     if (rc < 0) {
         throw std::runtime_error("Failed to initialize Ouster communications interface");
     }
@@ -18,39 +17,34 @@ comms::OusterComms::OusterComms(const std::string &device_name) {
 int comms::OusterComms::_init(const std::string &sensor_hostname) {
 
     // Establish communications with the Ouster
-    core::SensorConfig config; 
+    ouster::sdk::core::SensorConfig config; 
     config.udp_dest = "@auto"; // TODO validate that this works reliably
     _sensors.emplace_back(sensor_hostname, config); 
-    _source(_sensors);
-
+    _source(_sensors); // creating the client that will configure the sensors 
     spdlog::info("initialized Ouster communications interface with sensor hostname {}", sensor_hostname);
 
     // LiDAR Slam setup
-    _slam_config.backend = "kiss";
     _slam_config.deskew_method = "auto";
-
-    // TODO make these configurable - through foxglove?
-    _slam_config.min_range = 0.5; 
+    _slam_config.min_range = 0.5; // ranges in meters - how far you are allowed to filter points from 
     _slam_config.max_range = 100.0; 
-
-    _slam_engine(_source.sensor_info(), _slam_config);
-
-    spdlog::info("created Ouster Slam engine with backend {} and deskew method {}", _slam_config.backend, _slam_config.deskew_method);
+    spdlog::info("created Ouster Slam engine with and deskew method {}", _slam_config.deskew_method);
 
     // LUT setup
     _lut(*_source.sensor_info()[0], true);
-
     spdlog::info("initialized Ouster LUT");
 
     _running = true; 
-    _thread = std::thread([this]() { _loop();});
+    _thread = std::thread([this]() { _loop();}); //tells the thread to run the loop
     
 }
 
 void _loop() {
     while (_running) {
-        auto [idx, scan] = _source.get_scan();
-        if (!scan) continue;
+        auto result= _source.get_frame();
+        auto index = result.first;
+        auto &frame = *result.second;
+
+        if (!frame) continue;
 
         auto cloud = _lut(*scan);
 

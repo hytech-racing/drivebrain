@@ -1,9 +1,12 @@
 #pragma once
 
 #include "StateTracker.hpp"
-#include <ouster/client.h> 
-#include <ouster/chanfield.h>
-#include <ouster/slam_engine.h>
+#include <ouster/sensor/client.h> 
+#include <ouster/core/chanfield.h>
+#include <ouster/core/xyzlut.h>
+#include <ouster/mapping/slam_engine.h>
+#include <ouster/sensor/sensor_frame_set_source.h>
+
 
 namespace comms {
 
@@ -37,14 +40,26 @@ namespace comms {
              */
             void _loop();
 
-            std::vector<sensor::Sensor> _sensors; 
-            sensor::SensorScanSource _source;
-            mapping::SlamConfig _slam_config;
-            mapping::SlamEngine _slam_engine;
-            core::XYZLut _lut;
+            // Represents a physical ouster lidar in a vector so you can have multiple sensors/lidars
+            std::vector<ouster::sdk::sensor::Sensor> _sensors;
+            
+            // SensorFrameSetSource allows you to receive data in lidar frames instead of udp packets
+            ouster::sdk::sensor::SensorFrameSetSource _source;
+            
+            // SLAM parameters and settings that the ouster SDK's system will use
+            ouster::sdk::mapping::SlamConfig _slam_config;
+
+            // Use the lookup table to convert range measurements into xyz coordinates
+            std::vector<ouster::sdk::core::XYZLut> _lut;
+
             std::thread _recv_thread;
             std::atomic<bool> _running{true};
 
-    }
+    };
 
 }
+
+/*
+main things you need for lidar driver is get data, deskew, and send as a protobuf message. 
+can use core::log to visualize the point cloud in foxglove
+*/
