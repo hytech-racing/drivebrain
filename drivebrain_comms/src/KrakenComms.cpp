@@ -28,11 +28,11 @@ namespace comms
         auto device_id = foxglove.get_param<int>("kraken_comms/device_id");
         auto canbus_name = foxglove.get_param<std::string>("kraken_comms/canbus_name");
         auto send_rate_hz = foxglove.get_param<int>("kraken_comms/send_rate_hz");
-        auto gear_ratio = foxglove.get_param<float>("kraken_comms/gear_ratio");
+        auto reduction = foxglove.get_param<float>("kraken_comms/reduction");
         auto min_angle_deg = foxglove.get_param<float>("kraken_comms/min_angle_deg");
         auto max_angle_deg = foxglove.get_param<float>("kraken_comms/max_angle_deg");
 
-        if (!(device_id && canbus_name && send_rate_hz && gear_ratio && min_angle_deg && max_angle_deg))
+        if (!(device_id && canbus_name && send_rate_hz && reduction && min_angle_deg && max_angle_deg))
         {
             spdlog::error("Couldn't load all params for KrakenComms");
             return false;
@@ -41,7 +41,7 @@ namespace comms
         _config.device_id = device_id.value();
         _config.canbus_name = canbus_name.value();
         _config.send_rate_hz = send_rate_hz.value();
-        _config.gear_ratio = gear_ratio.value();
+        _config.reduction = reduction.value();
         _config.min_angle_deg = min_angle_deg.value();
         _config.max_angle_deg = max_angle_deg.value();
 
@@ -56,6 +56,14 @@ namespace comms
         ctre::phoenix6::configs::TalonFXConfiguration talon_config{};
         talon_config.MotorOutput.NeutralMode = ctre::phoenix6::signals::NeutralModeValue::Brake;
         // TODO: tune Slot0 gains and CurrentLimits before running closed loop on hardware
+
+        const double forward_limit_rotations = (static_cast<double>(_config.max_angle_deg) / 360.0) * _config.reduction;
+        const double reverse_limit_rotations = (static_cast<double>(_config.min_angle_deg) / 360.0) * _config.reduction;
+        talon_config.SoftwareLimitSwitch.ForwardSoftLimitEnable = true;
+        talon_config.SoftwareLimitSwitch.ForwardSoftLimitThreshold = units::angle::turn_t{forward_limit_rotations};
+        talon_config.SoftwareLimitSwitch.ReverseSoftLimitEnable = true;
+        talon_config.SoftwareLimitSwitch.ReverseSoftLimitThreshold = units::angle::turn_t{reverse_limit_rotations};
+
         auto status = _kraken->GetConfigurator().Apply(talon_config);
         if (!status.IsOK())
         {
@@ -110,7 +118,7 @@ namespace comms
     float KrakenComms::get_measured_angle_deg()
     {
         double rotations = _kraken->GetPosition().GetValueAsDouble();
-        return static_cast<float>(rotations * 360.0 / _config.gear_ratio);
+        return static_cast<float>(rotations * 360.0 / _config.reduction);
     }
 
     void KrakenComms::_run()
@@ -132,7 +140,7 @@ namespace comms
                 target_deg = _angle_deg;
             }
 
-            const double target_rotations = (static_cast<double>(target_deg) / 360.0) * _config.gear_ratio;
+            const double target_rotations = (static_cast<double>(target_deg) / 360.0) * _config.reduction;
             _kraken->SetControl(request.WithPosition(units::angle::turn_t{target_rotations}));
 
             auto now = steady_clock::now();

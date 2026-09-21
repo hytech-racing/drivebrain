@@ -19,7 +19,7 @@ namespace comms
             int device_id;
             std::string canbus_name;
             int send_rate_hz;
-            float gear_ratio;
+            float reduction;
             float min_angle_deg;
             float max_angle_deg;
         };
