@@ -5,6 +5,7 @@ for a in "$@"; do
   case "$a" in
     --test) shouldTest=1 ;;
     --clean) shouldClean=1 ;;
+    --local-cache-only) localCacheOnly=1 ;;
   esac
 done
 
@@ -34,11 +35,21 @@ unset CMAKE_TOOLCHAIN_FILE
 
 conan profile detect --force
 
-conan install . \
-  --build=missing \
-  --profile:build=default \
-  --profile:host="$profile" \
-  -of=cmake
+if [ "$localCacheOnly" = 1 ]; then
+    conan install . \
+    --build=missing \
+    --profile:build=default \
+    --profile:host="$profile" \
+    -of=cmake \
+    --no-remote
+else
+  conan install . \
+    --build=missing \
+    --profile:build=default \
+    --profile:host="$profile" \
+    -of=cmake
+fi
+
 
 mkdir -p "$build_folder"
 cd "$build_folder"
