@@ -30,6 +30,8 @@ conan install . \
   --build=missing \
   --profile:build=default \
   --profile:host="$profile" \
+  -s:h compiler.cppstd=20 \
+  -s:b compiler.cppstd=20 \
   -of=cmake
 
 mkdir -p "$build_folder"
@@ -41,10 +43,13 @@ cmake .. \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_TOOLCHAIN_FILE=../cmake/conan_toolchain.cmake \
   -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-  -DCMAKE_EXE_LINKER_FLAGS="-static" \
   $hootl
 
 make -j
+
+if [ "$1" != "--test" ]; then
+  python3 ../bundle_runtime_libs.py drivebrain lib
+fi
 
 # run unit tests
 if [ "$1" = "--test" ]; then

@@ -1,4 +1,5 @@
-FROM ubuntu:22.04
+ARG BASE_PLATFORM=linux/amd64
+FROM --platform=${BASE_PLATFORM} ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -10,12 +11,30 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     git \
     wget \
+    curl \
     vim \
     pkg-config \
     python3 \
     python3-pip \
     python3-setuptools \
     python3-venv \
+    binutils-aarch64-linux-gnu \
+    patchelf \
     && apt-get clean
+
+RUN sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list \
+    && dpkg --add-architecture arm64 \
+    && echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy main universe" > /etc/apt/sources.list.d/arm64-ports.list \
+    && echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main universe" >> /etc/apt/sources.list.d/arm64-ports.list \
+    && echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-security main universe" >> /etc/apt/sources.list.d/arm64-ports.list \
+    && curl -fsSL --compressed -o /usr/share/keyrings/ctr-pubkey.gpg "https://deb.ctr-electronics.com/ctr-pubkey.gpg" \
+    && echo "deb [signed-by=/usr/share/keyrings/ctr-pubkey.gpg] https://deb.ctr-electronics.com/libs/2026 stable main" > /etc/apt/sources.list.d/ctr2026.list \
+    && apt-get update \
+    && apt-get install -y phoenix6:arm64 \
+    && apt-get clean \
+    && sed -i \
+        -e 's#set(phoenix6_LIBRARIES "-lCTRE_Phoenix6 -lCTRE_PhoenixTools")#set(phoenix6_LIBRARIES "${libdir}/libCTRE_Phoenix6.so;${libdir}/libCTRE_PhoenixTools.so")#' \
+        -e 's#INTERFACE_LINK_LIBRARIES \${phoenix6_LIBRARIES})#INTERFACE_LINK_LIBRARIES "${phoenix6_LIBRARIES}")#' \
+        /usr/lib/phoenix6/cmake/phoenix6-config.cmake
 
 CMD ["/bin/bash"]
