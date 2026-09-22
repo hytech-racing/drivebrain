@@ -247,21 +247,7 @@ ControllerOutput control::BasicQP::step_controller(const VehicleState &in)
     cmd_out.out = type_set;
     auto& speed_out = std::get<SpeedControlOut>(cmd_out.out);
     speed_out = {};
-
-    if (intent < 0.0) {
-        // For now don't run controller on braking
-        speed_out.desired_rpms.FL = 0.0;
-        speed_out.desired_rpms.FR = 0.0;
-        speed_out.desired_rpms.RL = 0.0;
-        speed_out.desired_rpms.RR = 0.0;
-
-        speed_out.torque_lim_nm.FL = QP_MAX_BRAKING_TORQUE * brake;
-        speed_out.torque_lim_nm.FR = QP_MAX_BRAKING_TORQUE * brake;
-        speed_out.torque_lim_nm.RL = QP_MAX_BRAKING_TORQUE * brake;
-        speed_out.torque_lim_nm.RR = QP_MAX_BRAKING_TORQUE * brake;
-    }
     
-
     // Total torque
     double max_total_torque = std::fabs((QP_MAX_TORQUE * 4.0) * intent * QP_GR);
     if (intent > 0.01) {
@@ -366,6 +352,29 @@ ControllerOutput control::BasicQP::step_controller(const VehicleState &in)
 
     _x_prev = solution;
 
-    ControllerOutput out; 
-    return out;
+    if (intent < 0.0) {
+        // For now don't run controller on braking
+        speed_out.desired_rpms.FL = 0.0;
+        speed_out.desired_rpms.FR = 0.0;
+        speed_out.desired_rpms.RL = 0.0;
+        speed_out.desired_rpms.RR = 0.0;
+
+        speed_out.torque_lim_nm.FL = QP_MAX_BRAKING_TORQUE * brake;
+        speed_out.torque_lim_nm.FR = QP_MAX_BRAKING_TORQUE * brake;
+        speed_out.torque_lim_nm.RL = QP_MAX_BRAKING_TORQUE * brake;
+        speed_out.torque_lim_nm.RR = QP_MAX_BRAKING_TORQUE * brake;
+    } else {
+        speed_out.desired_rpms.FL = 20000;
+        speed_out.desired_rpms.FR = 20000;
+        speed_out.desired_rpms.RL = 20000;
+        speed_out.desired_rpms.RR = 20000;
+
+        speed_out.torque_lim_nm.FL = fl_torque;
+        speed_out.torque_lim_nm.FR = fr_torque;
+        speed_out.torque_lim_nm.RL = rl_torque;
+        speed_out.torque_lim_nm.RR = rr_torque;
+    }
+
+
+    return cmd_out;
 }

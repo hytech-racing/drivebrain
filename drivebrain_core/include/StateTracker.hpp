@@ -16,6 +16,7 @@
 #include "hytech.pb.h"
 #include "FzEstimator.h"
 #include "SteeringEstimator.hpp"
+#include "NavEstimator.h"
 #include "Telemetry.hpp"
 
 /**
@@ -224,6 +225,7 @@ namespace core {
         bool state_is_valid;
         int prev_MCU_recv_millis;
         float steering_angle_deg;
+        float steering_angle_rads;
         ControllerOutput prev_controller_output;
         TireDynamics tire_dynamics;
         veh_vec<float> driver_torque;
@@ -345,5 +347,6 @@ namespace core {
             /* Estimators */
             estimation::FzEstimator _fz_estimator;
             estimation::SteeringEstimator _steering_estimator;
+            estimation::NavEstimator _nav_estimator;
     };
 }

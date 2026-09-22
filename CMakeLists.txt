@@ -56,7 +56,7 @@ FetchContent_MakeAvailable(vn_driver_lib)
 # NOTE: If doing replay with HT09 data use release 280 for it to work with the older can description
 FetchContent_Declare(
     HT_CAN
-    URL "https://github.com/hytech-racing/HT_CAN/releases/download/280/drivebrain_can_lib.tar.gz"
+    URL "https://github.com/hytech-racing/HT_CAN/releases/download/268/drivebrain_can_lib.tar.gz"
 )
 FetchContent_MakeAvailable(HT_CAN)
 

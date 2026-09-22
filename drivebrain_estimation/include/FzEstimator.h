@@ -22,9 +22,9 @@ constexpr double FZ_CG_Z = 0.29;
 constexpr double FZ_WHEELBASE = 1.53;
 constexpr double FZ_TRACK_WIDTH = 1.2;
 
-constexpr double FZ_FL_STATIC = 707.1;
-constexpr double FZ_FR_STATIC = 707.1;
-constexpr double FZ_RL_STATIC = 650.1;
+constexpr double FZ_FL_STATIC = 710.1;
+constexpr double FZ_FR_STATIC = 720.1;
+constexpr double FZ_RL_STATIC = 660.1;
 constexpr double FZ_RR_STATIC = 650.1;
 
 using namespace core;
@@ -72,25 +72,24 @@ class FzEstimator {
         // Maps raw analog load cell measurements --> normal force (N) on each wheel
 
         InterpolatingTable fl_load_cell_to_fz{{
-            {673, 422.55}, {924, 615.63}, {982, 701.76}, {1019, 705.49},
-            {1098, 720.56}, {1264, 974.46}, {1401, 1029.04}, {1562, 1104.69}
-        }};
-        
-        InterpolatingTable fr_load_cell_to_fz{{
-            {385, 304.96}, {524, 358.02}, {670, 459.96}, {778, 698.43},
-            {926, 707.26}, {950, 747.38}, {1210, 1007.82}
-        }};
-        
-        InterpolatingTable rl_load_cell_to_fz{{
-            {504, 343.19}, {768, 590.51}, {834, 642.06}, {887, 649.73},
-            {930, 655.22}, {965, 683.50}, {1139, 902.22}, {1293, 993.22}, {1416, 1062.18}
-        }};
-        
-        InterpolatingTable rr_load_cell_to_fz{{
-            {289, 238.29}, {438, 322.96}, {576, 382.96}, {746, 650.29},
-            {862, 650.77}, {961, 755.30}, {1229, 934.27}
+            {724, 228.64}, {1162, 465.16}, {1436, 629.61}, {1554, 706.19},
+            {2120, 1041.73}, {2285, 1149.06}, {2647, 1526.75}
         }};
 
+        InterpolatingTable fr_load_cell_to_fz{{
+            {596, 241.57}, {985, 462.48}, {1250, 617.02}, {1430, 729.90},
+            {2000, 1076.11}, {2160, 1177.57}, {2630, 1545.03}
+        }};
+
+        InterpolatingTable rl_load_cell_to_fz{{
+            {507, 181.43}, {1033, 509.29}, {1168, 596.98}, {1283, 669.91},
+            {1762, 971.18}, {2080, 1166.65}, {2400, 1375.90}
+        }};
+
+        InterpolatingTable rr_load_cell_to_fz{{
+            {466, 186.68}, {996, 507.09}, {1148, 606.73}, {1220, 653.29},
+            {1697, 956.59}, {2060, 1187.00}, {2580, 1474.14}
+        }};
 };
 
 }

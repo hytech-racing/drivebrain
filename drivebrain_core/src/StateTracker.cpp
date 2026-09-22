@@ -54,7 +54,7 @@ void StateTracker::handle_receive_protobuf_message(std::shared_ptr<google::proto
 
         {
             std::unique_lock lk(_state_mutex);
-            _vehicle_state.current_body_vel_ms = body_vel_ms;
+            // _vehicle_state.current_body_vel_ms = body_vel_ms;
             _vehicle_state.current_body_accel_mss = body_accel_mss;
             _vehicle_state.current_angular_rate_rads = angular_rate_rads;
             _vehicle_state.current_ypr_rad = ypr_rad;
@@ -166,7 +166,6 @@ void StateTracker::_receive_low_level_state(std::shared_ptr<google::protobuf::Me
                 std::chrono::high_resolution_clock::now().time_since_epoch());
             _raw_input_data.raw_steering_analog = in_msg->steering_analog_raw();
             _raw_input_data.raw_steering_digital = in_msg->steering_digital_raw();
-            _vehicle_state.steering_angle_deg = _raw_input_data.raw_steering_analog;
         }
     } else if (msg->GetDescriptor() == hytech::em_measurement::descriptor()) {
         auto in_msg = std::static_pointer_cast<hytech::em_measurement>(msg);
@@ -262,10 +261,17 @@ void StateTracker::_receive_inverter_states(std::shared_ptr<google::protobuf::Me
 void StateTracker::_update_estimators() {
     std::unique_lock lk(_state_mutex);
 
+    // DT
+    static auto prev = std::chrono::steady_clock::now();
+
+    auto now = std::chrono::steady_clock::now();
+    auto dt = std::chrono::duration_cast<std::chrono::microseconds>(now - prev).count() / 1e6;
+    prev = now;
+
     // FZ update
     estimation::fz_control_input_vector u;
     u <<
-        _vehicle_state.current_body_accel_mss.x, _vehicle_state.current_body_accel_mss.y;
+        _vehicle_state.current_body_accel_mss.x, -_vehicle_state.current_body_accel_mss.y;
     _fz_estimator.predict(u);
     _fz_estimator.update(_vehicle_state.loadcells.FL, _vehicle_state.loadcells.FR, _vehicle_state.loadcells.RL, _vehicle_state.loadcells.RR);
 
@@ -285,8 +291,49 @@ void StateTracker::_update_estimators() {
     _vehicle_state.fz_estimates.RR = estimates(3);
 
     // Steering update
-    // TODO
+    _steering_estimator.update(_raw_input_data.raw_steering_analog);
+    _vehicle_state.steering_angle_rads = _steering_estimator.get_steering_angle_rads();
+    _vehicle_state.steering_angle_deg = _steering_estimator.get_steering_angle_degs();
 
+    // Navigation estimator update
+    if (_nav_estimator.get_state() == estimation::NAV_ESTIMATOR_STATE_INITIALIZING) {
+        _nav_estimator.initialize(
+            _vehicle_state.current_body_accel_mss.x,
+            _vehicle_state.current_body_accel_mss.y,
+            _vehicle_state.current_angular_rate_rads.z
+        );
+    } else {
+        _nav_estimator.predict(
+            _vehicle_state.current_body_accel_mss.x,
+            _vehicle_state.current_body_accel_mss.y,
+            _vehicle_state.current_angular_rate_rads.z,
+            dt
+        );
+
+        if (_vehicle_state.current_rpms.FL <= 1 && _vehicle_state.current_rpms.FR <= 1 &&
+            _vehicle_state.current_rpms.RL <= 1 && _vehicle_state.current_rpms.RR <= 1) {
+            _nav_estimator.zero_velocity_update();
+        }
+    }
+
+    std::shared_ptr<hytech_msgs::NavEstimator> nav_estimate = std::make_shared<hytech_msgs::NavEstimator>();
+
+    auto nav_estimates = _nav_estimator.getEstimates();
+
+    nav_estimate->set_pn_estimate(nav_estimates(0));
+    nav_estimate->set_pe_estimate(nav_estimates(1));
+    nav_estimate->set_yaw_estimate(nav_estimates(2));
+    nav_estimate->set_vx_estimate(nav_estimates(3));
+    nav_estimate->set_vy_estimate(nav_estimates(4));
+    nav_estimate->set_alpha_estimate(nav_estimates(5));
+    nav_estimate->set_bx_estimate(nav_estimates(6));
+    nav_estimate->set_by_estimate(nav_estimates(7));
+    nav_estimate->set_bg_estimate(nav_estimates(8));
+
+    _vehicle_state.current_body_vel_ms.x = nav_estimates(3);
+    _vehicle_state.current_body_vel_ms.y = nav_estimates(4);
+
+    core::log(nav_estimate);
     core::log(fz_estimate);
 }
 
