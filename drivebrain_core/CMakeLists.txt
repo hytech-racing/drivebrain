@@ -9,6 +9,7 @@ find_package(mcap REQUIRED)
 
 add_library(drivebrain_core
     src/FoxgloveServer.cpp
+    src/SystemMetrics.cpp
     src/MCAPLogger.cpp
     src/StateTracker.cpp
     src/DrivebrainControllerInterface.cpp

@@ -4,6 +4,7 @@
 #include <fstream>
 
 #include <MCAPLogger.hpp>
+#include "SystemMetrics.hpp"
 
 /****************************************************************
  * HELPER METHODS
@@ -187,6 +188,12 @@ int core::MCAPLogger::open_new_mcap() {
     _writer.addChannel(overrun_channel);
     _name_to_id_map["drivebrain_loop_overrun"] = overrun_channel.id;
 
+    mcap::Schema metrics_schema("drivebrain_system_metrics", "jsonschema", core::SystemMetricsSampler::schema().dump());
+    _writer.addSchema(metrics_schema);
+    mcap::Channel metrics_channel("drivebrain_system_metrics", "json", metrics_schema.id);
+    _writer.addChannel(metrics_channel);
+    _name_to_id_map["drivebrain_system_metrics"] = metrics_channel.id;
+
     return 0;
 }
 
@@ -305,5 +312,19 @@ int core::MCAPLogger::log_overrun(const std::string &loop_name, double overrun_u
         _input_buffer_cv.notify_one();
     }
 
+    return 0;
+}
+
+int core::MCAPLogger::log_system_metrics(const nlohmann::json &metrics) {
+    RawMessage_s msg;
+    msg.log_time = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    msg.message_name = "drivebrain_system_metrics";
+    msg.serialized_data = metrics.dump();
+    {
+        std::unique_lock lock(_input_buffer_mutex);
+        _input_buffer.push_back(std::move(msg));
+    }
+    _input_buffer_cv.notify_one();
     return 0;
 }

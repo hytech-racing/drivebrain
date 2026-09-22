@@ -125,6 +125,9 @@ namespace core {
              */
             int log_overrun(const std::string &loop_name, double overrun_us);
 
+            // Called by the background sampler, never by the control loop.
+            int log_system_metrics(const nlohmann::json &metrics);
+
         private: 
           
             /* Private constructor to be called by init method */

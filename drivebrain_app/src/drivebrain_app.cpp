@@ -2,6 +2,7 @@
 #include "ETHRecvComms.hpp"
 #include "FoxgloveServer.hpp"
 #include "MCAPLogger.hpp"
+#include "SystemMetrics.hpp"
 #include "hytech_msgs.pb.h"
 #include "Telemetry.hpp"
 #include "ControllerManager.hpp"
@@ -92,6 +93,12 @@ void DrivebrainApp::run() {
   }
 
   spdlog::info("Constructed controller manager");
+
+  // Local ownership stops and joins the sampler before run() returns and the
+  // application destructor destroys the logger, including exception unwinding.
+  core::SystemMetricsMonitor system_metrics([](const nlohmann::json& metrics) {
+    core::MCAPLogger::instance().log_system_metrics(metrics);
+  });
 
   running = true; 
   _io_context_thread = std::thread([this]() {

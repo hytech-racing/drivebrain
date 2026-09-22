@@ -96,5 +96,16 @@ target_link_libraries(drivebrain PUBLIC
 
 if(NOT CMAKE_CROSSCOMPILING)
     enable_testing()
+    # Standalone metrics test avoids hardware and the legacy SIL dependencies.
+    find_package(Threads REQUIRED)
+    find_package(nlohmann_json REQUIRED)
+    add_executable(system_metrics_test
+        tests/system_metrics/SystemMetricsTest.cpp
+        drivebrain_core/src/SystemMetrics.cpp
+    )
+    target_include_directories(system_metrics_test PRIVATE drivebrain_core/include)
+    target_link_libraries(system_metrics_test PRIVATE
+        nlohmann_json::nlohmann_json spdlog::spdlog Threads::Threads)
+    add_test(NAME system_metrics COMMAND system_metrics_test)
     # add_subdirectory(tests/sil)
 endif()
