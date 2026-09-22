@@ -116,6 +116,15 @@ namespace core {
              */
             int log_params(nlohmann::json params);
 
+            /**
+             * Logs a control-loop overrun event to the "drivebrain_loop_overrun" mcap channel.
+             *
+             * @param loop_name a human-readable name for the loop that overran
+             * @param overrun_us how far past its deadline the loop tick ran, in microseconds
+             * @return 0 on success, negative err code on failure
+             */
+            int log_overrun(const std::string &loop_name, double overrun_us);
+
         private: 
           
             /* Private constructor to be called by init method */

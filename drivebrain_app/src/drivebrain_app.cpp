@@ -220,6 +220,7 @@ void DrivebrainApp::_loop() {
     auto now = std::chrono::steady_clock::now();
     if(now > next_tick) {
       spdlog::warn("Loop overrun by {}", now-next_tick);
+      core::MCAPLogger::instance().log_overrun("drivebrain_main_loop", std::chrono::duration<double, std::micro>(now - next_tick).count());
       next_tick = now;
     }
 
