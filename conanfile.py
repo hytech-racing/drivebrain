@@ -35,3 +35,8 @@ class DrivebrainSoftware(ConanFile):
         if not self.settings_build.get_safe("cross_build"):
             self.requires("gtest/1.17.0")
         self.tool_requires("protobuf/5.29.3")
+        
+    def configure(self):
+        self.options["hwloc"].shared = True
+        self.options["gtsam"].with_TBB = False
+        self.options["gtsam"].support_nested_dissection = False  # drops metis/gklib (breaks ARM cross-compile)

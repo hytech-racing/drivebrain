@@ -5,6 +5,7 @@ project(drivebrain)
 
 include(FetchContent)
 list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/cmake")
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 #################################
 # Options
