@@ -76,7 +76,7 @@ set(BUILD_VIZ         OFF CACHE BOOL "" FORCE)
 set(BUILD_EXAMPLES    OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTING     OFF CACHE BOOL "" FORCE)
 set(BUILD_SENSOR      ON CACHE BOOL "" FORCE)
-set(BUILD_MAPPING     ON CACHE BOOL "" FORCE)
+set(BUILD_MAPPING     OFF CACHE BOOL "" FORCE)
 set(BUILD_PERCEPTION   ON CACHE BOOL "" FORCE)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "" FORCE)
 
@@ -128,7 +128,6 @@ target_link_libraries(drivebrain PUBLIC
     ouster_client
     ouster_sensor
     ouster_perception
-    ouster_mapping
 )
 
 #################################

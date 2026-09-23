@@ -47,6 +47,7 @@ void _loop() {
         if (!frame) continue;
 
         auto cloud = _lut(*scan);
+        auto n_valid_first_returns = (frame.field<uint32_t>(core::ChanField::RANGE) != 0).count();
 
         auto status = scan.status();
         auto it = std::find_if(status.data(), status.data() + status.size(), [](const auto& status_val) { return status_val & 0x01; });
