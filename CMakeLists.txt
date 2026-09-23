@@ -71,7 +71,7 @@ FetchContent_MakeAvailable(drivebrain_simulink_models)
  
 set(BUILD_SHARED_LIBS ON CACHE BOOL "" FORCE)
 set(BUILD_PCAP        OFF CACHE BOOL "" FORCE)
-set(BUILD_OSF         ON CACHE BOOL "" FORCE)
+set(BUILD_OSF         OFF CACHE BOOL "" FORCE)
 set(BUILD_VIZ         OFF CACHE BOOL "" FORCE)
 set(BUILD_EXAMPLES    OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTING     OFF CACHE BOOL "" FORCE)
