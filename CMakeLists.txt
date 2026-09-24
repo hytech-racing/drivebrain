@@ -42,18 +42,6 @@ endif()
 #################################
 # Upstreams (non-conan)
 #################################
-<<<<<<< HEAD
-# NOTE: for local HT_proto development, I keep my HT_Proto at ../HT_proto and uncomment the add_subdirectory line below. Otherwise, use FetchContent to pull the repo from github.
-FetchContent_Declare(
-    HT_Proto 
-    GIT_REPOSITORY https://github.com/hytech-racing/HT_proto.git
-    GIT_TAG 6cc8e92a57ca83c404f86558671dc4629b0ab107
-)
-FetchContent_MakeAvailable(HT_Proto)
-# add_subdirectory(../HT_proto ${CMAKE_BINARY_DIR}/HT_proto)
-=======
-
->>>>>>> 17d63fa (Consuming HT_Proto as static lib)
 
 FetchContent_Declare(
     vn_driver_lib
