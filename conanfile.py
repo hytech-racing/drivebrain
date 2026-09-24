@@ -30,6 +30,7 @@ class DrivebrainSoftware(ConanFile):
         self.requires("libzip/1.11.4")
         self.requires("libcurl/8.21.0")
         self.requires("openssl/3.6.2")
+        self.requires("ouster_sdk/1.0.1")
         
     def build_requirements(self): 
         if not self.settings_build.get_safe("cross_build"):
@@ -40,3 +41,6 @@ class DrivebrainSoftware(ConanFile):
         self.options["hwloc"].shared = True
         self.options["gtsam"].with_TBB = False
         self.options["gtsam"].support_nested_dissection = False  # drops metis/gklib (breaks ARM cross-compile)
+        self.options["ouster_sdk"].build_osf = False
+        self.options["ouster_sdk"].build_pcap = False
+        self.options["ouster_sdk"].build_mapping = False

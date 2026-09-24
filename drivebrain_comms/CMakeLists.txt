@@ -7,11 +7,13 @@ find_package(foxglove-websocket REQUIRED)
 find_package(Protobuf REQUIRED CONFIG)
 find_package(dbcppp REQUIRED)
 find_package(cppzmq REQUIRED)
+find_package(OusterSDK REQUIRED)
 
 set(DRIVEBRAIN_COMMS_SRCS
     src/CANComms.cpp
     src/VNComms.cpp
     src/ETHSendComms.cpp
+    src/OusterComms.cpp
 )
 
 if(HOOTL)
@@ -35,6 +37,7 @@ target_link_libraries(drivebrain_comms PUBLIC
     hytech_msgs_cpp_lib
     libvncxx
     dbcppp::dbcppp
+    OusterSDK::ouster_sensor
 )
 
 if(HOOTL)
