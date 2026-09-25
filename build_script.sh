@@ -11,6 +11,8 @@ done
 
 profile="rpi_profile"
 build_folder="build-arm"
+ARTIFACTORY_URL="http://54.198.162.181:8082/artifactory/api/conan/conan"
+conan remote add artifactory "$ARTIFACTORY_URL" --force
 
 hootl=""
 if [ "$shouldTest" = 1 ]; then
