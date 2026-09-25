@@ -11,6 +11,10 @@ list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/cmake")
 #################################
 option(HOOTL "Build with HOOTL sim interface" OFF)
 
+### Packages for custom libs
+find_package(ht_proto REQUIRED CONFIG)
+find_package(ht_can REQUIRED CONFIG)
+
 #################################
 # Custom libs
 #################################
@@ -30,6 +34,7 @@ find_package(mcap REQUIRED)
 find_package(dbcppp REQUIRED)
 find_package(Eigen3 REQUIRED)
 
+
 if (HOOTL)
     find_package(cppzmq REQUIRED)
 endif()
@@ -37,6 +42,7 @@ endif()
 #################################
 # Upstreams (non-conan)
 #################################
+<<<<<<< HEAD
 # NOTE: for local HT_proto development, I keep my HT_Proto at ../HT_proto and uncomment the add_subdirectory line below. Otherwise, use FetchContent to pull the repo from github.
 FetchContent_Declare(
     HT_Proto 
@@ -45,6 +51,9 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(HT_Proto)
 # add_subdirectory(../HT_proto ${CMAKE_BINARY_DIR}/HT_proto)
+=======
+
+>>>>>>> 17d63fa (Consuming HT_Proto as static lib)
 
 FetchContent_Declare(
     vn_driver_lib
@@ -53,12 +62,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(vn_driver_lib)
 
-# NOTE: If doing replay with HT09 data use release 280 for it to work with the older can description
-FetchContent_Declare(
-    HT_CAN
-    URL "https://github.com/hytech-racing/HT_CAN/releases/download/264/drivebrain_can_lib.tar.gz"
-)
-FetchContent_MakeAvailable(HT_CAN)
 
 #################################
 # Linking to main app
@@ -82,8 +85,8 @@ target_link_libraries(drivebrain PUBLIC
     mcap::mcap
     protobuf::libprotobuf 
     boost::boost
-    hytech_msgs_cpp_lib
-    hytech_can_msgs_cpp_lib
+    ht_proto::hytech_msgs_cpp_lib
+    ht_can::hytech_can_msgs_cpp_lib
     drivebrain_core
     drivebrain_comms
     drivebrain_control
