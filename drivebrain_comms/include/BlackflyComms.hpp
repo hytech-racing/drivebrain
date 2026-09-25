@@ -6,9 +6,11 @@
 #include <thread>
 #include <atomic>
 #include <foxglove/CompressedImage.pb.h>
-#include "Telemetry.hpp"
+#include <foxglove/RawImage.pb.h>
 #include <opencv2/opencv.hpp>
 #include <opencv2/imgcodecs.hpp>
+
+#include "Telemetry.hpp"
 
 namespace comms {
 

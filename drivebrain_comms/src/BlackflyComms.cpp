@@ -1,4 +1,7 @@
 #include "BlackflyComms.hpp"
+#include <chrono>
+#include <foxglove/websocket/common.hpp>
+#include <memory>
 
 using namespace comms;
 
@@ -74,24 +77,41 @@ void BlackflyComms::_aravis_receive_loop() {
                 arv_buffer_get_image_region(buffer, nullptr, nullptr, &width, &height);
 
                 cv::Mat bayer(cv::Size(width, height), CV_8UC1, (void*)data);
+
+                auto now = std::chrono::system_clock::now().time_since_epoch();
+                auto secs = std::chrono::duration_cast<std::chrono::seconds>(now).count();
+                auto nanos = std::chrono::duration_cast<std::chrono::nanoseconds>(now).count() % 1000000000;
+
+                // Log full uncompressed image to mcap
+                auto mcap_image = std::make_shared<foxglove::RawImage>();
+                mcap_image->mutable_timestamp()->set_seconds(secs);
+                mcap_image->mutable_timestamp()->set_nanos(nanos);
+                mcap_image->set_frame_id("blackfly");
+                mcap_image->set_width(width);
+                mcap_image->set_height(height);
+                mcap_image->set_encoding("bayer_rggb8");
+                mcap_image->set_step(width);
+                mcap_image->set_data(data, buffer_size);
+                core::log_mcap_only(mcap_image);
+
+                // stream compressed image over foxglove stream
                 cv::Mat bgr;
-                cv::cvtColor(bayer, bgr, cv::COLOR_BayerRG2BGR);
-
+                cv::cvtColor(bayer, bgr, cv::COLOR_BayerBG2BGR);
                 cv::Mat resized;
-                cv::resize(bgr, resized, cv::Size(640, 640), 0, 0, cv::INTER_AREA);
-
+                const int out_width = 640;
+                const int out_height = height * out_width / width;
+                cv::resize(bgr, resized, cv::Size(out_width, out_height), 0, 0, cv::INTER_AREA);
                 std::vector<uchar> jpeg_buf;
                 cv::imencode(".jpg", resized, jpeg_buf, {cv::IMWRITE_JPEG_QUALITY, 80});
-                
+
                 std::shared_ptr<foxglove::CompressedImage> raw_image = std::make_shared<foxglove::CompressedImage>();
-                auto* ts = raw_image->mutable_timestamp();
-                auto now = std::chrono::system_clock::now().time_since_epoch();
-                ts->set_seconds(std::chrono::duration_cast<std::chrono::seconds>(now).count());
-                ts->set_nanos(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count() % 1000000000);
+                raw_image->mutable_timestamp()->set_seconds(secs);
+                raw_image->mutable_timestamp()->set_nanos(nanos);
                 raw_image->set_frame_id("blackfly");
                 raw_image->set_format("jpeg");
                 raw_image->set_data(jpeg_buf.data(), jpeg_buf.size());
-                core::log(raw_image);
+                core::log_foxglove_only(raw_image);
+
             } else {
                 spdlog::error("Failed to retrieve buffer from Aravis stream");
             }
