@@ -5,6 +5,7 @@
 #include <ouster/core/chanfield.h>
 #include <ouster/core/xyzlut.h>
 #include <ouster/sensor/sensor_frame_set_source.h>
+#include <ouster/sensor/sensor_packet_source.h>
 
 
 namespace comms {
@@ -44,6 +45,9 @@ namespace comms {
             
             // SensorFrameSetSource allows you to receive data in lidar frames instead of udp packets
             ouster::sdk::sensor::SensorFrameSetSource _source;
+
+            // gets all udp packets -- gives access to imu dat
+            ouster::sdk::sensor::SensorPacketSource _packet; 
             
             // SLAM parameters and settings that the ouster SDK's system will use
             //ouster::sdk::mapping::SlamConfig _slam_config;
