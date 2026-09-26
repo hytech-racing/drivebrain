@@ -25,6 +25,7 @@ int comms::OusterComms::_init(const std::string &sensor_hostname) {
     // Establish communications with the Ouster
     ouster::sdk::core::SensorConfig config; 
     config.udp_dest = "@auto"; // TODO validate that this works reliably
+    spdlog::info("init claled");
 
     try {
         _sensors.emplace_back(sensor_hostname, config); 
