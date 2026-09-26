@@ -76,10 +76,12 @@ void DrivebrainApp::run() {
 
   bool ouster_init_not_successful; 
   const char* ouster_hostname = "os-122634002484.local";
-  _ouster_driver = std::make_unique<comms::OusterComms>(ouster_hostname);
+  _ouster_driver = std::make_unique<comms::OusterComms>(ouster_hostname, ouster_init_not_successful);
   if (ouster_init_not_successful) {
     spdlog::error("Failed to initialize ouster driver");
-  }
+  } 
+
+  spdlog::info("ouster driver init");
 
   // CAN device names are defined in the drivebrain JSON config
   _telem_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("telem_can_device").value(), _dbc_path);
