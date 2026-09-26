@@ -75,7 +75,8 @@ void DrivebrainApp::run() {
   }
 
   bool ouster_init_not_successful; 
-  _ouster_driver = std::make_unique<comms::OusterComms>(&ouster_hostname);
+  const char* ouster_hostname = "os-122634002484.local";
+  _ouster_driver = std::make_unique<comms::OusterComms>(ouster_hostname);
   if (ouster_init_not_successful) {
     spdlog::error("Failed to initialize ouster driver");
   }
