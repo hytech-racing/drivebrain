@@ -23,11 +23,14 @@ add_subdirectory(drivebrain_control)
 # Find packages
 #################################
 find_package(foxglove-websocket REQUIRED)
+find_package(foxglove-schemas-protobuf REQUIRED)
 find_package(Protobuf REQUIRED CONFIG)
 find_package(Boost REQUIRED)
 find_package(spdlog REQUIRED)
 find_package(mcap REQUIRED)
 find_package(dbcppp REQUIRED)
+find_package(aravis REQUIRED)
+find_package(OpenCV REQUIRED CONFIG)
 
 if (HOOTL)
     find_package(cppzmq REQUIRED)
@@ -86,6 +89,11 @@ add_executable(drivebrain
 
 target_include_directories(drivebrain PUBLIC drivebrain_app/include)
 
+# add_executable(drivebrain
+#     tests/hil/scripts/test_backfly.cpp
+# )
+
+
 if(HOOTL)
     target_compile_definitions(drivebrain PRIVATE HOOTL_ENABLED)
     target_compile_definitions(drivebrain_core PRIVATE HOOTL_ENABLED)
@@ -95,6 +103,7 @@ endif()
 
 target_link_libraries(drivebrain PUBLIC 
     foxglove-websocket::foxglove-websocket 
+    foxglove-schemas-protobuf::foxglove-schemas-protobuf
     mcap::mcap
     protobuf::libprotobuf 
     boost::boost
@@ -110,7 +119,12 @@ target_link_libraries(drivebrain PUBLIC
     # ouster_client
     # ouster_sensor
     # ouster_perception
+    aravis::aravis
+    opencv_core
+    opencv_imgproc
+    opencv_imgcodecs
 )
+
 
 #################################
 # Unit Testing
