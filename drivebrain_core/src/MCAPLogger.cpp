@@ -145,7 +145,7 @@ int core::MCAPLogger::open_new_mcap() {
         return -1;
     }
 
-    std::vector<std::string> proto_names = {"hytech_msgs.proto", "hytech.proto"};
+    std::vector<std::string> proto_names = {"hytech_msgs.proto", "hytech.proto", "foxglove/PointCloud.proto"};
     proto_names.insert(
         proto_names.end(),
         matlab_model_gen::matlab_model_gend_protos.begin(),
@@ -214,7 +214,7 @@ int core::MCAPLogger::log_msg(core::MsgType message) {
     new_message.message_name = message->GetDescriptor()->name();
     {
         std::unique_lock lock(_input_buffer_mutex);
-        _input_buffer.push_back(new_message); 
+        _input_buffer.push_back(std::move(new_message)); 
         _input_buffer_cv.notify_one(); 
    }
 

@@ -1,8 +1,10 @@
 #include "OusterComms.hpp"
 #include "Telemetry.hpp"
 #include <memory>
+#include <cstring>
 
 #include <foxglove/PointCloud.pb.h>
+#include <foxglove/PackedElementField.pb.h>
 
 /****************************************************************
  * PUBLIC METHODS
@@ -13,8 +15,6 @@ comms::OusterComms::OusterComms(const std::string &device_name, bool successful)
     if (rc < 0) {
         throw std::runtime_error("Failed to initialize Ouster communications interface");
     }
-
-
 }
 
 /****************************************************************
@@ -24,11 +24,12 @@ int comms::OusterComms::_init(const std::string &sensor_hostname) {
 
     // Establish communications with the Ouster
     ouster::sdk::core::SensorConfig config; 
-    config.udp_dest = "@auto"; // TODO validate that this works reliably
+    config.udp_dest = "169.254.0.1"; // TODO validate that this works reliably
+    config.timestamp_mode = ouster::sdk::core::TimestampMode::TIME_FROM_PTP_1588; // use jetson's PTP clock
     spdlog::info("init claled");
 
     try {
-        _sensors.emplace_back(sensor_hostname, config); 
+        _sensors.emplace_back("169.254.77.2", config);
     }
     catch (...) {
         spdlog::error("failed in ouster init");
@@ -36,7 +37,7 @@ int comms::OusterComms::_init(const std::string &sensor_hostname) {
     }
 
     _source = std::make_unique<ouster::sdk::sensor::SensorFrameSetSource>(_sensors); // creating the client that will configure the sensors 
-    _packet = std::make_unique<ouster::sdk::sensor::SensorPacketSource>(_sensors);
+    // _packet = std::make_unique<ouster::sdk::sensor::SensorPacketSource>(_sensors);
 
     spdlog::info("initialized Ouster communications interface with sensor hostname {}", sensor_hostname);
 
@@ -62,20 +63,19 @@ void comms::OusterComms::_loop() {
     while (_running) {
 
         /* IMU Data */
-        auto packet_event = _packet->get_packet(1.0); // example passes 1.0 as parameter?
-        if (packet_event.packet().type() == ouster::sdk::core::PacketType::Imu) {
-            spdlog::info("recieved an IMU packet");
-            //auto imu_acc = frame.field(ouster::sdk::core::ChanField::IMU_ACC);
+        // auto packet_event = _packet->get_packet(1.0); // example passes 1.0 as parameter?
+        // if (packet_event.packet().type() == ouster::sdk::core::PacketType::Imu) {
+        //     spdlog::info("recieved an IMU packet");
+        //     //auto imu_acc = frame.field(ouster::sdk::core::ChanField::IMU_ACC);
 
-        }
+        // }
 
-        if (packet_event.packet().packet_type() == ouster::sdk::sensor::ClientEvent::ERR) {
-            spdlog::error("Sensor client error state");
-        }
-
+        // if (packet_event.packet().packet_type() == ouster::sdk::sensor::ClientEvent::ERR) {
+        //     spdlog::error("Sensor client error state");
+        // }
 
         /* Lidar Data */
-        std::pair<int, std::unique_ptr<ouster::sdk::core::LidarFrame>> result = _source->get_frame(); 
+        std::pair<int, std::unique_ptr<ouster::sdk::core::LidarFrame>> result = _source->get_frame(0.5); 
 
         int index = result.first;
         if (!result.second) continue; // check that you actually received a lidar frame before dereferencing it
@@ -86,22 +86,44 @@ void comms::OusterComms::_loop() {
         // auto frame_status = result.second->frame_status; // todo - see what status the lidar can be
         // auto body_to_world = result.second->body_to_world();
 
+        // write xyz directly into the foxglove pointcloud buffer
+        const auto& lut = _lut[index];
+        const Eigen::Index n = lut.direction.rows();
 
-        // generate point cloud based on lookup table
-        auto cloud = _lut[index](frame); 
-
-
-        // log full point cloud to foxglove only 
         auto pc = std::make_shared<foxglove::PointCloud>();
-        if (!pc) {
-            spdlog::error("failed to parse foxglove pointcloud");
-            continue;
+        pc->set_frame_id("os_sensor");
+        pc->mutable_pose()->mutable_orientation()->set_w(1);
+        pc->set_point_stride(3 * sizeof(float));
+        const char* names[] = {"x", "y", "z"};
+        for (int i = 0; i < 3; i++) {
+            auto* f = pc->add_fields();
+            f->set_name(names[i]);
+            f->set_offset(i * sizeof(float));
+            f->set_type(foxglove::PackedElementField::FLOAT32);
         }
 
-        core::log_foxglove_only(pc);
+        auto live_pc = std::make_shared<foxglove::PointCloud>(*pc);
 
-        spdlog::info("in loop");
-        
+        std::string* data = pc->mutable_data();
+        data->resize(n * 3 * sizeof(float));
+        Eigen::Map<ouster::sdk::core::PointCloudXYZf> points(reinterpret_cast<float*>(data->data()), n, 3);
+        ouster::sdk::core::impl::cartesianT<float>(points, frame.field<uint32_t>(ouster::sdk::core::ChanField::RANGE), lut.direction, lut.offset);
+
+        // full resolution to mcap
+        core::MCAPLogger::instance().log_msg(pc);
+
+        // every Nth point streamed to foxglove 
+        constexpr Eigen::Index stream_stride = 4;
+        const size_t point_size = 3 * sizeof(float);
+        std::string* live_data = live_pc->mutable_data();
+        live_data->resize(((n + stream_stride - 1) / stream_stride) * point_size);
+        size_t m = 0;
+        for (Eigen::Index i = 0; i < n; i += stream_stride, ++m) {
+            std::memcpy(&(*live_data)[m * point_size], &(*data)[i * point_size], point_size);
+        }
+
+        live_data->resize(m * point_size);
+        core::log_foxglove_only(live_pc);
         
     }
 }

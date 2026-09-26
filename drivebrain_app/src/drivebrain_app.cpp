@@ -78,7 +78,7 @@ void DrivebrainApp::run() {
   const char* ouster_hostname = "os-122634002484.local";
   _ouster_driver = std::make_unique<comms::OusterComms>(ouster_hostname, ouster_init_not_successful);
   if (ouster_init_not_successful) {
-    spdlog::error("Failed to initialize ouster driver");
+    spdlog::error("Failed to initialize Ouster driver");
   } 
 
   spdlog::info("ouster driver init");
@@ -201,7 +201,7 @@ void DrivebrainApp::_loop() {
             _telem_can->send_message(desired_rpm_msg);
             _telem_can->send_message(torque_limit_msg);
             
-            // // spdlog::info("tick: send_aux_speed");
+            // spdlog::info("tick: send_aux_speed");
 
             _aux_can->send_message(desired_rpm_msg);
             _aux_can->send_message(torque_limit_msg);

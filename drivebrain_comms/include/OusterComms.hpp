@@ -56,7 +56,7 @@ namespace comms {
             //ouster::sdk::mapping::SlamConfig _slam_config;
 
             // Use the lookup table to convert range measurements into xyz coordinates
-            std::vector<ouster::sdk::core::XYZLut> _lut;
+            std::vector<ouster::sdk::core::XYZLutT<float>> _lut;
 
             std::thread _thread;
             std::atomic<bool> _running{true};
