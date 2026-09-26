@@ -8,6 +8,7 @@ find_package(Protobuf REQUIRED CONFIG)
 find_package(dbcppp REQUIRED)
 find_package(cppzmq REQUIRED)
 find_package(OusterSDK REQUIRED)
+find_package(foxglove-schemas-protobuf REQUIRED)
 
 set(DRIVEBRAIN_COMMS_SRCS
     src/CANComms.cpp
@@ -38,6 +39,7 @@ target_link_libraries(drivebrain_comms PUBLIC
     libvncxx
     dbcppp::dbcppp
     OusterSDK::ouster_sensor
+    foxglove-schemas-protobuf::foxglove-schemas-protobuf
 )
 
 if(HOOTL)
