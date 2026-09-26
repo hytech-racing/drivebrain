@@ -1,6 +1,6 @@
 #pragma once
 
-#include "StateTracker.hpp"
+//#include "StateTracker.hpp"
 #include "Telemetry.hpp"
 #include <ouster/sensor/client.h> 
 #include <ouster/core/chanfield.h>
@@ -21,10 +21,11 @@ namespace comms {
              * 
              * @param sensor_hostname the hostname of the ouster sensor trying to be initialized
              */
-            OusterComms(const std::string &sensor_hostname);
+            OusterComms(const std::string &sensor_hostname, bool successful);
 
             ~OusterComms() {
-                // TODO cleanup
+                _running = false;
+                spdlog::warn("destructed ouster comms");
             }
             
         

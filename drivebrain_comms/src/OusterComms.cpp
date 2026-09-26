@@ -7,7 +7,7 @@
 /****************************************************************
  * PUBLIC METHODS
  ****************************************************************/
-comms::OusterComms::OusterComms(const std::string &device_name) {
+comms::OusterComms::OusterComms(const std::string &device_name, bool successful) {
     // Initialize the Ouster interface
     int rc = _init(device_name);
     if (rc < 0) {
@@ -29,8 +29,8 @@ int comms::OusterComms::_init(const std::string &sensor_hostname) {
     try {
         _sensors.emplace_back(sensor_hostname, config); 
     }
-    catch (const std::exception& e) {
-        spdlog::error("Sensor initialization failed: {}", e.what());
+    catch (...) {
+        spdlog::error("failed in ouster init");
         return 1;
     }
 
@@ -66,7 +66,6 @@ void comms::OusterComms::_loop() {
             spdlog::info("recieved an IMU packet");
             //auto imu_acc = frame.field(ouster::sdk::core::ChanField::IMU_ACC);
 
-            // log to dv msgs imu field
         }
 
         if (packet_event.packet().packet_type() == ouster::sdk::sensor::ClientEvent::ERR) {
@@ -97,9 +96,10 @@ void comms::OusterComms::_loop() {
             spdlog::error("failed to parse foxglove pointcloud");
             continue;
         }
-        
+
         core::log_foxglove_only(pc);
 
+        spdlog::info("in loop");
         
         
     }
