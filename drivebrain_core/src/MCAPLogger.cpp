@@ -5,11 +5,17 @@
 
 #include <MCAPLogger.hpp>
 
+#if JETSON_ENABLED
+#define RECORDINGS_DIR "/home/hytech/recordings"
+#else
+#define RECORDINGS_DIR "/home/nixos/recordings"
+#endif
+
 /****************************************************************
  * HELPER METHODS
  ****************************************************************/
 static std::string get_logfile_name() {
-  std::string dir_path = "/home/nixos/recordings";
+  std::string dir_path = RECORDINGS_DIR;
   int max_file_number = 0;
   std::string largest_file_name; 
 
@@ -138,7 +144,7 @@ int core::MCAPLogger::open_new_mcap() {
 #if HOOTL_ENABLED
     _log_name = "sim_data.mcap";
 #else
-    _log_name = "/home/nixos/recordings/" + get_logfile_name(); 
+    _log_name = std::string(RECORDINGS_DIR) + "/" + get_logfile_name(); 
 #endif
 
     const auto res = _writer.open(_log_name, _options);
@@ -147,7 +153,7 @@ int core::MCAPLogger::open_new_mcap() {
         return -1;
     }
 
-    std::vector<std::string> proto_names = {"hytech_msgs.proto", "hytech.proto"};
+    std::vector<std::string> proto_names = {"hytech_msgs.proto", "hytech.proto", "foxglove/PointCloud.proto", "foxglove/CompressedImage.proto", "foxglove/RawImage.proto"};
 
     auto descriptors = get_pb_descriptors(proto_names);
 
@@ -212,7 +218,7 @@ int core::MCAPLogger::log_msg(core::MsgType message) {
     new_message.message_name = message->GetDescriptor()->name();
     {
         std::unique_lock lock(_input_buffer_mutex);
-        _input_buffer.push_back(new_message); 
+        _input_buffer.push_back(std::move(new_message)); 
         _input_buffer_cv.notify_one(); 
    }
 

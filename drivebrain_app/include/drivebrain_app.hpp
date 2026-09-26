@@ -9,8 +9,10 @@
 #include <foxglove/websocket/base64.hpp>
 #include "LoadCellTorqueController.hpp"
 #include "VNComms.hpp"
+#include "OusterComms.hpp"
 
 #include "hytech_msgs.pb.h"
+#include <BlackflyComms.hpp>
 
 class DrivebrainApp {
 public:
@@ -63,5 +65,11 @@ private:
 
   /* Vectornav */
   std::unique_ptr<comms::VNDriver> _vn_driver; 
+
+  /* Cameras */
+  std::unique_ptr<comms::BlackflyComms> _camera_driver;
+
+  /* Ouster Lidar */
+  std::unique_ptr<comms::OusterComms> _ouster_driver;
 
 };

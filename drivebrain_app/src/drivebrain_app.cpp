@@ -2,6 +2,7 @@
 #include "ETHRecvComms.hpp"
 #include "FoxgloveServer.hpp"
 #include "MCAPLogger.hpp"
+#include "OusterComms.hpp"
 #include "hytech_msgs.pb.h"
 #include "Telemetry.hpp"
 #include "ControllerManager.hpp"
@@ -15,6 +16,7 @@
 #include <spdlog/spdlog.h>
 #include <filesystem>
 #include <stdexcept>
+
 
 std::atomic<bool> running{true};
 
@@ -58,6 +60,8 @@ void DrivebrainApp::run() {
   _vcr_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::VCRData_s>>(_io_context, 9999);
   _vcf_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::VCFData_s>>(_io_context, 4444);
 
+  spdlog::info("Initialized ethernet drivers");
+
 #if HOOTL_ENABLED
   comms::SimComms::create(); 
   comms::SimComms::instance().start();
@@ -69,12 +73,23 @@ void DrivebrainApp::run() {
     spdlog::error("Failed to initialize vectornav driver");
   }
 
-  spdlog::info("Initialized ethernet drivers");
+  bool ouster_init_not_successful; 
+  const char* ouster_hostname = "os-122634002484.local";
+  _ouster_driver = std::make_unique<comms::OusterComms>(ouster_hostname, ouster_init_not_successful);
+  if (ouster_init_not_successful) {
+    spdlog::error("Failed to initialize Ouster driver");
+  } 
+
+  spdlog::info("ouster driver init");
 
   // CAN device names are defined in the drivebrain JSON config
   _telem_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("telem_can_device").value(), _dbc_path);
   _aux_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("aux_can_device").value(), _dbc_path);
   spdlog::info("Initialized CAN drivers");
+
+  _camera_driver = std::make_unique<comms::BlackflyComms>();
+  _camera_driver->start("", "BayerRG8", 15.0);
+
 
   // Initialize controllers
   const size_t num_controllers = 1;
@@ -175,7 +190,7 @@ void DrivebrainApp::_loop() {
             _telem_can->send_message(desired_rpm_msg);
             _telem_can->send_message(torque_limit_msg);
             
-            // // spdlog::info("tick: send_aux_speed");
+            // spdlog::info("tick: send_aux_speed");
 
             _aux_can->send_message(desired_rpm_msg);
             _aux_can->send_message(torque_limit_msg);

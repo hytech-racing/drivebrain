@@ -6,13 +6,13 @@ for a in "$@"; do
     --test) shouldTest=1 ;;
     --clean) shouldClean=1 ;;
     --local-cache-only) localCacheOnly=1 ;;
+    --jetson) jetson="-DJETSON=ON" ;;
   esac
 done
 
 profile="rpi_profile"
 build_folder="build-arm"
 ARTIFACTORY_URL="http://54.198.162.181:8082/artifactory/api/conan/conan"
-conan remote add artifactory "$ARTIFACTORY_URL" --force
 
 hootl=""
 if [ "$shouldTest" = 1 ]; then
@@ -29,6 +29,7 @@ fi
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
+conan remote add artifactory "$ARTIFACTORY_URL" --force
 
 # let cmake infer this
 unset CC
@@ -64,6 +65,7 @@ cmake .. \
   -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
   -DCMAKE_EXE_LINKER_FLAGS="-static" \
   $hootl \
+  $jetson \
   --log-level=NOTICE
 
 make -j

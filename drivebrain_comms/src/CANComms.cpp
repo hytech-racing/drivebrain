@@ -33,7 +33,7 @@ static std::shared_ptr<google::protobuf::Message> get_proto_message_from_name(co
 comms::CANComms::CANComms(const std::string &device_name, const std::string &dbc_file_path) : _device_name(device_name) {
 #if !HOOTL_ENABLED
     if (_init( dbc_file_path) < 0) {
-        throw std::runtime_error("Failed to initialize CAN communications");
+        spdlog::error("Failed to initialize CAN communications");
     }
 #endif
 }
