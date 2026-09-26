@@ -1,4 +1,8 @@
 #include "OusterComms.hpp"
+#include "Telemetry.hpp"
+#include <memory>
+
+#include <foxglove/PointCloud.pb.h>
 
 /****************************************************************
  * PUBLIC METHODS
@@ -9,6 +13,7 @@ comms::OusterComms::OusterComms(const std::string &device_name) {
     if (rc < 0) {
         throw std::runtime_error("Failed to initialize Ouster communications interface");
     }
+
 
 }
 
@@ -29,8 +34,8 @@ int comms::OusterComms::_init(const std::string &sensor_hostname) {
         return 1;
     }
 
-    _source(_sensors); // creating the client that will configure the sensors 
-    _packet(_sensors);
+    _source = std::make_unique<ouster::sdk::sensor::SensorFrameSetSource>(_sensors); // creating the client that will configure the sensors 
+    _packet = std::make_unique<ouster::sdk::sensor::SensorPacketSource>(_sensors);
 
     spdlog::info("initialized Ouster communications interface with sensor hostname {}", sensor_hostname);
 
@@ -41,7 +46,7 @@ int comms::OusterComms::_init(const std::string &sensor_hostname) {
     // spdlog::info("created Ouster Slam engine with and deskew method {}", _slam_config.deskew_method);
 
     // LUT setup
-    _lut.emplace_back(*_source.sensor_info()[0], true);
+    _lut.emplace_back(*_source->sensor_info()[0], true);
     spdlog::info("initialized Ouster LUT");
 
     _running = true; 
@@ -56,21 +61,21 @@ void comms::OusterComms::_loop() {
     while (_running) {
 
         /* IMU Data */
-        auto packet_event = _packet.get_packet(1.0); // example passes 1.0 as parameter?
-        if (packet_event.packet().type == ouster::sdk::core::PacketType::Imu) {
+        auto packet_event = _packet->get_packet(1.0); // example passes 1.0 as parameter?
+        if (packet_event.packet().type() == ouster::sdk::core::PacketType::Imu) {
             spdlog::info("recieved an IMU packet");
             //auto imu_acc = frame.field(ouster::sdk::core::ChanField::IMU_ACC);
 
             // log to dv msgs imu field
         }
 
-        if (packet_event.packet().type == ouster::sdk::sensor::ClientEvent::ERR) {
+        if (packet_event.packet().packet_type() == ouster::sdk::sensor::ClientEvent::ERR) {
             spdlog::error("Sensor client error state");
         }
 
 
         /* Lidar Data */
-        std::pair<int, std::unique_ptr<ouster::sdk::core::LidarFrame>> result = _source.get_frame(); 
+        std::pair<int, std::unique_ptr<ouster::sdk::core::LidarFrame>> result = _source->get_frame(); 
 
         int index = result.first;
         if (!result.second) continue; // check that you actually received a lidar frame before dereferencing it
@@ -83,7 +88,17 @@ void comms::OusterComms::_loop() {
 
 
         // generate point cloud based on lookup table
-        std::vector<std::vector<ouster::sdk::core::PointCloudXYZd>> cloud = _lut[index](frame); // write to dv msgs?
+        auto cloud = _lut[index](frame); 
+
+
+        // log full point cloud to foxglove only 
+        auto pc = std::make_shared<foxglove::PointCloud>();
+        if (!pc) {
+            spdlog::error("failed to parse foxglove pointcloud");
+            continue;
+        }
+        
+        core::log_foxglove_only(pc);
 
         
         

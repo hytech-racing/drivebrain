@@ -71,4 +71,7 @@ private:
   /* Estimator Manager */
   std::shared_ptr<estimation::EstimatorManager> _estim_manager;
 
+  /* Ouster Lidar */
+  std::unique_ptr<comms::OusterComms> _ouster_driver;
+
 };

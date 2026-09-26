@@ -3,6 +3,7 @@
 #include "FoxgloveServer.hpp"
 #include "MCAPLogger.hpp"
 #include "MatlabModelAddHelper.hpp"
+#include "OusterComms.hpp"
 #include "hytech_msgs.pb.h"
 #include "Telemetry.hpp"
 #include "ControllerManager.hpp"
@@ -60,6 +61,8 @@ void DrivebrainApp::run() {
   _vcr_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::VCRData_s>>(_io_context, 9999);
   _vcf_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::VCFData_s>>(_io_context, 4444);
 
+  spdlog::info("Initialized ethernet drivers");
+
 #if HOOTL_ENABLED
   comms::SimComms::create(); 
   comms::SimComms::instance().start();
@@ -71,7 +74,11 @@ void DrivebrainApp::run() {
     spdlog::error("Failed to initialize vectornav driver");
   }
 
-  spdlog::info("Initialized ethernet drivers");
+  bool ouster_init_not_successful; 
+  _ouster_driver = std::make_unique<comms::OusterComms>(&ouster_hostname);
+  if (ouster_init_not_successful) {
+    spdlog::error("Failed to initialize ouster driver");
+  }
 
   // CAN device names are defined in the drivebrain JSON config
   _telem_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("telem_can_device").value(), _dbc_path);

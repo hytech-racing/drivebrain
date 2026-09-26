@@ -16,4 +16,13 @@ inline void log(std::shared_ptr<google::protobuf::Message> msg) {
     FoxgloveServer::instance().send_live_telem_msg(msg);
 }
 
+/**
+ * Logs the given protobuf message to the Foxglove client only.
+ * 
+ * @msg The protobuf message to log to the Foxglove client only.
+ */
+inline void log_foxglove_only(std::shared_ptr<google::protobuf::Message> msg) {
+    FoxgloveServer::instance().send_live_telem_msg(msg);
+}
+
 }
