@@ -1,23 +1,35 @@
 #!/usr/bin/env sh
 set -e
 
+for a in "$@"; do
+  case "$a" in
+    --test) shouldTest=1 ;;
+    --clean) shouldClean=1 ;;
+    --local-cache-only) localCacheOnly=1 ;;
+    --jetson) jetson="-DJETSON=ON" ;;
+  esac
+done
+
 profile="rpi_profile"
 build_folder="build-arm"
+ARTIFACTORY_URL="http://54.198.162.181:8082/artifactory/api/conan/conan"
 
 hootl=""
-if [ "$1" = "--test" ]; then
+if [ "$shouldTest" = 1 ]; then
   profile="default"
   build_folder="build-native"
   hootl="-DHOOTL=ON"
 fi
 
-rm -rf .venv
-# rm -rf "$build_folder"
-rm -rf cmake
+if [ "$shouldClean" = 1 ]; then
+  rm -rf .venv
+  rm -rf cmake
+fi
 
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
+conan remote add artifactory "$ARTIFACTORY_URL" --force
 
 # let cmake infer this
 unset CC
@@ -26,11 +38,21 @@ unset CMAKE_TOOLCHAIN_FILE
 
 conan profile detect --force
 
-conan install . \
-  --build=missing \
-  --profile:build=default \
-  --profile:host="$profile" \
-  -of=cmake
+if [ "$localCacheOnly" = 1 ]; then
+    conan install . \
+    --build=missing \
+    --profile:build=default \
+    --profile:host="$profile" \
+    -of=cmake \
+    --no-remote
+else
+  conan install . \
+    --build=missing \
+    --profile:build=default \
+    --profile:host="$profile" \
+    -of=cmake
+fi
+
 
 mkdir -p "$build_folder"
 cd "$build_folder"
@@ -42,12 +64,14 @@ cmake .. \
   -DCMAKE_TOOLCHAIN_FILE=../cmake/conan_toolchain.cmake \
   -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
   -DCMAKE_EXE_LINKER_FLAGS="-static" \
-  $hootl
+  $hootl \
+  $jetson \
+  --log-level=NOTICE
 
 make -j
 
 # run unit tests
-if [ "$1" = "--test" ]; then
+if [ "$shouldTest" = 1 ]; then
   ctest --rerun-failed --output-on-failure
 fi
 

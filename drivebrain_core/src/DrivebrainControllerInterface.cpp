@@ -3,10 +3,8 @@
 #include "StateTracker.hpp"
 #include <DrivebrainControllerInterface.hpp>
 #include <cstddef>
+#include <FoxgloveServer.hpp>
 
-namespace matlab_model_gen {
-inline constexpr std::size_t num_controllers = 1;
-}
 
 /** Singleton Methods */
 void core::DrivebrainControllerInterface::create() {
@@ -40,19 +38,12 @@ void core::DrivebrainControllerInterface::_handle_parameter_updates(const std::u
 
     spdlog::info("Entering drivebrain controller interface parameter updates.");
     
-    // TODO update this
-    if (auto pval = std::get_if<bool>(&new_params.at("drivebraincontrollerinterface/should_log"))) {
-        bool should_log = *pval;
-        if (should_log) {
-            _request_start_logging();
-        } else {
-            _request_stop_logging();
-        }
+    if (auto should_log = process_param_update<bool>(new_params, "drivebraincontrollerinterface/should_log")) {
+        *should_log ? _request_start_logging() : _request_stop_logging();
     }
 
-    if (auto pval = std::get_if<int>(&new_params.at("drivebraincontrollerinterface/controller_index"))) {
-        int controller_index = *pval;
-        _request_controller_change(controller_index);
+    if (auto controller_index = process_param_update<int>(new_params, "drivebraincontrollerinterface/controller_index")) {
+        _request_controller_change(*controller_index);
     }
 
     spdlog::info("Exiting drivebrain controller interface parameter updates.");
@@ -78,7 +69,7 @@ void core::DrivebrainControllerInterface::_request_stop_logging() {
 }
 
 void core::DrivebrainControllerInterface::_request_controller_change(int controller_index) {
-    const size_t num_controllers = 1 + matlab_model_gen::num_controllers;
+    const size_t num_controllers = 1;
     auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, num_controllers>::instance();
 
     if (controller_index == controller_manager.get_active_controller_index()) {

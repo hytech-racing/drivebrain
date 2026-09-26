@@ -11,6 +11,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Options
 #################################
 option(HOOTL "Build with HOOTL sim interface" OFF)
+option(JETSON "Build for the Jetson Orin (else Pi)" OFF)
+
+### Packages for custom libs
+find_package(ht_proto REQUIRED CONFIG)
+find_package(ht_can REQUIRED CONFIG)
 
 #################################
 # Custom libs
@@ -18,6 +23,7 @@ option(HOOTL "Build with HOOTL sim interface" OFF)
 add_subdirectory(drivebrain_core)
 add_subdirectory(drivebrain_comms)
 add_subdirectory(drivebrain_control)
+add_subdirectory(drivebrain_estimation)
 
 #################################
 # Find packages
@@ -31,6 +37,8 @@ find_package(mcap REQUIRED)
 find_package(dbcppp REQUIRED)
 find_package(aravis REQUIRED)
 find_package(OpenCV REQUIRED CONFIG)
+find_package(Eigen3 REQUIRED)
+
 
 if (HOOTL)
     find_package(cppzmq REQUIRED)
@@ -39,12 +47,6 @@ endif()
 #################################
 # Upstreams (non-conan)
 #################################
-FetchContent_Declare(
-    HT_Proto 
-    GIT_REPOSITORY https://github.com/hytech-racing/HT_proto.git
-    GIT_TAG f4fc651
-)
-FetchContent_MakeAvailable(HT_Proto)
 
 FetchContent_Declare(
     vn_driver_lib
@@ -53,24 +55,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(vn_driver_lib)
 
-FetchContent_Declare(
-    HT_CAN
-    URL "https://github.com/hytech-racing/HT_CAN/releases/download/264/drivebrain_can_lib.tar.gz"
-)
-FetchContent_MakeAvailable(HT_CAN)
-
-FetchContent_Declare(
-    simulink_automation_msgs_cpp
-    URL "https://github.com/hytech-racing/drivebrain_simulink_models/releases/download/rel57/proto_outputs.tar.gz"
-)
-
-FetchContent_MakeAvailable(simulink_automation_msgs_cpp)
-
-FetchContent_Declare(
-    drivebrain_simulink_models
-    URL "https://github.com/hytech-racing/drivebrain_simulink_models/releases/download/rel57/codegen_outputs.tar.gz"
-)
-FetchContent_MakeAvailable(drivebrain_simulink_models)
 
 
 find_package(OusterSDK REQUIRED)
@@ -101,21 +85,21 @@ if(HOOTL)
     target_link_libraries(drivebrain PRIVATE cppzmq)
 endif()
 
+if(JETSON)
+    target_compile_definitions(drivebrain_core PRIVATE JETSON_ENABLED)
+endif()
+
 target_link_libraries(drivebrain PUBLIC 
     foxglove-websocket::foxglove-websocket 
     foxglove-schemas-protobuf::foxglove-schemas-protobuf
     mcap::mcap
     protobuf::libprotobuf 
     boost::boost
-    hytech_msgs_cpp_lib
-    hytech_can_msgs_cpp_lib
+    ht_proto::hytech_msgs_cpp_lib
+    ht_can::hytech_can_msgs_cpp_lib
     drivebrain_core
     drivebrain_comms
     drivebrain_control
-    matlab_model
-    -Wl,--whole-archive
-    simulink_automation_msgs_proto_cpp
-    -Wl,--no-whole-archive
     # ouster_client
     # ouster_sensor
     # ouster_perception
@@ -123,6 +107,7 @@ target_link_libraries(drivebrain PUBLIC
     opencv_core
     opencv_imgproc
     opencv_imgcodecs
+    drivebrain_estimation
 )
 
 

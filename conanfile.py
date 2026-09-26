@@ -27,11 +27,13 @@ class DrivebrainSoftware(ConanFile):
         self.requires("mcap/2.0.2")
         self.requires("dbcppp/3.2.6")
         self.requires("cppzmq/4.11.0")
-        self.requires("eigen/3.4.0")
         self.requires("libzip/1.11.4")
         self.requires("libcurl/8.21.0")
         self.requires("openssl/3.6.2")
         self.requires("ouster_sdk/1.0.1")
+        self.requires("eigen/3.4.0", transitive_headers=True)
+        self.requires("ht_proto/conan")
+        self.requires("ht_can/264")
         
         self.requires("aravis/0.8.33")
         self.requires("opencv/4.14.0", options={

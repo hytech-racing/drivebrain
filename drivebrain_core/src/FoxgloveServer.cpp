@@ -4,8 +4,6 @@
 #include <fstream>
 #include <spdlog/spdlog.h>
 
-#include <MatlabModelProtoRegHelper.hpp>
-
 static std::string to_lowercase(std::string s) {
    std::transform(s.begin(), s.end(), s.begin(),
                        [](unsigned char c){ return static_cast<unsigned char>(std::tolower(c)); });
@@ -173,11 +171,7 @@ core::FoxgloveServer::FoxgloveServer(std::string file_name) {
         _server->publishParameterValues(clientHandle, foxglove_params, request_id);
     };
 
-    std::vector<std::string> proto_names = {"hytech_msgs.proto", "hytech.proto", "foxglove/PointCloud.proto", "foxglove/CompressedImage.proto"};
-    proto_names.insert(
-        proto_names.end(),
-        matlab_model_gen::matlab_model_gend_protos.begin(),
-        matlab_model_gen::matlab_model_gend_protos.end());
+    std::vector<std::string> proto_names = {"hytech_msgs.proto", "hytech.proto", "foxglove/PointCloud.proto", "foxglove/CompressedImage.proto", "foxglove/RawImage.proto"};
 
     auto descriptors = get_pb_descriptors(proto_names);
     std::vector<foxglove::ChannelWithoutId> channels;

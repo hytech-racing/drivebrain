@@ -40,7 +40,7 @@ target_link_libraries(drivebrain_comms PUBLIC
     foxglove-websocket::foxglove-websocket 
     foxglove-schemas-protobuf::foxglove-schemas-protobuf
     protobuf::libprotobuf
-    hytech_msgs_cpp_lib
+    ht_proto::hytech_msgs_cpp_lib
     libvncxx
     dbcppp::dbcppp
     OusterSDK::ouster_sensor

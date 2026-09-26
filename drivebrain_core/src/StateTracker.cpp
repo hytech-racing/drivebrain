@@ -78,6 +78,7 @@ void StateTracker::handle_receive_protobuf_message(std::shared_ptr<google::proto
     else {
         _receive_low_level_state(msg);
     }
+    _update_estimators();
 }
 
 std::pair<core::VehicleState, bool> StateTracker::get_latest_state_and_validity() {
@@ -256,6 +257,26 @@ void StateTracker::_receive_inverter_states(std::shared_ptr<google::protobuf::Me
             _vehicle_state.acc_data.pack_voltage = static_cast<float>(voltage);
         }
     }
+}
+
+void StateTracker::_update_estimators() {
+    std::unique_lock lk(_state_mutex);
+    estimation::fz_control_input_vector u;
+    u <<
+        _vehicle_state.current_body_accel_mss.x, _vehicle_state.current_body_accel_mss.y;
+    _fz_estimator.predict(u);
+    _fz_estimator.update(_vehicle_state.loadcells.FL, _vehicle_state.loadcells.FR, _vehicle_state.loadcells.RL, _vehicle_state.loadcells.RR);
+
+    auto estimates = _fz_estimator.getEstimates();
+
+    std::shared_ptr<hytech_msgs::FzEstimator> fz_estimate = std::make_shared<hytech_msgs::FzEstimator>();
+
+    fz_estimate->set_fl_fz_estimate(estimates(0));
+    fz_estimate->set_fr_fz_estimate(estimates(1));
+    fz_estimate->set_rl_fz_estimate(estimates(2));
+    fz_estimate->set_rr_fz_estimate(estimates(3));
+        
+    core::log(fz_estimate);
 }
 
 template <size_t arr_len>

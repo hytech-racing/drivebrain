@@ -5,13 +5,17 @@
 
 #include <MCAPLogger.hpp>
 
-#include <MatlabModelProtoRegHelper.hpp>
+#if JETSON_ENABLED
+#define RECORDINGS_DIR "/home/hytech/recordings"
+#else
+#define RECORDINGS_DIR "/home/nixos/recordings"
+#endif
 
 /****************************************************************
  * HELPER METHODS
  ****************************************************************/
 static std::string get_logfile_name() {
-  std::string dir_path = "/home/hytech/recordings";
+  std::string dir_path = RECORDINGS_DIR;
   int max_file_number = 0;
   std::string largest_file_name; 
 
@@ -137,7 +141,11 @@ void core::MCAPLogger::destroy() {
 int core::MCAPLogger::open_new_mcap() {
     std::string mcap_name = get_logfile_name();
     spdlog::info("Attempting to open new MCAP file: {}", mcap_name);
-    _log_name = "/home/hytech/recordings/" + get_logfile_name(); 
+#if HOOTL_ENABLED
+    _log_name = "sim_data.mcap";
+#else
+    _log_name = std::string(RECORDINGS_DIR) + "/" + get_logfile_name(); 
+#endif
 
     const auto res = _writer.open(_log_name, _options);
     if (!res.ok()) {
@@ -145,11 +153,7 @@ int core::MCAPLogger::open_new_mcap() {
         return -1;
     }
 
-    std::vector<std::string> proto_names = {"hytech_msgs.proto", "hytech.proto", "foxglove/PointCloud.proto", "foxglove/CompressedImage.proto"};
-    proto_names.insert(
-        proto_names.end(),
-        matlab_model_gen::matlab_model_gend_protos.begin(),
-        matlab_model_gen::matlab_model_gend_protos.end());
+    std::vector<std::string> proto_names = {"hytech_msgs.proto", "hytech.proto", "foxglove/PointCloud.proto", "foxglove/CompressedImage.proto", "foxglove/RawImage.proto"};
 
     auto descriptors = get_pb_descriptors(proto_names);
 

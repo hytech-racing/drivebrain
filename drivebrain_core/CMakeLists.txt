@@ -18,14 +18,14 @@ add_library(drivebrain_core
 target_include_directories(drivebrain_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 target_link_libraries(drivebrain_core PUBLIC 
+    drivebrain_estimation
     spdlog::spdlog 
     boost::boost 
     nlohmann_json::nlohmann_json
     foxglove-websocket::foxglove-websocket
     mcap::mcap
     protobuf::libprotobuf
-    hytech_msgs_cpp_lib
-    hytech_can_msgs_cpp_lib
-    matlab_model
+    ht_proto::hytech_msgs_cpp_lib
+    ht_can::hytech_can_msgs_cpp_lib
     foxglove-schemas-protobuf::foxglove-schemas-protobuf
 )
