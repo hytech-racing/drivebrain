@@ -21,3 +21,5 @@ compile_commands.json
 *.mcap
 
 tests/replay/mcap/*.mcap
+
+.agents/
