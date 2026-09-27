@@ -15,14 +15,14 @@
 namespace planning {
 
 constexpr float kGravity = 9.80665f;
-constexpr float kLateralLimit = 2.0f * kGravity;
-constexpr float kForwardLimit = 1.5f * kGravity;
-constexpr float kBrakingLimit = 2.0f * kGravity;
-constexpr float MIN_PATH_TANGENT = 1e-6f;
-
+constexpr float kMinPathTangent = 1e-6f;
+const float kCarWeightKg = 180.0f;
+const float kMu = 1.5;
+const float kMaxAccel = kMu * kGravity;
 
 VelocityPlanner::VelocityPlanner(std::string path_filename, float max_car_velocity)
     : path_(loadPathFromCsv(path_filename)), max_car_velocity_(max_car_velocity) {
+        path_points_.reserve(lookahead_distance_index_);
     if (!std::isfinite(max_car_velocity_) || max_car_velocity_ <= 0.0f) {
         throw std::invalid_argument("Maximum car velocity must be positive and finite");
     }
@@ -70,7 +70,7 @@ std::size_t VelocityPlanner::getHorizonPointIndex(const core::VehicleState& stat
     return start_point_index_;
 }
 
-const std::vector<VelocitySample>& VelocityPlanner::tick(const core::VehicleState& state) {
+const std::vector<PathPoint>& VelocityPlanner::tick(const core::VehicleState& state) {
     // obtain start point for velocity planner
     start_point_index_ = getHorizonPointIndex(state);
 
@@ -98,7 +98,7 @@ const std::vector<VelocitySample>& VelocityPlanner::tick(const core::VehicleStat
     gte::NaturalCubicSpline<2, float> spline(true, positions, times);
 
 
-    std::vector<VelocitySample> samples;
+    std::vector<PathPoint> samples;
 
     size_t iterations = 0;
 
@@ -115,32 +115,67 @@ const std::vector<VelocitySample>& VelocityPlanner::tick(const core::VehicleStat
             
         const float path_tangent_squared = path_tangent[0] * path_tangent[0] + path_tangent[1] * path_tangent[1];
 
-        if (path_tangent_squared <= MIN_PATH_TANGENT) {
+        if (path_tangent_squared <= kMinPathTangent) {
             spdlog::error("Spline tangent is too small, cannot compute curvature");
         }
 
-    //     const float cross = jet[1][0] * jet[2][1] - jet[1][1] * jet[2][0];
-    //     const float curvature = cross / (speed_squared * std::sqrt(speed_squared));
-    //     if (!std::isfinite(curvature)) {
-    //         throw std::runtime_error("Spline curvature is invalid");
-    //     }
-    //     const float curvature_speed_limit = std::abs(curvature) <= kDerivativeEpsilon
-    //         ? max_car_velocity_
-    //         : std::sqrt(kLateralLimit / std::abs(curvature));
-    //     const float velocity_limit = std::min(max_car_velocity_, curvature_speed_limit);
+        const float cross = path_tangent[0] * change_in_tangent[1] - path_tangent[1] * change_in_tangent[0];
+        const float curvature = cross / (path_tangent_squared * std::sqrt(path_tangent_squared));
 
-    //     // The friction ellipse leaves this fraction of longitudinal acceleration.
-    //     const float lateral_accel = velocity_limit * velocity_limit * std::abs(curvature);
-    //     const float lateral_fraction = std::min(1.0f, lateral_accel / kLateralLimit);
-    //     const float longitudinal_fraction = std::sqrt(std::max(0.0f,
-    //         1.0f - lateral_fraction * lateral_fraction));
-    //     samples.push_back({{jet[0][0], jet[0][1]}, curvature, velocity_limit,
-    //                        -kBrakingLimit * longitudinal_fraction,
-    //                        kForwardLimit * longitudinal_fraction});
+        // sqrt(ax+ay) = mu * g where ax == 0 (ay = v*v*k) => v = sqrt(mu * g / k)
+        const float v_max = std::min(max_car_velocity_, std::sqrt(kMu * kGravity / std::abs(curvature)));
+        path_points_[iterations] = {
+            .point = {position[0], position[1]},
+            .curvature = curvature,
+            .velocity = v_max,
+            .longitudinal_accel = -1,
+        };
     }
 
-    // velocity_samples_ = std::move(samples);
-    // return velocity_samples_;
+    solver(state, true); // forward solve with curvature limits
+    solver(state, false); // backward solve with accel limits
+    
+
+}
+
+void VelocityPlanner::solver(const core::VehicleState& state, bool forward) {
+    const core::xy_vec<float> position{state.vehicle_position_map_frame.x, state.vehicle_position_map_frame.y}; // global frame
+    const core::xy_vec<float> velocity{state.current_body_vel_ms.x, state.current_body_vel_ms.y}; // local frame
+    const float speed = velocity.length();
+
+    PathPoint current_point = {
+        .point = position,
+        .curvature = -1,
+        .velocity = speed, 
+        .longitudinal_accel = -1
+    };
+
+    PathPoint start_point;
+    PathPoint saved_point;
+    if (forward) {
+        start_point = current_point;
+    } else {
+        start_point = path_points_.back();
+        saved_point = path_points_.back();
+        path_points_.pop_back();
+        std::reverse(path_points_.begin(), path_points_.end());
+    }
+
+    for (auto& next_point: path_points_) {
+        auto v = (next_point.point - start_point.point);
+        const float ds = v.length();
+        const float lateral_accel = std::abs(start_point.curvature) * start_point.velocity * start_point.velocity; // a_y = v^2 * k
+        const float a_long_avail = std::sqrt(kMaxAccel * kMaxAccel - lateral_accel * lateral_accel);
+
+        const float v_long_avail = std::sqrt(start_point.velocity * start_point.velocity + 2 * a_long_avail * ds);
+        next_point.velocity = std::min(next_point.velocity, v_long_avail);
+        start_point = next_point;
+    }
+
+    if (!forward) {
+        std::reverse(path_points_.begin(), path_points_.end());
+        path_points_.push_back(saved_point); 
+    }
 }
 
 std::vector<core::xy_vec<float>> VelocityPlanner::loadPathFromCsv(
