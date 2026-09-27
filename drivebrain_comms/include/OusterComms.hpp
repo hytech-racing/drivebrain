@@ -7,6 +7,7 @@
 #include <ouster/core/xyzlut.h>
 #include <ouster/sensor/sensor_frame_set_source.h>
 #include <ouster/sensor/sensor_packet_source.h>
+#include <ouster/mapping/slam_engine.h>
 
 
 
@@ -53,7 +54,7 @@ namespace comms {
             std::unique_ptr<ouster::sdk::sensor::SensorPacketSource> _packet; 
             
             // SLAM parameters and settings that the ouster SDK's system will use
-            //ouster::sdk::mapping::SlamConfig _slam_config;
+            ouster::sdk::mapping::LIOSlamConfig _slam_config;
 
             // Use the lookup table to convert range measurements into xyz coordinates
             std::vector<ouster::sdk::core::XYZLutT<float>> _lut;

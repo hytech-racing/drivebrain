@@ -42,10 +42,10 @@ int comms::OusterComms::_init(const std::string &sensor_hostname) {
     spdlog::info("initialized Ouster communications interface with sensor hostname {}", sensor_hostname);
 
     // LiDAR Slam setup
-    // _slam_config.deskew_method = "auto";
-    // _slam_config.min_range = 0.5; // ranges in meters - how far you are allowed to filter points from 
-    // _slam_config.max_range = 100.0; 
-    // spdlog::info("created Ouster Slam engine with and deskew method {}", _slam_config.deskew_method);
+    _slam_config.deskew_method = "auto";
+    _slam_config.min_range = 0.5; // ranges in meters - how far you are allowed to filter points from 
+    _slam_config.max_range = 100.0; 
+    spdlog::info("created Ouster Slam engine with and deskew method {}", _slam_config.deskew_method);
 
     // LUT setup
     _lut.emplace_back(*_source->sensor_info()[0], true);
@@ -62,14 +62,6 @@ int comms::OusterComms::_init(const std::string &sensor_hostname) {
 void comms::OusterComms::_loop() {
     while (_running) {
 
-        /* IMU Data */
-        // auto packet_event = _packet->get_packet(1.0); // example passes 1.0 as parameter?
-        // if (packet_event.packet().type() == ouster::sdk::core::PacketType::Imu) {
-        //     spdlog::info("recieved an IMU packet");
-        //     //auto imu_acc = frame.field(ouster::sdk::core::ChanField::IMU_ACC);
-
-        // }
-
         // if (packet_event.packet().packet_type() == ouster::sdk::sensor::ClientEvent::ERR) {
         //     spdlog::error("Sensor client error state");
         // }
@@ -80,6 +72,17 @@ void comms::OusterComms::_loop() {
         int index = result.first;
         if (!result.second) continue; // check that you actually received a lidar frame before dereferencing it
         auto& frame = *result.second;
+        
+        
+        /* IMU Data */
+        // auto packet_event = _packet->get_packet(1.0); // timeout is 1 second (wait up to 1 second for a packet)
+        // if (packet_event.packet().type() == ouster::sdk::core::PacketType::Imu) {
+        //     spdlog::info("recieved an IMU packet");
+
+        //     auto& imu_data = packet_event.as<ouster::sdk::core::ImuPacket>
+
+        // }
+
 
         // log to dv msgs lidar field 
         // auto timestamp = result.second->get_first_valid_packet_timestamp(); // need to catch the std runtime error if no packets are available

@@ -59,6 +59,6 @@ class DrivebrainSoftware(ConanFile):
         self.options["hwloc"].shared = True
         self.options["gtsam"].with_TBB = False
         self.options["gtsam"].support_nested_dissection = False  # drops metis/gklib (breaks ARM cross-compile)
-        self.options["ouster_sdk"].build_osf = False
+        #self.options["ouster_sdk"].build_osf = False
         self.options["ouster_sdk"].build_pcap = False
-        self.options["ouster_sdk"].build_mapping = False
+        #self.options["ouster_sdk"].build_mapping = False
