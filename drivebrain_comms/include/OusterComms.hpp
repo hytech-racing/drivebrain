@@ -12,8 +12,6 @@
 #include <ouster/sensor/sensor_frame_set_source.h>
 #include <ouster/sensor/sensor_http.h>
 #include <ouster/sensor/sensor_packet_source.h>
-#include <ouster/mapping/slam_engine.h>
-
 
 
 
@@ -62,15 +60,14 @@ namespace comms {
 
             ouster::sdk::core::SensorInfo _sensor_info;
             
-            /*
-            SLAM parameters and settings that the ouster SDK's system will use. LIOS uses lidar + IMU for deskewing
-            */
-            ouster::sdk::mapping::LIOSlamConfig _slam_config;
-
-            std::unique_ptr<ouster::sdk::mapping::SlamEngine> slam_engine;
 
             // Use the lookup table to convert range measurements into xyz coordinates
             std::vector<ouster::sdk::core::XYZLutT<float>> _lut;
+
+            Eigen::Array<uint16_t, Eigen::Dynamic, 1> imu_status;
+            Eigen::Array<uint64_t, Eigen::Dynamic, 1> imu_timestamp;
+            Eigen::Array<float, Eigen::Dynamic, 3> imu_accel;
+            Eigen::Array<float, Eigen::Dynamic, 3> imu_gyro;
 
             std::thread _thread;
             std::atomic<bool> _running{true};
