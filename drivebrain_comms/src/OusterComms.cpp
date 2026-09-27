@@ -1,10 +1,13 @@
 #include "OusterComms.hpp"
 #include "Telemetry.hpp"
+#include "dv_msgs.pb.h"
 #include <memory>
 #include <cstring>
 
 #include <foxglove/PointCloud.pb.h>
 #include <foxglove/PackedElementField.pb.h>
+#include <ouster/core/frame_set.h>
+#include <ouster/sensor/sensor_packet_source.h>
 
 /****************************************************************
  * PUBLIC METHODS
@@ -43,9 +46,22 @@ int comms::OusterComms::_init(const std::string &sensor_hostname) {
 
     // LiDAR Slam setup
     _slam_config.deskew_method = "auto";
+    //_slam_config.deskew_method = "constant_velocity";
     _slam_config.min_range = 0.5; // ranges in meters - how far you are allowed to filter points from 
     _slam_config.max_range = 100.0; 
     spdlog::info("created Ouster Slam engine with and deskew method {}", _slam_config.deskew_method);
+
+
+    std::vector<std::shared_ptr<ouster::sdk::core::SensorInfo>> sensor_info = {std::move(_source->sensor_info())};
+    slam_engine = ouster::sdk::mapping::SlamEngine::create(
+        sensor_info,
+        _slam_config
+    );
+    
+    /* if the auto deskew method doesnt work, calculate accel bias in init/at starting, and integrate that to get velocity?
+    */
+
+    //_sensor_info.emplace_back(new SensorInfo(_sensors[0].fetch_metadata(static_cast<int>(1.0))));
 
     // LUT setup
     _lut.emplace_back(*_source->sensor_info()[0], true);
@@ -68,20 +84,44 @@ void comms::OusterComms::_loop() {
 
         /* Lidar Data */
         std::pair<int, std::unique_ptr<ouster::sdk::core::LidarFrame>> result = _source->get_frame(0.5); 
-
         int index = result.first;
         if (!result.second) continue; // check that you actually received a lidar frame before dereferencing it
         auto& frame = *result.second;
-        
+ 
+        std::shared_ptr<ouster::sdk::core::LidarFrame> lidar_frame = std::move(result.second);
+        ouster::sdk::core::FrameSet frame_set{lidar_frame};
+
+        slam_engine->update(frame_set);
         
         /* IMU Data */
-        // auto packet_event = _packet->get_packet(1.0); // timeout is 1 second (wait up to 1 second for a packet)
-        // if (packet_event.packet().type() == ouster::sdk::core::PacketType::Imu) {
-        //     spdlog::info("recieved an IMU packet");
+        auto packet_event = _packet->get_packet(1.0); // timeout is 1 second (wait up to 1 second for a packet)
+        if (packet_event.packet().type() == ouster::sdk::core::PacketType::Imu) {
+            spdlog::info("recieved an IMU packet");
 
-        //     auto& imu_data = packet_event.as<ouster::sdk::core::ImuPacket>
+            const auto& imu = packet_event.packet().as<ouster::sdk::core::ImuPacket>();
 
-        // }
+            Eigen::Array<uint16_t, Eigen::Dynamic, 1> status = imu.status();
+            Eigen::Array<uint64_t, Eigen::Dynamic, 1> timestamp = imu.timestamp();
+            Eigen::Array<float, Eigen::Dynamic, 3> accel = imu.accel();
+            Eigen::Array<float, Eigen::Dynamic, 3> gyro  = imu.gyro();
+
+
+            std::shared_ptr<dv_msgs::LidarIMU> imu_data_out = std::make_shared<dv_msgs::LidarIMU>();
+
+            for (int i = 0; i < accel.rows(); i++) {
+                imu_data_out->set_accelerometer_x(accel(i, 0));
+                imu_data_out->set_accelerometer_y(accel(i, 1));
+                imu_data_out->set_accelerometer_z(accel(i, 2));
+
+                // imu_data_out->set_gyro(gyro(i, 2)); // need to update it to be gyro_x
+                // imu_data_out->set_gyro_y(gyro(i, 2));
+                // imu_data_out->set_gyro_z(gyro(i, 2));
+            }
+
+            core::log(imu_data_out);
+            spdlog::info("logged lidar imu data");
+
+        }
 
 
         // log to dv msgs lidar field 

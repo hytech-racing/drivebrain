@@ -56,8 +56,15 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(vn_driver_lib)
 
 
+FetchContent_Declare(
+    HT_Proto 
+    GIT_REPOSITORY https://github.com/hytech-racing/HT_proto.git
+    GIT_TAG feat/lidar_data
+)
+FetchContent_MakeAvailable(HT_Proto)
 
-find_package(OusterSDK REQUIRED)
+
+#find_package(OusterSDK REQUIRED)
 
 #################################
 # Linking to main app
@@ -78,6 +85,7 @@ target_include_directories(drivebrain PUBLIC drivebrain_app/include)
 # )
 
 
+
 if(HOOTL)
     target_compile_definitions(drivebrain PRIVATE HOOTL_ENABLED)
     target_compile_definitions(drivebrain_core PRIVATE HOOTL_ENABLED)
@@ -89,6 +97,7 @@ if(JETSON)
     target_compile_definitions(drivebrain PRIVATE JETSON_ENABLED)
     target_compile_definitions(drivebrain_core PRIVATE JETSON_ENABLED)
 endif()
+
 
 target_link_libraries(drivebrain PUBLIC 
     foxglove-websocket::foxglove-websocket 

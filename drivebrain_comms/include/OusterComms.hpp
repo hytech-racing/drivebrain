@@ -2,12 +2,19 @@
 
 //#include "StateTracker.hpp"
 #include "Telemetry.hpp"
+#include "hytech_msgs.pb.h"
+#include "dv_msgs.pb.h"
+
+#include <ouster/core/sensor_info.h>
 #include <ouster/sensor/client.h> 
 #include <ouster/core/chanfield.h>
 #include <ouster/core/xyzlut.h>
 #include <ouster/sensor/sensor_frame_set_source.h>
+#include <ouster/sensor/sensor_http.h>
 #include <ouster/sensor/sensor_packet_source.h>
 #include <ouster/mapping/slam_engine.h>
+
+
 
 
 
@@ -52,9 +59,15 @@ namespace comms {
 
             // gets all udp packets -- gives access to imu data
             std::unique_ptr<ouster::sdk::sensor::SensorPacketSource> _packet; 
+
+            ouster::sdk::core::SensorInfo _sensor_info;
             
-            // SLAM parameters and settings that the ouster SDK's system will use
+            /*
+            SLAM parameters and settings that the ouster SDK's system will use. LIOS uses lidar + IMU for deskewing
+            */
             ouster::sdk::mapping::LIOSlamConfig _slam_config;
+
+            std::unique_ptr<ouster::sdk::mapping::SlamEngine> slam_engine;
 
             // Use the lookup table to convert range measurements into xyz coordinates
             std::vector<ouster::sdk::core::XYZLutT<float>> _lut;

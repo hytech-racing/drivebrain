@@ -194,7 +194,8 @@ void DrivebrainApp::_loop() {
             torque_limit_msg->set_drivebrain_torque_rl(speedControl->torque_lim_nm.RL);
             torque_limit_msg->set_drivebrain_torque_rr(speedControl->torque_lim_nm.RR);
 
-#if !JETSON_ENABLED
+            // spdlog::info("tick: send_telem_speed");
+
             _telem_can->send_message(desired_rpm_msg);
             _telem_can->send_message(torque_limit_msg);
             _aux_can->send_message(desired_rpm_msg);
