@@ -16,7 +16,9 @@ BlackflyComms::~BlackflyComms() {
     _running = false;
 }
 
-bool BlackflyComms::start(const std::string& id, const std::string& pixel_format, double fps) {
+bool BlackflyComms::start(const std::string& id, const std::string& name, const std::string& pixel_format, double fps) {
+    _name = name;
+
     // Start the camera
     _camera = arv_camera_new(id.c_str(), &_error);
     if (!_camera || !arv_camera_is_gv_device(_camera)) {
@@ -28,6 +30,9 @@ bool BlackflyComms::start(const std::string& id, const std::string& pixel_format
     arv_camera_set_acquisition_mode(_camera, ARV_ACQUISITION_MODE_CONTINUOUS, &_error);
     arv_camera_set_frame_rate(_camera, fps, &_error);
     arv_camera_gv_set_packet_size(_camera, 9000, &_error);
+    // sync the camera clock to the jetson's PTP master (newer firmware calls it PtpEnable)
+    const char* ptp_feature = arv_camera_is_feature_available(_camera, "PtpEnable", nullptr) ? "PtpEnable" : "GevIEEE1588";
+    arv_camera_set_boolean(_camera, ptp_feature, TRUE, &_error);
     const auto payload = arv_camera_get_payload(_camera, &_error);
     if (!payload) {
         spdlog::error("Camera payload is empty");
@@ -86,13 +91,13 @@ void BlackflyComms::_aravis_receive_loop() {
                 auto mcap_image = std::make_shared<foxglove::RawImage>();
                 mcap_image->mutable_timestamp()->set_seconds(secs);
                 mcap_image->mutable_timestamp()->set_nanos(nanos);
-                mcap_image->set_frame_id("blackfly");
+                mcap_image->set_frame_id(_name);
                 mcap_image->set_width(width);
                 mcap_image->set_height(height);
                 mcap_image->set_encoding("bayer_rggb8");
                 mcap_image->set_step(width);
                 mcap_image->set_data(data, buffer_size);
-                core::log_mcap_only(mcap_image);
+                core::log_mcap_only(mcap_image, _name + "/raw");
 
                 // stream compressed image over foxglove stream
                 cv::Mat bgr;
@@ -107,13 +112,13 @@ void BlackflyComms::_aravis_receive_loop() {
                 std::shared_ptr<foxglove::CompressedImage> raw_image = std::make_shared<foxglove::CompressedImage>();
                 raw_image->mutable_timestamp()->set_seconds(secs);
                 raw_image->mutable_timestamp()->set_nanos(nanos);
-                raw_image->set_frame_id("blackfly");
+                raw_image->set_frame_id(_name);
                 raw_image->set_format("jpeg");
                 raw_image->set_data(jpeg_buf.data(), jpeg_buf.size());
-                core::log_foxglove_only(raw_image);
+                core::log_foxglove_only(raw_image, _name + "/compressed");
 
             } else {
-                spdlog::error("Failed to retrieve buffer from Aravis stream");
+                spdlog::error("[{}] Failed to retrieve buffer from Aravis stream, status {}", _name, static_cast<int>(arv_buffer_get_status(buffer)));
             }
             arv_stream_push_buffer(_stream, buffer);
         } else {

@@ -86,6 +86,7 @@ if(HOOTL)
 endif()
 
 if(JETSON)
+    target_compile_definitions(drivebrain PRIVATE JETSON_ENABLED)
     target_compile_definitions(drivebrain_core PRIVATE JETSON_ENABLED)
 endif()
 

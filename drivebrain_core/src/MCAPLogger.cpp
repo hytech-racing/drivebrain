@@ -165,6 +165,7 @@ int core::MCAPLogger::open_new_mcap() {
             mcap::Channel channel(message_descriptor->name(), "protobuf", schema.id);
             _writer.addChannel(channel);
             _name_to_id_map[message_descriptor->name()] = channel.id;
+            _type_to_schema_id_map[message_descriptor->name()] = schema.id;
         }
     }
 
@@ -210,12 +211,13 @@ void core::MCAPLogger::stop_logging() {
     }
 }
 
-int core::MCAPLogger::log_msg(core::MsgType message) {
+int core::MCAPLogger::log_msg(core::MsgType message, const std::string &topic) {
     mcap::Timestamp log_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     RawMessage_s new_message; 
     new_message.log_time = log_time;
     new_message.serialized_data = message->SerializeAsString(); 
-    new_message.message_name = message->GetDescriptor()->name();
+    new_message.type_name = message->GetDescriptor()->name();
+    new_message.message_name = topic.empty() ? new_message.type_name : topic;
     {
         std::unique_lock lock(_input_buffer_mutex);
         _input_buffer.push_back(std::move(new_message)); 
@@ -257,7 +259,14 @@ void core::MCAPLogger::_handle_log_to_file() {
             msg_to_log.logTime = msg.log_time;
             msg_to_log.publishTime = msg.log_time;
     
-            msg_to_log.channelId = _name_to_id_map[msg.message_name];
+            auto channel = _name_to_id_map.find(msg.message_name);
+            if (channel == _name_to_id_map.end()) {
+                // first message on this topic, add a channel for it with its message type's schema
+                mcap::Channel new_channel(msg.message_name, "protobuf", _type_to_schema_id_map[msg.type_name]);
+                _writer.addChannel(new_channel);
+                channel = _name_to_id_map.emplace(msg.message_name, new_channel.id).first;
+            }
+            msg_to_log.channelId = channel->second;
             auto write_res = _writer.write(msg_to_log);
         }
         write_buffer.clear();

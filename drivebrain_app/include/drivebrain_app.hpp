@@ -67,7 +67,7 @@ private:
   std::unique_ptr<comms::VNDriver> _vn_driver; 
 
   /* Cameras */
-  std::unique_ptr<comms::BlackflyComms> _camera_driver;
+  std::vector<std::unique_ptr<comms::BlackflyComms>> _camera_drivers;
 
   /* Ouster Lidar */
   std::unique_ptr<comms::OusterComms> _ouster_driver;

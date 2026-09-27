@@ -82,13 +82,22 @@ void DrivebrainApp::run() {
 
   spdlog::info("ouster driver init");
 
+#if !JETSON_ENABLED
   // CAN device names are defined in the drivebrain JSON config
   _telem_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("telem_can_device").value(), _dbc_path);
   _aux_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("aux_can_device").value(), _dbc_path);
   spdlog::info("Initialized CAN drivers");
+#endif
 
-  _camera_driver = std::make_unique<comms::BlackflyComms>();
-  _camera_driver->start("", "BayerRG8", 15.0);
+  // start every GigE camera aravis can find
+  arv_update_device_list();
+  const unsigned int num_cameras = arv_get_n_devices();
+  spdlog::info("Found {} cameras", num_cameras);
+  for (unsigned int i = 0; i < num_cameras; i++) {
+    auto camera = std::make_unique<comms::BlackflyComms>();
+    camera->start(arv_get_device_id(i), std::string("blackfly_") + arv_get_device_serial_nbr(i), "BayerRG8", 15.0);
+    _camera_drivers.push_back(std::move(camera));
+  }
 
 
   // Initialize controllers
@@ -185,15 +194,12 @@ void DrivebrainApp::_loop() {
             torque_limit_msg->set_drivebrain_torque_rl(speedControl->torque_lim_nm.RL);
             torque_limit_msg->set_drivebrain_torque_rr(speedControl->torque_lim_nm.RR);
 
-            // spdlog::info("tick: send_telem_speed");
-
+#if !JETSON_ENABLED
             _telem_can->send_message(desired_rpm_msg);
             _telem_can->send_message(torque_limit_msg);
-            
-            // spdlog::info("tick: send_aux_speed");
-
             _aux_can->send_message(desired_rpm_msg);
             _aux_can->send_message(torque_limit_msg);
+#endif
 
             // spdlog::info("tick: log_speed");
 
@@ -208,13 +214,10 @@ void DrivebrainApp::_loop() {
             desired_torque_msg->set_drivebrain_torque_rl(torqueControl->desired_torques_nm.RL);
             desired_torque_msg->set_drivebrain_torque_rr(torqueControl->desired_torques_nm.RR);
 
-            // spdlog::info("tick: send_telem_torque");
-            
+#if !JETSON_ENABLED
             _telem_can->send_message(desired_torque_msg);
-
-            // spdlog::info("tick: send_aux_torque");
-
-             _aux_can->send_message(desired_torque_msg);
+            _aux_can->send_message(desired_torque_msg);
+#endif
 
             // spdlog::info("tick: log_aux_torque");
 

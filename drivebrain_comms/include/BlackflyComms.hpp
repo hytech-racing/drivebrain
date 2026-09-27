@@ -36,7 +36,7 @@ class BlackflyComms {
          * @return true if the camera was successfully opened, false otherwise.
          * 
          */
-        bool start(const std::string& id, const std::string& pixel_format, double fps);
+        bool start(const std::string& id, const std::string& name, const std::string& pixel_format, double fps);
 
 
     private: 
@@ -49,6 +49,7 @@ class BlackflyComms {
         ArvCamera *_camera{nullptr};
         ArvStream *_stream{nullptr};
         GError *_error{nullptr};
+        std::string _name; // frame id and topic prefix
 
         std::thread _blackfly_receive_thread; 
 

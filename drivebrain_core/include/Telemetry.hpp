@@ -21,8 +21,8 @@ inline void log(std::shared_ptr<google::protobuf::Message> msg) {
  * 
  * @msg The protobuf message to log to the MCAP file only.
  */
-inline void log_mcap_only(std::shared_ptr<google::protobuf::Message> msg) {
-    MCAPLogger::instance().log_msg(msg);
+inline void log_mcap_only(std::shared_ptr<google::protobuf::Message> msg, const std::string &topic = "") {
+    MCAPLogger::instance().log_msg(msg, topic);
 }
 
 
@@ -31,8 +31,8 @@ inline void log_mcap_only(std::shared_ptr<google::protobuf::Message> msg) {
  * 
  * @msg The protobuf message to log to the Foxglove client only.
  */
-inline void log_foxglove_only(std::shared_ptr<google::protobuf::Message> msg) {
-    FoxgloveServer::instance().send_live_telem_msg(msg);
+inline void log_foxglove_only(std::shared_ptr<google::protobuf::Message> msg, const std::string &topic = "") {
+    FoxgloveServer::instance().send_live_telem_msg(msg, topic);
 }
 
 }

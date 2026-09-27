@@ -277,8 +277,23 @@ core::DBParam core::FoxgloveServer::_get_db_param(foxglove::Parameter param) {
     }
 }
 
-void core::FoxgloveServer::send_live_telem_msg(std::shared_ptr<google::protobuf::Message> msg) {
-    auto msg_chan_id = _name_to_id_map[msg->GetDescriptor()->name()];
+void core::FoxgloveServer::send_live_telem_msg(std::shared_ptr<google::protobuf::Message> msg, const std::string &topic) {
+    const std::string &name = topic.empty() ? msg->GetDescriptor()->name() : topic;
+    foxglove::ChannelId msg_chan_id;
+    {
+        std::unique_lock lock(_channel_mutex);
+        auto channel = _name_to_id_map.find(name);
+        if (channel == _name_to_id_map.end()) {
+            // first message on this topic, advertise a channel for it
+            foxglove::ChannelWithoutId server_channel;
+            server_channel.topic = name;
+            server_channel.encoding = "protobuf";
+            server_channel.schemaName = msg->GetDescriptor()->full_name();
+            server_channel.schema = foxglove::base64Encode(SerializeFdSet(msg->GetDescriptor()));
+            channel = _name_to_id_map.emplace(name, _server->addChannels({server_channel})[0]).first;
+        }
+        msg_chan_id = channel->second;
+    }
     const auto serialized_msg = msg->SerializeAsString(); 
     const auto now = nanosecondsSinceEpoch();
     _server->broadcastMessage(msg_chan_id, now, reinterpret_cast<const uint8_t *>(serialized_msg.data()), serialized_msg.size());

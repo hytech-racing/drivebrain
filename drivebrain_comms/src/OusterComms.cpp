@@ -107,21 +107,24 @@ void comms::OusterComms::_loop() {
         std::string* data = pc->mutable_data();
         data->resize(n * 3 * sizeof(float));
         Eigen::Map<ouster::sdk::core::PointCloudXYZf> points(reinterpret_cast<float*>(data->data()), n, 3);
-        ouster::sdk::core::impl::cartesianT<float>(points, frame.field<uint32_t>(ouster::sdk::core::ChanField::RANGE), lut.direction, lut.offset);
+        const auto range = frame.field<uint32_t>(ouster::sdk::core::ChanField::RANGE);
+        ouster::sdk::core::impl::cartesianT<float>(points, range, lut.direction, lut.offset);
 
         // full resolution to mcap
         core::MCAPLogger::instance().log_msg(pc);
 
-        // every Nth point streamed to foxglove 
-        constexpr Eigen::Index stream_stride = 4;
+        // stream just every Nth point that has a return (range 0 = no return)
+        constexpr int stream_stride = 16;
         const size_t point_size = 3 * sizeof(float);
         std::string* live_data = live_pc->mutable_data();
-        live_data->resize(((n + stream_stride - 1) / stream_stride) * point_size);
+        live_data->resize(data->size());
         size_t m = 0;
-        for (Eigen::Index i = 0; i < n; i += stream_stride, ++m) {
+        int valid = 0;
+        for (Eigen::Index i = 0; i < n; ++i) {
+            if (range.data()[i] == 0 || valid++ % stream_stride != 0) continue;
             std::memcpy(&(*live_data)[m * point_size], &(*data)[i * point_size], point_size);
+            ++m;
         }
-
         live_data->resize(m * point_size);
         core::log_foxglove_only(live_pc);
         
