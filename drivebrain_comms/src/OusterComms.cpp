@@ -7,6 +7,7 @@
 #include <foxglove/PointCloud.pb.h>
 #include <foxglove/PackedElementField.pb.h>
 #include <ouster/core/frame_set.h>
+#include <ouster/core/lidar_frame.h>
 #include <ouster/sensor/sensor_packet_source.h>
 
 /****************************************************************
@@ -95,8 +96,8 @@ void comms::OusterComms::_loop() {
                 imu_data_out->set_accelerometer_y(imu_accel(i, 1));
                 imu_data_out->set_accelerometer_z(imu_accel(i, 2));
 
-                imu_data_out->set_gyro_x(imu_gyro(i, 2)); 
-                imu_data_out->set_gyro_y(imu_gyro(i, 2));
+                imu_data_out->set_gyro_x(imu_gyro(i, 0)); 
+                imu_data_out->set_gyro_y(imu_gyro(i, 1));
                 imu_data_out->set_gyro_z(imu_gyro(i, 2));
             }
 
@@ -135,6 +136,9 @@ void comms::OusterComms::_loop() {
         const auto range = frame.field<uint32_t>(ouster::sdk::core::ChanField::RANGE);
         ouster::sdk::core::impl::cartesianT<float>(points, range, lut.direction, lut.offset);
 
+
+        _deskew(frame, index);
+
         // full resolution to mcap
         core::MCAPLogger::instance().log_msg(pc);
 
@@ -154,4 +158,10 @@ void comms::OusterComms::_loop() {
         core::log_foxglove_only(live_pc);
         
     }
+}
+
+
+void comms::OusterComms::_deskew(ouster::sdk::core::LidarFrame &frame, int index) {
+    auto frame_timestamps = frame.timestamp();
+    
 }

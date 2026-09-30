@@ -33,6 +33,31 @@ namespace comms {
                 _running = false;
                 spdlog::warn("destructed ouster comms");
             }
+
+            struct deskew_data {
+                Eigen::Vector3d gyro_bias =
+                Eigen::Vector3d::Zero();
+
+            Eigen::Vector3d accel_bias =
+                Eigen::Vector3d::Zero();
+
+            // Current orientation
+            Eigen::Matrix3d rotation =
+                Eigen::Matrix3d::Identity();
+
+            // Current velocity
+            Eigen::Vector3d velocity =
+                Eigen::Vector3d::Zero();
+
+            // Current position
+            Eigen::Vector3d position =
+                Eigen::Vector3d::Zero();
+
+            // Last IMU timestamp
+            double last_timestamp = -1.0;
+            };
+
+            deskew_data _deskew_data;
             
         
         private: 
@@ -48,6 +73,8 @@ namespace comms {
              * Runs the main loop for receiving and processing Ouster data
              */
             void _loop();
+
+            void _deskew(ouster::sdk::core::LidarFrame &frame, int index);
 
             // Represents a physical ouster lidar in a vector so you can have multiple sensors/lidars
             std::vector<ouster::sdk::sensor::Sensor> _sensors;
