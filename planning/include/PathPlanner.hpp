@@ -29,6 +29,7 @@ namespace planning {
 
   inline constexpr double pi = 3.14159265358979323846; 
   inline constexpr float MAX_TRACK_WIDTH_SQ = 5.0f * 5.0f; // track width changes based on event - need a way to monitor event type (accel vs skidpad check rules)
+  inline constexpr float MAX_LOOKAHEAD_RANGE_SQ = 200.0f;
 
   // Returns the next set of coordinates for the car to follow as a path
   inline std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones) {
@@ -37,9 +38,6 @@ namespace planning {
     std::vector<core::xyz_vec<float>> midpoints; // Set of points to follow
 
     std::vector<double> coords; // Cone coordinates used to make the delaunay triangulation
-
-    float max_range_squared = 500.0f;
-
 
     // Position and orientation updating only uses sim zmq message - need to update to work with sensor data for real-car validation!!
     float vehicle_x = core::StateTracker::instance().vehicle_sim_pos().vehicle_x;
@@ -54,7 +52,6 @@ namespace planning {
     // Finding yaw from quaternion orientation
     float sin_yaw = 2.0 * (w * z + x * y);
     float cos_yaw = 1.0 - 2.0 * (y * y + z * z);
-
     float vehicle_yaw = std::atan2(sin_yaw, cos_yaw);
 
     coords.reserve(cones.cones_size()*2); // Allocate enough memory to store the x and y coordinates of each cone
@@ -81,8 +78,8 @@ namespace planning {
       }
 
 
-      // check for positive and negative angles
-      if (std::abs(angle_diff) < pi/1.5 && relative_distance < max_range_squared) {
+      // only keep cone coordinates that are in front of the car - can add a max range filter to see how far ahead the filtering should look at 
+      if (std::abs(angle_diff) < pi/2 && relative_distance < MAX_LOOKAHEAD_RANGE_SQ) {
         coords.push_back(cone.position().x());
         coords.push_back(cone.position().y());
         index_map.push_back(original_index);
@@ -98,7 +95,7 @@ namespace planning {
 
     delaunator::Delaunator delaunay(coords); // Triangulation occurs on construction
 
-    std::size_t invalid_index = static_cast<std::size_t>(-1);
+    std::size_t invalid_index = static_cast<std::size_t>(-1); // indices that do not point to the index of a corresponding half edge store -1
 
     for (std::size_t i = 0; i < delaunay.triangles.size(); i++) {
 
@@ -113,6 +110,7 @@ namespace planning {
       auto curr_edge_color = cones.cones().at(index_map[curr_edge]).color();
       auto twin_edge_color = cones.cones().at(index_map[twin_edge]).color();
       
+      // only looking for edges that cross the width of the track
       bool is_crossing_edge = (curr_edge_color == dv_msgs::Cones_ConeColor_BLUE && twin_edge_color == dv_msgs::Cones_ConeColor_YELLOW) ||
           (curr_edge_color == dv_msgs::Cones_ConeColor_YELLOW && twin_edge_color == dv_msgs::Cones_ConeColor_BLUE);
 
@@ -121,7 +119,6 @@ namespace planning {
         float dy = delaunay.coords[2 * curr_edge + 1] - delaunay.coords[2 * twin_edge +1];
 
         // filtering crossing edges based on length - they should only be the width of the track
-        // track width changes with events (compare accel to skidpad) -- need a way to monitor event mode so it automatically changes the max value
         if ((dx * dx) + (dy * dy) <= MAX_TRACK_WIDTH_SQ) {
           float mx = (delaunay.coords[2* curr_edge] + delaunay.coords[2* twin_edge]) / (2.0);
           float my = (delaunay.coords[2*curr_edge + 1] + delaunay.coords[2* twin_edge + 1]) / (2.0);
