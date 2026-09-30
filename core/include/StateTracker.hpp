@@ -298,6 +298,19 @@ namespace core {
     };
 
 
+    struct VehicleSimPosition {
+        float vehicle_x;
+        float vehicle_y;
+        float vehicle_z = 0;
+
+        float orientation_w;
+        float orientation_x;
+        float orientation_y;
+        float orientation_z;
+
+    };
+
+
     /**
      * Allows different communications interfaces
      * to update the internal state of drivebrain in a thread-safe manner
@@ -385,6 +398,9 @@ namespace core {
              */
             std::pair<TeleopCommand, bool> teleop_command();
 
+            void set_vehicle_sim_pose(std::shared_ptr<const hytech_msgs::pose> vehicle_pose);
+
+            VehicleSimPosition vehicle_sim_pos();
 
         private:
 
@@ -411,6 +427,9 @@ namespace core {
 
             TeleopCommand _teleop_command = { };
             std::mutex _teleop_mutex;
+
+            VehicleSimPosition _vehicle_sim_position = { };
+            std::mutex _vehicle_sim_pos_mutex;
             
             /* Private constructor called by the init method */
             StateTracker() {}; 
@@ -418,6 +437,8 @@ namespace core {
             /* Singleton move semantics */
             StateTracker(const StateTracker&) = delete; 
             StateTracker& operator=(const StateTracker&) = delete;
+
+            
 
             /* Singleton instance */
             inline static std::atomic<StateTracker*> _s_instance; 

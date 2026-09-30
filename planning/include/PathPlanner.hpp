@@ -28,33 +28,30 @@ namespace planning {
 
 
   inline constexpr double pi = 3.14159265358979323846; 
+  inline constexpr float MAX_TRACK_WIDTH_SQ = 5.0f * 5.0f; // track width changes based on event - need a way to monitor event type (accel vs skidpad check rules)
 
   // Returns the next set of coordinates for the car to follow as a path
   inline std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones) {
     
     /* Initializations */
-    std::vector<core::xyz_vec<float>> path_points; // The final set of points to be followed
-
-    std::vector<core::xyz_vec<float>> midpoints; // Set of midpoints generated based on range filter
-
+    std::vector<core::xyz_vec<float>> midpoints; // Set of points to follow
 
     std::vector<double> coords; // Cone coordinates used to make the delaunay triangulation
 
     float max_range_squared = 500.0f;
 
-    // FrameTransform is actually the position of the lidar relative to the map frame but the lidar is technically mounted towards the front of the car
-    float vehicle_x = static_cast<float>(foxglove::FrameTransform::default_instance().translation().x());
-    float vehicle_y = static_cast<float>(foxglove::FrameTransform::default_instance().translation().y());
+
+    // Position and orientation updating only uses sim zmq message - need to update to work with sensor data for real-car validation!!
+    float vehicle_x = core::StateTracker::instance().vehicle_sim_pos().vehicle_x;
+    float vehicle_y = core::StateTracker::instance().vehicle_sim_pos().vehicle_y;
+
+    float w = core::StateTracker::instance().vehicle_sim_pos().orientation_w;
+    float x = core::StateTracker::instance().vehicle_sim_pos().orientation_x;
+    float y = core::StateTracker::instance().vehicle_sim_pos().orientation_y;
+    float z = core::StateTracker::instance().vehicle_sim_pos().orientation_z;
 
 
-    // apparently default instance doesn't work (it's empty) so what do i use....?
-
-    float w = hytech_msgs::pose::default_instance().orientation().w();
-    float x = hytech_msgs::pose::default_instance().orientation().x();
-    float y = hytech_msgs::pose::default_instance().orientation().y();
-    float z = hytech_msgs::pose::default_instance().orientation().z();
-
-    // Using the formula for finding yaw from quaternion orientation (first formula i got when I searched it up)
+    // Finding yaw from quaternion orientation
     float sin_yaw = 2.0 * (w * z + x * y);
     float cos_yaw = 1.0 - 2.0 * (y * y + z * z);
 
@@ -93,11 +90,11 @@ namespace planning {
       ++original_index;
     }
 
-    if (coords.size() < 3) {
+    
+    if (coords.size() < 6) { // Each cone has an x and y
       spdlog::error("not enough cones");
-      return path_points; // Min 3 points required to do triangulation
+      return midpoints; // Min 3 points required to do triangulation
     }
-
 
     delaunator::Delaunator delaunay(coords); // Triangulation occurs on construction
 
@@ -120,67 +117,50 @@ namespace planning {
           (curr_edge_color == dv_msgs::Cones_ConeColor_YELLOW && twin_edge_color == dv_msgs::Cones_ConeColor_BLUE);
 
       if (is_crossing_edge) {
-        float mx = (delaunay.coords[2* curr_edge] + delaunay.coords[2* twin_edge]) / (2.0);
-        float my = (delaunay.coords[2*curr_edge + 1] + delaunay.coords[2* twin_edge + 1]) / (2.0);
-        midpoints.push_back({mx, my, 0.0f});
+        float dx = delaunay.coords[2 * curr_edge] - delaunay.coords[2 * twin_edge];
+        float dy = delaunay.coords[2 * curr_edge + 1] - delaunay.coords[2 * twin_edge +1];
+
+        // filtering crossing edges based on length - they should only be the width of the track
+        // track width changes with events (compare accel to skidpad) -- need a way to monitor event mode so it automatically changes the max value
+        if ((dx * dx) + (dy * dy) <= MAX_TRACK_WIDTH_SQ) {
+          float mx = (delaunay.coords[2* curr_edge] + delaunay.coords[2* twin_edge]) / (2.0);
+          float my = (delaunay.coords[2*curr_edge + 1] + delaunay.coords[2* twin_edge + 1]) / (2.0);
+          midpoints.push_back({mx, my, 0.0f});
+        }
       }
     }
     
+    if (midpoints.empty()) return midpoints;
+
     // Finding the first closest midpoint
-    float rel_dist_max = 500.0f;
-    float curr_dist = 0.0f;
-    std::size_t closest_midpoint_index = 0;
+    float closest_ahead = std::numeric_limits<float>::max();
+    std::size_t start;
 
     for (std::size_t i = 0; i < midpoints.size(); i++) {
-      float x = midpoints.at(i).x - vehicle_x;
-      float y = midpoints.at(i).y - vehicle_y;
-      curr_dist = (x * x) + (y * y);
-      if (curr_dist < rel_dist_max) {
-        rel_dist_max = curr_dist;
-        closest_midpoint_index = i;
+      float dx = midpoints[i].x - vehicle_x;
+      float dy = midpoints[i].y - vehicle_y;
+      float d = dx * dx + dy * dy;
+
+      if (dx * cos_yaw + dy * sin_yaw > 0.0f && d < closest_ahead) {
+        closest_ahead = d;
+        start = i;
       }
     }
 
-    auto closest_midpoint = midpoints.at(closest_midpoint_index);
+    std::swap(midpoints[0], midpoints[start]);
+    for (std::size_t i = 0; i + 1 < midpoints.size(); i++) {
+      const auto current = midpoints[i];
 
-    std::sort(midpoints.begin(), midpoints.end(), 
-      [closest_midpoint] (const auto& a, const auto& b) {
-        float ax = a.x - closest_midpoint.x;
-        float ay = a.y - closest_midpoint.y;
-
-        float bx = b.x - closest_midpoint.x;
-        float by = b.y - closest_midpoint.y;
-        float dist_a = (ax * ax) + (ay * ay);
-        float dist_b = (bx * bx) + (by * by);
-
-        return dist_a < dist_b;
-
+      auto next = std::min_element(midpoints.begin() + i + 1, midpoints.end(), [&](const auto& a, const auto& b) {
+        return ((a.x - current.x) * (a.x - current.x) + (a.y - current.y) * (a.y - current.y))< ((b.x - current.x) * (b.x - current.x) + (b.y - current.y) * (b.y - current.y)); 
       });
 
+      std::swap(*(midpoints.begin() + i + 1), *next);
 
-
-
-    for (const auto& midpoint : midpoints) {
-      path_points.push_back({midpoint.x, midpoint.y, 0.0f});
     }
 
-    return path_points;
+    return midpoints;
     
   }
 }
 
-
-    // midpoint to vehicle filtering
-    // std::sort(midpoints.begin(), midpoints.end(), 
-    // [&](const auto& a, const auto& b) {
-    //     float ax = a.x - vehicle_x;
-    //     float ay = a.y - vehicle_y;
-
-    //     float bx = b.x - vehicle_x;
-    //     float by = b.y - vehicle_y;
-
-    //     float dist_a = (ax * ax) + (ay * ay);
-    //     float dist_b = (bx * bx) + (by * by);
-
-    //     return dist_a < dist_b;
-    // });

@@ -1,6 +1,7 @@
 #include <StateTracker.hpp>
 #include <foxglove/PointCloud.pb.h>
 #include <foxglove/websocket/parameter.hpp>
+#include <mutex>
 
 using namespace core; 
 
@@ -155,6 +156,27 @@ std::pair<core::TeleopCommand, bool> StateTracker::teleop_command() {
                     (std::chrono::steady_clock::now() - current_command.recv_time) < TELEOP_TIMEOUT;
 
     return {current_command, is_valid};
+}
+
+void StateTracker::set_vehicle_sim_pose(std::shared_ptr<const hytech_msgs::pose> vehicle_pose) {
+    std::unique_lock lk(_vehicle_sim_pos_mutex);
+    _vehicle_sim_position.vehicle_x = vehicle_pose -> position().x();
+    _vehicle_sim_position.vehicle_y = vehicle_pose -> position().y();
+    _vehicle_sim_position.vehicle_z = vehicle_pose -> position().z();
+    _vehicle_sim_position.orientation_w = vehicle_pose -> orientation().w();
+    _vehicle_sim_position.orientation_x = vehicle_pose -> orientation().x();
+    _vehicle_sim_position.orientation_y = vehicle_pose -> orientation().y();
+    _vehicle_sim_position.orientation_z = vehicle_pose -> orientation().z();
+}
+
+core::VehicleSimPosition StateTracker::vehicle_sim_pos() {
+    VehicleSimPosition current_position;
+    
+    std::unique_lock lk(_vehicle_sim_pos_mutex);
+
+    current_position = _vehicle_sim_position;
+
+    return current_position;
 }
 
 /****************************************************************
