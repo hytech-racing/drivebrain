@@ -2,6 +2,7 @@ services:
   dev:
     # TODO: update docker hub image
     # image: kkittur/drivebrain_cross_compile 
+    platform: linux/amd64
     build:
       context: .
       target: dev-sim
