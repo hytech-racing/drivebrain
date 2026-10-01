@@ -26,11 +26,15 @@ namespace comms {
              * Initializes a new Ouster communications interface with the specified sensor hostname. 
              * 
              * @param sensor_hostname the hostname of the ouster sensor trying to be initialized
+             * @param init_not_successful output flag set to true if initialization failed, false otherwise
              */
-            OusterComms(const std::string &sensor_hostname, bool successful);
+            OusterComms(const std::string &sensor_hostname, bool &init_not_successful);
 
             ~OusterComms() {
                 _running = false;
+                if (_thread.joinable()) {
+                    _thread.join();
+                }
                 spdlog::warn("destructed ouster comms");
             }
             
