@@ -1,4 +1,5 @@
 {
+    "mcap_recordings_dir": "/mnt/ssd/recordings",
     "telem_can_device": "can_primary",
     "aux_can_device": "can_secondary",
     "SimpleSpeedController": {

@@ -42,7 +42,7 @@ DrivebrainApp::~DrivebrainApp() {
 void DrivebrainApp::run() {
   std::signal(SIGINT, sig_handler);
 
-  core::MCAPLogger::create("recordings/", mcap::McapWriterOptions(""), _json_params_path);
+  core::MCAPLogger::create("", mcap::McapWriterOptions(""), _json_params_path);
   core::FoxgloveServer::create(_json_params_path);
   core::StateTracker::create();
 
