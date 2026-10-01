@@ -8,6 +8,7 @@
 #include <cassert>
 #include <queue> 
 #include <chrono>
+#include <filesystem>
 #include <mcap/writer.hpp>
 #include <google/protobuf/descriptor.pb.h>
 #include <foxglove/websocket/base64.hpp>
@@ -68,9 +69,20 @@ namespace core {
             /**
              * Opens a new mcap file by adding options and all protobuf schema
              * 
+             * @param file_name optional specific file name or relative path
              * @return 0 on success, negative err code on failure
              */
-            int open_new_mcap();
+            int open_new_mcap(const std::string &file_name = "");
+
+            /**
+             * Returns the base directory where MCAP recordings are saved.
+             */
+            const std::string& get_base_dir() const;
+
+            /**
+             * Updates the base directory where MCAP recordings are saved.
+             */
+            void set_base_dir(const std::string &dir);
 
             /**
              * Closes the current mcap file. Only runs if there is a file open. 
@@ -156,6 +168,7 @@ namespace core {
             nlohmann::json _initial_params;
             std::unordered_map<std::string, uint32_t> _name_to_id_map;
             std::unordered_map<std::string, uint16_t> _type_to_schema_id_map;
+            std::string _base_dir;
             std::string _log_name = "NONE";
             bool _logging = false;
             bool _running = true;

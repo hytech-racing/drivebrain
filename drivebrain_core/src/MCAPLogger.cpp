@@ -6,36 +6,40 @@
 #include <MCAPLogger.hpp>
 
 #if JETSON_ENABLED
-#define RECORDINGS_DIR "/home/hytech/recordings"
+constexpr const char* DEFAULT_RECORDINGS_DIR = "/mnt/ssd/recordings";
 #else
-#define RECORDINGS_DIR "/home/nixos/recordings"
+constexpr const char* DEFAULT_RECORDINGS_DIR = "/home/nixos/recordings";
 #endif
 
 /****************************************************************
  * HELPER METHODS
  ****************************************************************/
-static std::string get_logfile_name() {
-  std::string dir_path = RECORDINGS_DIR;
+static std::string get_next_logfile_name(const std::string &dir_path) {
   int max_file_number = 0;
-  std::string largest_file_name; 
 
   try {
-    for (const auto& entry : std::filesystem::directory_iterator(dir_path)) {
+    std::error_code ec;
+    if (!std::filesystem::exists(dir_path, ec)) {
+      std::filesystem::create_directories(dir_path, ec);
+    }
+    for (const auto& entry : std::filesystem::directory_iterator(dir_path, ec)) {
       if (entry.is_regular_file()) {
-        std::string filename = entry.path().filename().string();
+        std::string stem = entry.path().stem().string();
         try {
-          int current_number = std::stoi(filename);
+          int current_number = std::stoi(stem);
           if (current_number > max_file_number) {
               max_file_number = current_number;
           }
-        } catch (const std::invalid_argument& e) {
-          spdlog::error("Skipping non-numeric file: {}", filename);
-        } 
+        } catch (const std::invalid_argument&) {
+          // Non-numeric filename, skip
+        } catch (const std::out_of_range&) {
+          // Number exceeds int range, skip
+        }
       }
     }
-  }  catch (const std::filesystem::filesystem_error& e) {
-    spdlog::error("Filesystem error");
-    return "sdfsdf.mcap";
+  } catch (const std::filesystem::filesystem_error& e) {
+    spdlog::error("Filesystem error scanning {}: {}", dir_path, e.what());
+    return "1.mcap";
   } 
 
   return std::to_string(max_file_number + 1) + ".mcap";
@@ -138,14 +142,28 @@ void core::MCAPLogger::destroy() {
     }
 }
 
-int core::MCAPLogger::open_new_mcap() {
-    std::string mcap_name = get_logfile_name();
-    spdlog::info("Attempting to open new MCAP file: {}", mcap_name);
+int core::MCAPLogger::open_new_mcap(const std::string &file_name) {
 #if HOOTL_ENABLED
-    _log_name = "sim_data.mcap";
+    _log_name = file_name.empty() ? "sim_data.mcap" : file_name;
 #else
-    _log_name = std::string(RECORDINGS_DIR) + "/" + get_logfile_name(); 
+    std::string mcap_name = file_name.empty() ? get_next_logfile_name(_base_dir) : file_name;
+    std::filesystem::path p(mcap_name);
+    if (p.is_absolute()) {
+        _log_name = p.string();
+    } else {
+        _log_name = (std::filesystem::path(_base_dir) / p).string();
+    }
 #endif
+    spdlog::info("Attempting to open new MCAP file: {}", _log_name);
+
+    std::filesystem::path log_path(_log_name);
+    if (log_path.has_parent_path()) {
+        std::error_code ec;
+        std::filesystem::create_directories(log_path.parent_path(), ec);
+        if (ec) {
+            spdlog::error("Failed to create directory {}: {}", log_path.parent_path().string(), ec.message());
+        }
+    }
 
     const auto res = _writer.open(_log_name, _options);
     if (!res.ok()) {
@@ -231,8 +249,28 @@ int core::MCAPLogger::log_msg(core::MsgType message, const std::string &topic) {
  * PRIVATE CLASS METHOD IMPLEMENTATIONS
  ****************************************************************/
 core::MCAPLogger::MCAPLogger(const std::string &base_dir, const mcap::McapWriterOptions &options, const std::string &params_file) : _options(options) {
+    nlohmann::json params_config;
     std::fstream raw_param_file(params_file);
-    nlohmann::json params_config = nlohmann::json::parse(raw_param_file);
+    if (raw_param_file.is_open()) {
+        try {
+            params_config = nlohmann::json::parse(raw_param_file);
+        } catch (const nlohmann::json::parse_error &e) {
+            spdlog::error("Failed to parse params file {}: {}", params_file, e.what());
+        }
+    } else {
+        spdlog::warn("Could not open params file: {}", params_file);
+    }
+
+    if (params_config.contains("mcap_recordings_dir") && params_config["mcap_recordings_dir"].is_string() && !params_config["mcap_recordings_dir"].get<std::string>().empty()) {
+        _base_dir = params_config["mcap_recordings_dir"].get<std::string>();
+    } else if (!base_dir.empty() && base_dir != "recordings/") {
+        _base_dir = base_dir;
+    } else {
+        _base_dir = DEFAULT_RECORDINGS_DIR;
+    }
+
+    spdlog::info("MCAPLogger initialized with base recordings directory: {}", _base_dir);
+
     _initial_params = params_config; // Used in open_new_mcap to log initial params
     _params_schema_json = generate_json_schema(params_config);
 }
@@ -287,5 +325,14 @@ int core::MCAPLogger::log_params(nlohmann::json params) {
     }
 
     return 0;
+}
+
+const std::string& core::MCAPLogger::get_base_dir() const {
+    return _base_dir;
+}
+
+void core::MCAPLogger::set_base_dir(const std::string &dir) {
+    _base_dir = dir;
+    spdlog::info("MCAPLogger base recordings directory changed to: {}", _base_dir);
 }
 
