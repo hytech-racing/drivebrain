@@ -118,6 +118,10 @@ namespace core {
              */
             int log_params(nlohmann::json params);
 
+            int log_overrun(const std::string &loop_name, double overrun_us);
+
+            int log_system_metrics(const nlohmann::json &metrics);
+
         private: 
           
             /* Private constructor to be called by init method */

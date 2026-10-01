@@ -55,7 +55,8 @@
     "use_fake_vn": false,
     "use_surrey_aero": false,
     "use_scale_comms": false,
-    "use_laptimer": false
+    "use_laptimer": false,
+    "use_ouster": true
 
 }
 

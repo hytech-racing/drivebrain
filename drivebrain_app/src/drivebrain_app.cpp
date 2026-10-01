@@ -7,6 +7,7 @@
 #include "Telemetry.hpp"
 #include "ControllerManager.hpp"
 #include "DrivebrainControllerInterface.hpp"
+#include "SystemMetrics.hpp"
 #include <StateTracker.hpp>
 #include <atomic>
 #include <chrono>
@@ -21,8 +22,8 @@
 std::atomic<bool> running{true};
 
 void sig_handler(int signal) {
-    if(signal == SIGINT) {
-      spdlog::warn("Interrupted, stopping Drivebrain app");
+    if(signal == SIGINT || signal == SIGTERM) {
+      spdlog::warn("Signal received ({}), stopping Drivebrain app", signal);
       running = false;
     }
 }
@@ -41,6 +42,7 @@ DrivebrainApp::~DrivebrainApp() {
 
 void DrivebrainApp::run() {
   std::signal(SIGINT, sig_handler);
+  std::signal(SIGTERM, sig_handler);
 
   core::MCAPLogger::create("recordings/", mcap::McapWriterOptions(""), _json_params_path);
   core::FoxgloveServer::create(_json_params_path);
@@ -73,14 +75,25 @@ void DrivebrainApp::run() {
     spdlog::error("Failed to initialize vectornav driver");
   }
 
-  bool ouster_init_not_successful; 
-  const char* ouster_hostname = "os-122634002484.local";
-  _ouster_driver = std::make_unique<comms::OusterComms>(ouster_hostname, ouster_init_not_successful);
-  if (ouster_init_not_successful) {
-    spdlog::error("Failed to initialize Ouster driver");
-  } 
-
-  spdlog::info("ouster driver init");
+  auto use_ouster = core::FoxgloveServer::instance().get_param<bool>("use_ouster").value_or(true);
+  if (use_ouster) {
+    bool ouster_init_not_successful = false; 
+    const char* ouster_hostname = "os-122634002484.local";
+    try {
+      _ouster_driver = std::make_unique<comms::OusterComms>(ouster_hostname, ouster_init_not_successful);
+    } catch (const std::exception& e) {
+      spdlog::error("Failed to construct Ouster driver: {}", e.what());
+      ouster_init_not_successful = true;
+    }
+    if (ouster_init_not_successful) {
+      spdlog::error("Failed to initialize Ouster driver; continuing without LiDAR");
+      _ouster_driver.reset();
+    } else {
+      spdlog::info("ouster driver init");
+    }
+  } else {
+    spdlog::info("Ouster driver disabled by configuration");
+  }
 
 #if !JETSON_ENABLED
   // CAN device names are defined in the drivebrain JSON config
@@ -116,6 +129,12 @@ void DrivebrainApp::run() {
   }
 
   spdlog::info("Constructed controller manager");
+
+  // Local ownership stops and joins the sampler before run() returns and the
+  // application destructor destroys the logger, including exception unwinding.
+  core::SystemMetricsMonitor system_metrics([](const nlohmann::json& metrics) {
+    core::MCAPLogger::instance().log_system_metrics(metrics);
+  });
 
   running = true; 
   _io_context_thread = std::thread([this]() {
@@ -238,6 +257,7 @@ void DrivebrainApp::_loop() {
     auto now = std::chrono::steady_clock::now();
     if(now > next_tick) {
       spdlog::warn("Loop overrun by {}", now-next_tick);
+      core::MCAPLogger::instance().log_overrun("drivebrain_main_loop", std::chrono::duration<double, std::micro>(now - next_tick).count());
       next_tick = now;
     }
 
