@@ -7,6 +7,7 @@
 #include "Telemetry.hpp"
 #include "ControllerManager.hpp"
 #include "DrivebrainControllerInterface.hpp"
+#include "SystemMetrics.hpp"
 #include <StateTracker.hpp>
 #include <atomic>
 #include <chrono>
@@ -129,6 +130,12 @@ void DrivebrainApp::run() {
 
   spdlog::info("Constructed controller manager");
 
+  // Local ownership stops and joins the sampler before run() returns and the
+  // application destructor destroys the logger, including exception unwinding.
+  core::SystemMetricsMonitor system_metrics([](const nlohmann::json& metrics) {
+    core::MCAPLogger::instance().log_system_metrics(metrics);
+  });
+
   running = true; 
   _io_context_thread = std::thread([this]() {
     try {
@@ -250,6 +257,7 @@ void DrivebrainApp::_loop() {
     auto now = std::chrono::steady_clock::now();
     if(now > next_tick) {
       spdlog::warn("Loop overrun by {}", now-next_tick);
+      core::MCAPLogger::instance().log_overrun("drivebrain_main_loop", std::chrono::duration<double, std::micro>(now - next_tick).count());
       next_tick = now;
     }
 
