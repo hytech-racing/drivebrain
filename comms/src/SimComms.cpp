@@ -97,22 +97,11 @@ SimComms::SimComms() {
         _running = false;
         throw std::runtime_error("SimComms: failed to bind recv socket");
     }
-    try {
-        _veh_data_send_socket = zmq::socket_t(_ctx, zmq::socket_type::push);
-        _veh_data_send_socket.set(zmq::sockopt::sndhwm, 10);
-        _veh_data_send_socket.connect(endpoint(_send_socket_port));
-    } catch (const zmq::error_t& e) {
-        spdlog::error("SimComms: failed to connect send socket: {}", e.what());
+    if (!_setup_send_socket(_veh_data_send_socket, _send_socket_port)) {
         _running = false;
         throw std::runtime_error("SimComms: failed to connect send socket");
     }
-    try {
-        _lidar_socket = zmq::socket_t(_ctx, zmq::socket_type::pull);
-        _lidar_socket.set(zmq::sockopt::rcvhwm, 2);
-        _lidar_socket.set(zmq::sockopt::rcvtimeo, 100);
-        _lidar_socket.connect(endpoint(_lidar_socket_port));
-    } catch (const zmq::error_t& e) {
-        spdlog::error("SimComms: failed to connect lidar socket: {}", e.what());
+    if (!_setup_lidar_socket(_lidar_socket, _lidar_socket_port)) {
         _running = false;
         throw std::runtime_error("SimComms: failed to connect lidar socket");
     }
@@ -130,6 +119,33 @@ bool SimComms::_setup_recv_socket(zmq::socket_t& s, uint16_t port) {
     return false;
   }
   return true;
+}
+
+bool SimComms::_setup_send_socket(zmq::socket_t& s, uint16_t port) {
+    try {
+        s = zmq::socket_t(_ctx, zmq::socket_type::push);
+        s.set(zmq::sockopt::sndhwm, 10);
+        s.connect(endpoint(port));
+    } catch (const zmq::error_t& e) {
+        spdlog::error("SimComms: failed to connect send socket: {}", e.what());
+        _running = false;
+        return false;
+    }
+    return true;
+}
+
+bool SimComms::_setup_lidar_socket(zmq::socket_t& s, uint16_t port) {
+    try {
+        s = zmq::socket_t(_ctx, zmq::socket_type::pull);
+        s.set(zmq::sockopt::rcvhwm, 2);
+        s.set(zmq::sockopt::rcvtimeo, 100);
+        s.connect(endpoint(port));
+    } catch (const zmq::error_t& e) {
+        spdlog::error("SimComms: failed to connect lidar socket: {}", e.what());
+        _running = false;
+        return false;
+    }
+    return true;
 }
 
 void SimComms::_veh_recv_loop() {
@@ -175,6 +191,7 @@ void SimComms::_lidar_recv_loop() {
         zmq::message_t frame;
         try {
             auto res = _lidar_socket.recv(frame);
+            std::cout << "Received lidar frame of size: " << frame.size() << std::endl;
             if (!res) continue;
         } catch (const zmq::error_t& e) {
             if (e.num() == ETERM) break;

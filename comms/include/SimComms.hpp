@@ -42,6 +42,22 @@ class SimComms {
          * @return Whether the setup suceeded
         */
         bool _setup_recv_socket(zmq::socket_t& s, uint16_t port);
+        
+        /**
+         * Initializes the ZMQ SimComms lidar socket
+         * @param s The ZMQ socket to initialize
+         * @param port The endpoint the ZMQ socket should be listening on
+         * @return Whether the setup suceeded
+        */
+        bool _setup_lidar_socket(zmq::socket_t& s, uint16_t port);
+
+        /**
+         * Initializes the ZMQ SimComms vehicle data send socket
+         * @param s The ZMQ socket to initialize
+         * @param port The endpoint the ZMQ socket should be listening on
+         * @return Whether the setup suceeded
+        */
+        bool _setup_send_socket(zmq::socket_t& s, uint16_t port);
 
         void _veh_recv_loop();
         void _lidar_recv_loop();
