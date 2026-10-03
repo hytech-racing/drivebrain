@@ -13,12 +13,13 @@ namespace core {
  *
  * @msg The protobuf message to log and stream.
 */
-inline void log(std::shared_ptr<const google::protobuf::Message> msg) {
+inline void log(std::shared_ptr<const google::protobuf::Message> msg, const std::string& topic = {}) {
     if (!msg) {
         return;
     }
+    const std::string& t = topic.empty() ? msg->GetDescriptor()->name() : topic;
     MCAPLogger::instance().log_msg(msg);
-    FoxgloveServer::instance().send_live_telem_msg(msg);
+    FoxgloveServer::instance().send_live_telem_msg(msg, t);
 }
 
 /**

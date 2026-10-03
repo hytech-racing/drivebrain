@@ -6,6 +6,7 @@
 
 #include <StateTracker.hpp>
 #include <GraphSLAM.hpp>
+#include <LidarFilter.hpp>
 
 namespace core {
 
