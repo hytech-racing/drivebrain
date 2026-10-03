@@ -122,7 +122,7 @@ target_link_libraries(drivebrain PUBLIC
     perception
     slam
     matlab_model
-    simulink_automation_msgs_proto_cpp
+    #simulink_automation_msgs_proto_cpp
 )
 
 #################################
