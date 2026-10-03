@@ -11,6 +11,8 @@ services:
       - conan-cache:/root/.conan2
       - ./:/app
       - /tmp:/tmp
+    environment:
+      - SIM_HOST=host.docker.internal
     working_dir: /app
     tty: true
     stdin_open: true

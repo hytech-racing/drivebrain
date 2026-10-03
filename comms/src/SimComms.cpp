@@ -4,6 +4,7 @@
 #include <memory>
 #include "StateTracker.hpp"
 #include "dv_msgs.pb.h"
+#include <cstdlib>
 
 namespace comms {
 
@@ -26,7 +27,9 @@ static std::shared_ptr<google::protobuf::Message> parse_by_name(const std::strin
 }
 
 static std::string endpoint(uint16_t port) {
-    return "ipc:///tmp/drivebrain_sim_" + std::to_string(port);
+    const char* host = std::getenv("SIM_HOST");
+    if (!host) host = "127.0.0.1";
+    return "tcp://" + std::string(host) + ":" + std::to_string(port);
 }
 
 /****************************************************************
