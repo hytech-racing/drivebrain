@@ -19,6 +19,11 @@ namespace perception {
   constexpr float GROUND_PERCENTILE = 0.15f;
   constexpr float NON_GROUND_HEIGHT_THRESHOLD_M = 0.02f;
 
+  // Clustering
+  constexpr float CLUSTER_TOLERANCE_M = 0.25f;
+  constexpr int MIN_CLUSTER_SIZE = 3;
+  constexpr int MAX_CLUSTER_SIZE = 1000;
+
   /**
    * Performs ground and object filtering on a LiDAR scan
    * @param scan The pointcloud to run filtering on
