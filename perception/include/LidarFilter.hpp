@@ -24,12 +24,37 @@ namespace perception {
   constexpr int MIN_CLUSTER_SIZE = 3;
   constexpr int MAX_CLUSTER_SIZE = 1000;
 
+  // Cone Filtering
+  constexpr float MAX_DETECTION_RANGE_M = 25.0f;
+  constexpr float NEAR_RANGE_M = 5.0f;
+  constexpr float MID_RANGE_M = 10.0f;
+
+  constexpr int NEAR_MIN_CONE_POINTS = 7;
+  constexpr int MID_MIN_CONE_POINTS = 5;
+  constexpr int FAR_MIN_CONE_POINTS = 3;
+
+  constexpr float NEAR_MIN_CONE_HEIGHT_M = 0.06f;
+  constexpr float MID_MIN_CONE_HEIGHT_M = 0.02f;
+  constexpr float FAR_MIN_CONE_HEIGHT_M = 0.0f;
+
+  constexpr float NEAR_MAX_CONE_WIDTH_M = 0.30f;
+  constexpr float MID_MAX_CONE_WIDTH_M = 0.25f;
+  constexpr float FAR_MAX_CONE_WIDTH_M = 0.10f;
+
+  constexpr float MAX_CONE_HEIGHT_M = 0.5f;
+  constexpr float MAX_ELONGATION = 4.0f;
+  constexpr float MIN_WIDTH_FOR_ELONGATION_M = 0.03f;
+
+  constexpr float NEAR_ACCEPTED_CONFIDENCE = 1.0f;
+  constexpr float MID_ACCEPTED_CONFIDENCE = 0.5f;
+  constexpr float FAR_ACCEPTED_CONFIDENCE = 0.25f;
+
   /**
    * Performs ground and object filtering on a LiDAR scan
    * @param scan The pointcloud to run filtering on
-   * @return goon
+   * @return shared pointer to the filtered cones
   */
-  std::shared_ptr<const foxglove::PointCloud> filter_cloud(const foxglove::PointCloud& scan);
-}
+  std::shared_ptr<dv_msgs::Cones> filter_cloud(const foxglove::PointCloud& scan);
+} // namespace perception
 
 

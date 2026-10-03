@@ -12,8 +12,11 @@ namespace {
     };
 
     struct ClusterFeatures {
-
-    }
+        core::LidarPoint centroid{0, 0, 0}, min{0, 0, 0}, max{0, 0, 0};
+        float width_x_m = 0, width_y_m = 0, height_z_m = 0; 
+        float max_horizontal_width_m = 0, range_m = 0; 
+        std::size_t num_points = 0;
+    };
 
     // Arranges cell key in the format of 64 bits cx (high 32 bits) cy (low 32 bits)
     std::int64_t cell_key(std::int32_t cx, std::int32_t cy) {
@@ -144,24 +147,108 @@ namespace {
 
         }
 
-        std::cout << "Raw clusters: " << raw_clusters << ", Too small: " << too_small << ", Too large: " << too_large << ", Valid clusters: " << clusters.size() << std::endl;
+        // std::cout << "Raw clusters: " << raw_clusters << ", Too small: " << too_small << ", Too large: " << too_large << ", Valid clusters: " << clusters.size() << std::endl;
 
         return clusters;
     }
 
-    std::vector<ClusterFeatures> extract_features(const std::vector<Cluster>& clusters, const foxglove::PointCloud& points) {
+    /**
+     * Extract features from the given clusters and the filtered point cloud.
+     * Returns a vector of ClusterFeatures containing centroid, bounding box, and other metrics for each cluster.
+     * 
+     * @param clusters The vector of clusters to extract features from.
+     * @param filtered_cloud The filtered point cloud corresponding to the clusters.
+     * @return A vector of ClusterFeatures for each cluster.
+     */
+    std::vector<ClusterFeatures> extract_features(const std::vector<Cluster>& clusters, const foxglove::PointCloud& filtered_cloud) {
+        const auto pts = core::points(filtered_cloud); 
         std::vector<ClusterFeatures> features;
+        features.reserve(clusters.size());
+
+        for (const auto& cluster : clusters) {
+            if (cluster.point_indices.empty()) continue;
+
+            ClusterFeatures feature;
+            const auto& first = pts[cluster.point_indices.front()];
+            feature.min = feature.max = first;
+            
+            // Get centroid and bounding box for the cluster
+            for (const auto& idx : cluster.point_indices) {
+                const auto& pt = pts[idx];
+                feature.centroid.x += pt.x;  feature.centroid.y += pt.y;  feature.centroid.z += pt.z;
+                feature.min.x = std::min(feature.min.x, pt.x);  feature.max.x = std::max(feature.max.x, pt.x);
+                feature.min.y = std::min(feature.min.y, pt.y);  feature.max.y = std::max(feature.max.y, pt.y);
+                feature.min.z = std::min(feature.min.z, pt.z);  feature.max.z = std::max(feature.max.z, pt.z);
+            }
+
+            feature.num_points = cluster.point_indices.size();
+            const float n = static_cast<float>(feature.num_points);
+            feature.centroid = {feature.centroid.x / n, feature.centroid.y / n, feature.centroid.z / n};
+
+            feature.width_x_m = feature.max.x - feature.min.x;
+            feature.width_y_m = feature.max.y - feature.min.y;
+            feature.height_z_m = feature.max.z - feature.min.z;
+            feature.max_horizontal_width_m = std::max(feature.width_x_m, feature.width_y_m);
+            feature.range_m = std::hypot(feature.centroid.x, feature.centroid.y);
+
+            features.push_back(std::move(feature));
+        }
 
         return features;
+    }
+
+    std::shared_ptr<dv_msgs::Cones> extract_cones(const std::vector<ClusterFeatures>& features, const foxglove::PointCloud& filtered_cloud) {
+        auto cones = std::make_shared<dv_msgs::Cones>();
+        // cones->set_frame_id(filtered_cloud.frame_id());
+        // *cones->mutable_timestamp() = filtered_cloud.timestamp();
+
+        for (const ClusterFeatures& feature : features) {
+            // Determine the range category of the cluster (near, mid, far) and create lambda for returning values based on range
+            const bool near = feature.range_m < NEAR_RANGE_M;
+            const bool mid = !near && feature.range_m <= MID_RANGE_M;
+            const bool far = !near && !mid;
+            const auto by_range = [&](auto n, auto m, auto f) { return near ? n : mid ? m : f; };
+
+            const std::size_t min_points = by_range(NEAR_MIN_CONE_POINTS, MID_MIN_CONE_POINTS, FAR_MIN_CONE_POINTS);
+            const double min_height = by_range(NEAR_MIN_CONE_HEIGHT_M, MID_MIN_CONE_HEIGHT_M, FAR_MIN_CONE_HEIGHT_M);
+            const double max_width = by_range(NEAR_MAX_CONE_WIDTH_M, MID_MAX_CONE_WIDTH_M, FAR_MAX_CONE_WIDTH_M);
+            const double small_width = std::max(std::min(feature.width_x_m, feature.width_y_m), MIN_WIDTH_FOR_ELONGATION_M);
+            const double elongation = feature.max_horizontal_width_m / small_width;
+
+            // TODO better debug information for why a cluster is being skipped 
+            if (feature.range_m > MAX_DETECTION_RANGE_M) continue;
+            else if (feature.num_points < min_points) continue;
+            else if (feature.height_z_m < min_height) continue;
+            else if (feature.height_z_m > MAX_CONE_HEIGHT_M) continue;
+            else if (feature.max_horizontal_width_m > max_width) continue;
+            else if (elongation > MAX_ELONGATION) continue;
+
+            // TODO report this
+            const double confidence = by_range(NEAR_ACCEPTED_CONFIDENCE, MID_ACCEPTED_CONFIDENCE, FAR_ACCEPTED_CONFIDENCE);
+
+            // Add the dv cone
+            auto* cone = cones->add_cones();
+
+            cone->set_color(dv_msgs::Cones::UNKNOWN);
+
+            auto* position = cone->mutable_position();
+            position->set_x(feature.centroid.x);
+            position->set_y(feature.centroid.y);
+            position->set_z(feature.centroid.z);
+        }
+        
+        return cones;
     }
     
 
 } // END OF ANONYMOUS NAMESPACE
 
-    std::shared_ptr<const foxglove::PointCloud> filter_cloud(const foxglove::PointCloud& scan) {
+    std::shared_ptr<dv_msgs::Cones> filter_cloud(const foxglove::PointCloud& scan) {
         std::shared_ptr<const foxglove::PointCloud> filtered_scan = remove_ground(scan);
         auto clusters = cluster(*filtered_scan);
-        return filtered_scan;
+        auto features = extract_features(clusters, *filtered_scan);
+        auto cones = extract_cones(features, *filtered_scan);
+        return cones;
     }
 
 }

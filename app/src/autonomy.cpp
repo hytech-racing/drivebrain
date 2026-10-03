@@ -66,9 +66,9 @@ void Autonomy::_run() {
     if (dv.lidar_is_valid && dv.lidar_cloud != last_scan) {
       last_scan = dv.lidar_cloud;
 
-      std::shared_ptr<const foxglove::PointCloud> filtered_scan = perception::filter_cloud(*last_scan);
+      std::shared_ptr<dv_msgs::Cones> cones = perception::filter_cloud(*last_scan);
 
-      core::log(filtered_scan, "/lidar/non_ground");
+      core::render_cones(cones, "filtered_cones", "lidar");
 
       // TODO: cone classifier needs to be invoked here
       auto path = planning::plan_path(*StateTracker::instance().dv_state().cone_observations);
