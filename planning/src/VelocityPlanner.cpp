@@ -22,7 +22,7 @@ const float kMaxAccel = kMu * kGravity;
 
 VelocityPlanner::VelocityPlanner(std::string path_filename, float max_car_velocity)
     : path_(loadPathFromCsv(path_filename)), max_car_velocity_(max_car_velocity) {
-        path_points_.reserve(lookahead_distance_index_);
+        path_points_.resize(lookahead_distance_index_);
     if (!std::isfinite(max_car_velocity_) || max_car_velocity_ <= 0.0f) {
         throw std::invalid_argument("Maximum car velocity must be positive and finite");
     }
@@ -49,7 +49,7 @@ std::size_t VelocityPlanner::getHorizonPointIndex(const core::VehicleState& stat
         if (closest == path_.size()) {
             spdlog::error("No path point is ahead of the vehicle");
         }
-        return start_point_index_;
+        return closest;
     }
 
     // if we know where we were before, advance from there until we start going further from the car
@@ -67,21 +67,21 @@ std::size_t VelocityPlanner::getHorizonPointIndex(const core::VehicleState& stat
         closest_distance_squared = distance_squared;
     }
 
-    return start_point_index_;
+    return closest;
 }
 
-const std::vector<PathPoint>& VelocityPlanner::tick(const core::VehicleState& state) {
+const std::vector<PathPoint>& VelocityPlanner::tick(const core::VehicleState& state, const float pose_to_path_curvature) {
     // obtain start point for velocity planner
     start_point_index_ = getHorizonPointIndex(state);
 
     // cumulative (polyline, chord-length) distance for spline parametrization
     std::vector<float> times;
-    times.reserve(path_.size());
+    times.resize(path_.size());
     times.push_back(0.0f);
 
     // copy points from core_xy_vec to gte::Vector<2, float>
     std::vector<gte::Vector<2, float>> positions;
-    positions.reserve(path_.size());
+    positions.resize(path_.size());
     positions.push_back({path_[0].x, path_[0].y});
 
     for (std::size_t i = 1; i < path_.size(); ++i) {
@@ -103,12 +103,12 @@ const std::vector<PathPoint>& VelocityPlanner::tick(const core::VehicleState& st
     size_t iterations = 0;
 
     while (iterations < lookahead_distance_index_) {
-        size_t t = (start_point_index_ + iterations) % times.size();
+        size_t index = (start_point_index_ + iterations) % times.size();
         iterations++;
 
         // for given spline section, get r(t), r't(t), r''(t) (IMPORTANT T IS NOT TIME)
         std::array<gte::Vector<2, float>, 3> jet{};
-        spline.Evaluate(t, 2, jet.data());
+        spline.Evaluate(times[index], 2, jet.data()); // evaluate at cumul distance times[t]
         gte::Vector<2, float> position = jet[0];
         gte::Vector<2, float> path_tangent = jet[1]; // with respect to spline parameter t (cumulative distance along path)
         gte::Vector<2, float> change_in_tangent = jet[2];
@@ -138,14 +138,14 @@ const std::vector<PathPoint>& VelocityPlanner::tick(const core::VehicleState& st
 
 }
 
-void VelocityPlanner::solver(const core::VehicleState& state, bool forward) {
+void VelocityPlanner::solver(const core::VehicleState& state, const float pose_to_path_curvature, bool forward) {
     const core::xy_vec<float> position{state.vehicle_position_map_frame.x, state.vehicle_position_map_frame.y}; // global frame
     const core::xy_vec<float> velocity{state.current_body_vel_ms.x, state.current_body_vel_ms.y}; // local frame
     const float speed = velocity.length();
 
     PathPoint current_point = {
         .point = position,
-        .curvature = -1,
+        .curvature = pose_to_path_curvature,
         .velocity = speed, 
         .longitudinal_accel = -1
     };
@@ -165,7 +165,11 @@ void VelocityPlanner::solver(const core::VehicleState& state, bool forward) {
         auto v = (next_point.point - start_point.point);
         const float ds = v.length();
         const float lateral_accel = std::abs(start_point.curvature) * start_point.velocity * start_point.velocity; // a_y = v^2 * k
-        const float a_long_avail = std::sqrt(kMaxAccel * kMaxAccel - lateral_accel * lateral_accel);
+        if (lateral_accel > kMaxAccel) { // always positive no need for abs()
+            spdlog::error("Lateral acceleration exceeds maximum limit, previous point might've been too far");
+        }
+        const float a_long_avail = lateral_accel > kMaxAccel ?
+         -kMaxAccel : std::sqrt( kMaxAccel * kMaxAccel - lateral_accel * lateral_accel); // set accel to -MAX if we're off limit
 
         const float v_long_avail = std::sqrt(start_point.velocity * start_point.velocity + 2 * a_long_avail * ds);
         next_point.velocity = std::min(next_point.velocity, v_long_avail);

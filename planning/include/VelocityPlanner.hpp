@@ -21,7 +21,7 @@ public:
                              float max_car_velocity = 20.0f);
 
     // Run one planning cycle. The returned samples begin at the nearest point ahead.
-    const std::vector<PathPoint>& tick(const core::VehicleState& state);
+    const std::vector<PathPoint>& tick(const core::VehicleState& state,  const float pose_to_path_curvature);
     
 private:
     std::vector<core::xy_vec<float>> path_;
@@ -31,7 +31,7 @@ private:
     float max_car_velocity_ = 20.0f; // m/s
     std::vector<PathPoint> path_points_;
 
-    void solver(const core::VehicleState& state, bool forward = true);
+    void solver(const core::VehicleState& state, const float pose_to_path_curvature, bool forward = true);
     std::size_t getHorizonPointIndex(const core::VehicleState& state);
     static std::vector<core::xy_vec<float>> loadPathFromCsv(const std::string& filename);
 };

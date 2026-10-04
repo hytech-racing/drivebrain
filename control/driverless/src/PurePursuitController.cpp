@@ -93,6 +93,7 @@ float PurePursuitController::getCurvature(core::xy_vec<float> vehicle_pos, core:
     float sin_error_angle = cross_product / (vehicle_heading.length() * to_goal.length());
     std::cout << "Sin error angle: " << sin_error_angle << "\n";
     float curvature = 2.0f * sin_error_angle / lookahead_distance_;
+    curvature_ = curvature; // store the curvature for velocity planner
     return curvature;
 }
 
