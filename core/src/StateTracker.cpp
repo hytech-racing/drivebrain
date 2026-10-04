@@ -171,11 +171,8 @@ void StateTracker::set_vehicle_sim_pose(std::shared_ptr<const hytech_msgs::pose>
 
 core::VehicleSimPosition StateTracker::vehicle_sim_pos() {
     VehicleSimPosition current_position;
-    
     std::unique_lock lk(_vehicle_sim_pos_mutex);
-
     current_position = _vehicle_sim_position;
-
     return current_position;
 }
 
