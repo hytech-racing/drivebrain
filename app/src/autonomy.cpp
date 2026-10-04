@@ -68,7 +68,7 @@ void Autonomy::_run() {
 
       // TODO: cone classifier needs to be invoked here
       auto path = planning::plan_path(*StateTracker::instance().dv_state().cone_observations);
-      render_path(path, "planned_path", "lidar");
+      render_path(path, "planned_path", "map");
       StateTracker::instance().set_dv_path(
           std::make_shared<const std::vector<xyz_vec<float>>>(std::move(path)));
     }
