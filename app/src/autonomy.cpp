@@ -68,6 +68,8 @@ void Autonomy::_run() {
 
       std::shared_ptr<dv_msgs::Cones> cones = perception::filter_cloud(*last_scan);
 
+      std::cout << "Filtered cones: " << cones->cones_size() << std::endl;
+
       core::render_cones(cones, "filtered_cones", "lidar");
 
       // TODO: cone classifier needs to be invoked here

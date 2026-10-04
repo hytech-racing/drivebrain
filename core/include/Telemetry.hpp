@@ -44,7 +44,7 @@ inline void render_cones(std::shared_ptr<dv_msgs::Cones> cones, std::string id, 
         auto* pos = cyl->mutable_pose()->mutable_position();
         pos->set_x(cone.position().x());
         pos->set_y(cone.position().y());
-        pos->set_z(0.165);
+        pos->set_z(cone.position().z());
         cyl->mutable_pose()->mutable_orientation()->set_w(1.0);
         cyl->mutable_size()->set_x(0.23);
         cyl->mutable_size()->set_y(0.23);

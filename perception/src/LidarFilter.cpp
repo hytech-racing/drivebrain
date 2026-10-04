@@ -199,8 +199,6 @@ namespace {
 
     std::shared_ptr<dv_msgs::Cones> extract_cones(const std::vector<ClusterFeatures>& features, const foxglove::PointCloud& filtered_cloud) {
         auto cones = std::make_shared<dv_msgs::Cones>();
-        // cones->set_frame_id(filtered_cloud.frame_id());
-        // *cones->mutable_timestamp() = filtered_cloud.timestamp();
 
         for (const ClusterFeatures& feature : features) {
             // Determine the range category of the cluster (near, mid, far) and create lambda for returning values based on range
@@ -248,6 +246,10 @@ namespace {
         auto clusters = cluster(*filtered_scan);
         auto features = extract_features(clusters, *filtered_scan);
         auto cones = extract_cones(features, *filtered_scan);
+        const auto& ts = scan.timestamp();
+        uint64_t microseconds = (static_cast<uint64_t>(ts.seconds()) * 1'000'000ULL) 
+                          + (static_cast<uint64_t>(ts.nanos()) / 1'000ULL);
+        cones->set_timestamp_us(microseconds);
         return cones;
     }
 
