@@ -2,6 +2,7 @@
 #include "ETHRecvComms.hpp"
 #include "FoxgloveServer.hpp"
 #include "MCAPLogger.hpp"
+#include "OusterComms.hpp"
 #include "hytech_msgs.pb.h"
 #include "Telemetry.hpp"
 #include "ControllerManager.hpp"
@@ -16,10 +17,11 @@
 #include <filesystem>
 #include <stdexcept>
 
+
 std::atomic<bool> running{true};
 
 void sig_handler(int signal) {
-    if(signal == SIGINT) {
+    if(signal == SIGINT || signal == SIGTERM) {
       spdlog::warn("Interrupted, stopping Drivebrain app");
       running = false;
     }
@@ -39,6 +41,7 @@ DrivebrainApp::~DrivebrainApp() {
 
 void DrivebrainApp::run() {
   std::signal(SIGINT, sig_handler);
+  std::signal(SIGTERM, sig_handler);
 
   core::MCAPLogger::create("recordings/", mcap::McapWriterOptions(""), _json_params_path);
   core::FoxgloveServer::create(_json_params_path);
@@ -58,6 +61,8 @@ void DrivebrainApp::run() {
   _vcr_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::VCRData_s>>(_io_context, 9999);
   _vcf_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::VCFData_s>>(_io_context, 4444);
 
+  spdlog::info("Initialized ethernet drivers");
+
 #if HOOTL_ENABLED
   comms::SimComms::create(); 
   comms::SimComms::instance().start();
@@ -69,7 +74,10 @@ void DrivebrainApp::run() {
     spdlog::error("Failed to initialize vectornav driver");
   }
 
-  spdlog::info("Initialized ethernet drivers");
+#if JETSON_ENABLED
+  _ouster_driver = std::make_unique<comms::OusterComms>();
+  spdlog::info("ouster driver init");
+#endif
 
 #if !HOOTL_ENABLED
   _kraken_comms = std::make_unique<comms::KrakenComms>();
@@ -78,10 +86,30 @@ void DrivebrainApp::run() {
   }
 #endif
 
+#if !JETSON_ENABLED
   // CAN device names are defined in the drivebrain JSON config
   _telem_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("telem_can_device").value(), _dbc_path);
   _aux_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("aux_can_device").value(), _dbc_path);
   spdlog::info("Initialized CAN drivers");
+#endif
+
+#if JETSON_ENABLED
+  // start every GigE camera aravis can find
+  constexpr unsigned int expected_cameras = 2; 
+  unsigned int num_cameras = 0;
+  for (int attempt = 0; attempt < 15; ++attempt) {
+    arv_update_device_list();
+    num_cameras = arv_get_n_devices();
+    if (num_cameras >= expected_cameras) break;
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+  }
+  spdlog::info("Found {} cameras", num_cameras);
+  for (unsigned int i = 0; i < num_cameras; i++) {
+    auto camera = std::make_unique<comms::BlackflyComms>();
+    camera->start(arv_get_device_id(i), std::string("blackfly_") + arv_get_device_serial_nbr(i), "BayerRG8", 15.0);
+    _camera_drivers.push_back(std::move(camera));
+  }
+#endif
 
   // Initialize controllers
   const size_t num_controllers = 1;
@@ -140,11 +168,7 @@ void DrivebrainApp::_loop() {
 
   while(running) {
 
-    // spdlog::info("tick: start");
-    
     next_tick += loop_time_ms;
-
-    // spdlog::info("tick: get_state");
 
     auto state_and_validity = core::StateTracker::instance().get_latest_state_and_validity();
 
@@ -154,19 +178,13 @@ void DrivebrainApp::_loop() {
     }
 #endif
 
-    // spdlog::info("tick: step_controller");
-
     auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, 1>::instance();
     auto out_struct = controller_manager.step_active_controller(state_and_validity.first);
-
-    // spdlog::info("tick: variant_branch");
 
     std::variant<core::SpeedControlOut, core::TorqueControlOut, std::monostate> cmd_out = out_struct.out;
     core::StateTracker::instance().set_previous_control_output(out_struct);
 
     bool state_is_valid = state_and_validity.second;
-
-    // spdlog::info("tick: enter_send_if");
 
     if (state_is_valid) {
 
@@ -183,17 +201,12 @@ void DrivebrainApp::_loop() {
             torque_limit_msg->set_drivebrain_torque_rl(speedControl->torque_lim_nm.RL);
             torque_limit_msg->set_drivebrain_torque_rr(speedControl->torque_lim_nm.RR);
 
-            // spdlog::info("tick: send_telem_speed");
-
+#if !JETSON_ENABLED
             _telem_can->send_message(desired_rpm_msg);
             _telem_can->send_message(torque_limit_msg);
-            
-            // // spdlog::info("tick: send_aux_speed");
-
             _aux_can->send_message(desired_rpm_msg);
             _aux_can->send_message(torque_limit_msg);
-
-            // spdlog::info("tick: log_speed");
+#endif
 
             core::log(desired_rpm_msg);
             core::log(torque_limit_msg);
@@ -206,15 +219,10 @@ void DrivebrainApp::_loop() {
             desired_torque_msg->set_drivebrain_torque_rl(torqueControl->desired_torques_nm.RL);
             desired_torque_msg->set_drivebrain_torque_rr(torqueControl->desired_torques_nm.RR);
 
-            // spdlog::info("tick: send_telem_torque");
-            
+#if !JETSON_ENABLED
             _telem_can->send_message(desired_torque_msg);
-
-            // spdlog::info("tick: send_aux_torque");
-
-             _aux_can->send_message(desired_torque_msg);
-
-            // spdlog::info("tick: log_aux_torque");
+            _aux_can->send_message(desired_torque_msg);
+#endif
 
            core::log(desired_torque_msg);
             

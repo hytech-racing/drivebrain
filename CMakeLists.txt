@@ -5,11 +5,13 @@ project(drivebrain)
 
 include(FetchContent)
 list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/cmake")
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 #################################
 # Options
 #################################
 option(HOOTL "Build with HOOTL sim interface" OFF)
+option(JETSON "Build for the Jetson Orin (else Pi)" OFF)
 
 #################################
 # Custom libs
@@ -23,12 +25,16 @@ add_subdirectory(drivebrain_estimation)
 # Find packages
 #################################
 find_package(foxglove-websocket REQUIRED)
+find_package(foxglove-schemas-protobuf REQUIRED)
 find_package(Protobuf REQUIRED CONFIG)
 find_package(Boost REQUIRED)
 find_package(spdlog REQUIRED)
 find_package(mcap REQUIRED)
 find_package(dbcppp REQUIRED)
+find_package(aravis REQUIRED)
+find_package(OpenCV REQUIRED CONFIG)
 find_package(Eigen3 REQUIRED)
+
 
 if (HOOTL)
     find_package(cppzmq REQUIRED)
@@ -37,11 +43,10 @@ endif()
 #################################
 # Upstreams (non-conan)
 #################################
-# NOTE: for local HT_proto development, I keep my HT_Proto at ../HT_proto and uncomment the add_subdirectory line below. Otherwise, use FetchContent to pull the repo from github.
 FetchContent_Declare(
     HT_Proto 
     GIT_REPOSITORY https://github.com/hytech-racing/HT_proto.git
-    GIT_TAG 6cc8e92a57ca83c404f86558671dc4629b0ab107
+    GIT_TAG d98c8a3892007eb215ac780c30d50a4577d9ecdc
 )
 FetchContent_MakeAvailable(HT_Proto)
 # add_subdirectory(../HT_proto ${CMAKE_BINARY_DIR}/HT_proto)
@@ -53,12 +58,13 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(vn_driver_lib)
 
-# NOTE: If doing replay with HT09 data use release 280 for it to work with the older can description
 FetchContent_Declare(
     HT_CAN
-    URL "https://github.com/hytech-racing/HT_CAN/releases/download/264/drivebrain_can_lib.tar.gz"
+    URL "https://github.com/hytech-racing/HT_CAN/releases/download/268/drivebrain_can_lib.tar.gz"
 )
 FetchContent_MakeAvailable(HT_CAN)
+
+find_package(OusterSDK REQUIRED)
 
 #################################
 # Linking to main app
@@ -68,7 +74,16 @@ add_executable(drivebrain
     drivebrain_app/src/drivebrain_app.cpp
 )
 
+#add_executable(drivebrain
+#    tests/hil/scripts/test_ouster.cpp
+#)
+
 target_include_directories(drivebrain PUBLIC drivebrain_app/include)
+
+# add_executable(drivebrain
+#     tests/hil/scripts/test_backfly.cpp
+# )
+
 
 if(HOOTL)
     target_compile_definitions(drivebrain PRIVATE HOOTL_ENABLED)
@@ -77,8 +92,14 @@ if(HOOTL)
     target_link_libraries(drivebrain PRIVATE cppzmq)
 endif()
 
+if(JETSON)
+    target_compile_definitions(drivebrain PRIVATE JETSON_ENABLED)
+    target_compile_definitions(drivebrain_core PRIVATE JETSON_ENABLED)
+endif()
+
 target_link_libraries(drivebrain PUBLIC 
     foxglove-websocket::foxglove-websocket 
+    foxglove-schemas-protobuf::foxglove-schemas-protobuf
     mcap::mcap
     protobuf::libprotobuf 
     boost::boost
@@ -87,8 +108,16 @@ target_link_libraries(drivebrain PUBLIC
     drivebrain_core
     drivebrain_comms
     drivebrain_control
+    # ouster_client
+    # ouster_sensor
+    # ouster_perception
+    aravis::aravis
+    opencv_core
+    opencv_imgproc
+    opencv_imgcodecs
     drivebrain_estimation
 )
+
 
 #################################
 # Unit Testing

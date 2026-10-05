@@ -11,8 +11,10 @@
 #include <foxglove/websocket/base64.hpp>
 #include "LoadCellTorqueController.hpp"
 #include "VNComms.hpp"
+#include "OusterComms.hpp"
 
 #include "hytech_msgs.pb.h"
+#include <BlackflyComms.hpp>
 
 class DrivebrainApp {
 public:
@@ -70,5 +72,11 @@ private:
   /* Steering */
   std::unique_ptr<comms::KrakenComms> _kraken_comms;
 #endif
+
+  /* Cameras */
+  std::vector<std::unique_ptr<comms::BlackflyComms>> _camera_drivers;
+
+  /* Ouster Lidar */
+  std::unique_ptr<comms::OusterComms> _ouster_driver;
 
 };
