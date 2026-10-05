@@ -157,27 +157,17 @@ void DrivebrainApp::_loop() {
 
   while(running) {
 
-    // spdlog::info("tick: start");
-    
     next_tick += loop_time_ms;
-
-    // spdlog::info("tick: get_state");
 
     auto state_and_validity = core::StateTracker::instance().get_latest_state_and_validity();
 
-    // spdlog::info("tick: step_controller");
-
     auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, 1>::instance();
     auto out_struct = controller_manager.step_active_controller(state_and_validity.first);
-
-    // spdlog::info("tick: variant_branch");
 
     std::variant<core::SpeedControlOut, core::TorqueControlOut, std::monostate> cmd_out = out_struct.out;
     core::StateTracker::instance().set_previous_control_output(out_struct);
 
     bool state_is_valid = state_and_validity.second;
-
-    // spdlog::info("tick: enter_send_if");
 
     if (state_is_valid) {
 
@@ -194,14 +184,12 @@ void DrivebrainApp::_loop() {
             torque_limit_msg->set_drivebrain_torque_rl(speedControl->torque_lim_nm.RL);
             torque_limit_msg->set_drivebrain_torque_rr(speedControl->torque_lim_nm.RR);
 
-            // spdlog::info("tick: send_telem_speed");
-#if !JETSON_ENABLED
+            #if !JETSON_ENABLED
             _telem_can->send_message(desired_rpm_msg);
             _telem_can->send_message(torque_limit_msg);
             _aux_can->send_message(desired_rpm_msg);
             _aux_can->send_message(torque_limit_msg);
 #endif
-            // spdlog::info("tick: log_speed");
 
             core::log(desired_rpm_msg);
             core::log(torque_limit_msg);
@@ -218,8 +206,6 @@ void DrivebrainApp::_loop() {
             _telem_can->send_message(desired_torque_msg);
             _aux_can->send_message(desired_torque_msg);
 #endif
-
-            // spdlog::info("tick: log_aux_torque");
 
            core::log(desired_torque_msg);
             

@@ -21,7 +21,7 @@ target_link_libraries(drivebrain_control PUBLIC
     boost::boost
     foxglove-websocket::foxglove-websocket 
     protobuf::libprotobuf
-    ht_proto::hytech_msgs_cpp_lib
+    hytech_msgs_cpp_lib
     libvncxx
     dbcppp::dbcppp
 )

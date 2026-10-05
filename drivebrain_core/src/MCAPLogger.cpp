@@ -6,7 +6,7 @@
 #include <MCAPLogger.hpp>
 
 #if JETSON_ENABLED
-#define RECORDINGS_DIR "/home/hytech/recordings"
+#define RECORDINGS_DIR "/mnt/ssd/recordings"
 #else
 #define RECORDINGS_DIR "/home/nixos/recordings"
 #endif

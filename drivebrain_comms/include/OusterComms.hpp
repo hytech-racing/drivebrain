@@ -13,9 +13,6 @@
 #include <ouster/sensor/sensor_http.h>
 #include <ouster/sensor/sensor_packet_source.h>
 
-
-
-
 namespace comms {
 
     class OusterComms {
@@ -23,14 +20,15 @@ namespace comms {
         public: 
 
             /**
-             * Initializes a new Ouster communications interface with the specified sensor hostname. 
-             * 
-             * @param sensor_hostname the hostname of the ouster sensor trying to be initialized
+             * Initializes a new Ouster communications interface. 
              */
-            OusterComms(const std::string &sensor_hostname, bool successful);
+            OusterComms();
 
             ~OusterComms() {
                 _running = false;
+                if (_thread.joinable()) {
+                    _thread.join();
+                }
                 spdlog::warn("destructed ouster comms");
             }
             
@@ -42,7 +40,7 @@ namespace comms {
              * 
              * @return 0 if successful, negative error code on failure
              */
-            int _init(const std::string &sensor_hostname);   
+            int _init();
             
             /**
              * Runs the main loop for receiving and processing Ouster data
@@ -58,16 +56,8 @@ namespace comms {
             // gets all udp packets -- gives access to imu data
             std::unique_ptr<ouster::sdk::sensor::SensorPacketSource> _packet; 
 
-            ouster::sdk::core::SensorInfo _sensor_info;
-            
-
             // Use the lookup table to convert range measurements into xyz coordinates
             std::vector<ouster::sdk::core::XYZLutT<float>> _lut;
-
-            Eigen::Array<uint16_t, Eigen::Dynamic, 1> imu_status;
-            Eigen::Array<uint64_t, Eigen::Dynamic, 1> imu_timestamp;
-            Eigen::Array<float, Eigen::Dynamic, 3> imu_accel;
-            Eigen::Array<float, Eigen::Dynamic, 3> imu_gyro;
 
             std::thread _thread;
             std::atomic<bool> _running{true};

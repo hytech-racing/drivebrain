@@ -12,60 +12,53 @@
 /****************************************************************
  * PUBLIC METHODS
  ****************************************************************/
-comms::OusterComms::OusterComms(const std::string &device_name, bool successful) {
+comms::OusterComms::OusterComms() {
     // Initialize the Ouster interface
-    int rc = _init(device_name);
+    int rc = _init();
     if (rc < 0) {
-        throw std::runtime_error("Failed to initialize Ouster communications interface");
+        spdlog::error("Failed to initialize Ouster communications interface");
     }
 }
 
 /****************************************************************
  * PRIVATE METHODS
  ****************************************************************/
-int comms::OusterComms::_init(const std::string &sensor_hostname) {
+int comms::OusterComms::_init() {
 
     // Establish communications with the Ouster
     ouster::sdk::core::SensorConfig config; 
     config.udp_dest = "169.254.0.1"; // TODO validate that this works reliably
     config.timestamp_mode = ouster::sdk::core::TimestampMode::TIME_FROM_PTP_1588; // use jetson's PTP clock
-    spdlog::info("init claled");
+    spdlog::info("init called");
 
     try {
         _sensors.emplace_back("169.254.77.2", config);
+        _source = std::make_unique<ouster::sdk::sensor::SensorFrameSetSource>(_sensors); // creating the client that will configure the sensors 
+        spdlog::info("Initialized Ouster communications interface");
     }
     catch (...) {
         spdlog::error("failed in ouster init");
-        return 1;
+        return -1;
     }
 
-    _source = std::make_unique<ouster::sdk::sensor::SensorFrameSetSource>(_sensors); // creating the client that will configure the sensors 
-    // _packet = std::make_unique<ouster::sdk::sensor::SensorPacketSource>(_sensors);
-
-    spdlog::info("initialized Ouster communications interface with sensor hostname {}", sensor_hostname);
-
-
-    /* if the auto deskew method doesnt work, calculate accel bias in init/at starting, and integrate that to get velocity?
-    */
-
     // LUT setup
+    if (_source->sensor_info().empty()) {
+        spdlog::error("No sensor info available for LUT initialization");
+        return -1;
+    }
+
     _lut.emplace_back(*_source->sensor_info()[0], true);
     spdlog::info("initialized Ouster LUT");
 
     _running = true; 
-    _thread = std::thread([this]() { _loop();}); //tells the thread to run the loop
+    _thread = std::thread([this]() { _loop();});
 
     return 0;
-    
 }
 
 
 void comms::OusterComms::_loop() {
     while (_running) {
-
-        // if (packet_event.packet().packet_type() == ouster::sdk::sensor::ClientEvent::ERR) {
-        //     spdlog::error("Sensor client error state");
-        // }
 
         /* Lidar Data */
         std::pair<int, std::unique_ptr<ouster::sdk::core::LidarFrame>> result = _source->get_frame(0.5); 
@@ -73,43 +66,34 @@ void comms::OusterComms::_loop() {
         if (!result.second) continue; // check that you actually received a lidar frame before dereferencing it
         auto& frame = *result.second;
  
-        std::shared_ptr<ouster::sdk::core::LidarFrame> lidar_frame = std::move(result.second);
-        ouster::sdk::core::FrameSet frame_set{lidar_frame};
-
         /* IMU Data */
-        auto packet_event = _packet->get_packet(1.0); // timeout is 1 second (wait up to 1 second for a packet)
-        if (packet_event.packet().type() == ouster::sdk::core::PacketType::Imu) {
-            spdlog::info("recieved an IMU packet");
+        // auto packet_event = _packet->get_packet(1.0); // timeout is 1 second (wait up to 1 second for a packet)
+        // if (packet_event.packet().type() == ouster::sdk::core::PacketType::Imu) {
+        //     spdlog::info("recieved an IMU packet");
 
-            const auto& imu = packet_event.packet().as<ouster::sdk::core::ImuPacket>();
+        //     const auto& imu = packet_event.packet().as<ouster::sdk::core::ImuPacket>();
 
-            imu_status = imu.status();
-            imu_timestamp = imu.timestamp();
-            imu_accel = imu.accel();
-            imu_gyro  = imu.gyro();
+        //     imu_status = imu.status();
+        //     imu_timestamp = imu.timestamp();
+        //     imu_accel = imu.accel();
+        //     imu_gyro  = imu.gyro();
 
-            std::shared_ptr<dv_msgs::LidarIMU> imu_data_out = std::make_shared<dv_msgs::LidarIMU>();
+        //     std::shared_ptr<dv_msgs::LidarIMU> imu_data_out = std::make_shared<dv_msgs::LidarIMU>();
 
-            for (int i = 0; i < imu_accel.rows(); i++) {
-                imu_data_out->set_accelerometer_x(imu_accel(i, 0));
-                imu_data_out->set_accelerometer_y(imu_accel(i, 1));
-                imu_data_out->set_accelerometer_z(imu_accel(i, 2));
+        //     for (int i = 0; i < imu_accel.rows(); i++) {
+        //         imu_data_out->set_accelerometer_x(imu_accel(i, 0));
+        //         imu_data_out->set_accelerometer_y(imu_accel(i, 1));
+        //         imu_data_out->set_accelerometer_z(imu_accel(i, 2));
 
-                imu_data_out->set_gyro_x(imu_gyro(i, 2)); 
-                imu_data_out->set_gyro_y(imu_gyro(i, 2));
-                imu_data_out->set_gyro_z(imu_gyro(i, 2));
-            }
+        //         imu_data_out->set_gyro_x(imu_gyro(i, 2)); 
+        //         imu_data_out->set_gyro_y(imu_gyro(i, 2));
+        //         imu_data_out->set_gyro_z(imu_gyro(i, 2));
+        //     }
 
-            core::log(imu_data_out);
-            spdlog::info("logged lidar imu data");
+        //     core::log(imu_data_out);
+        //     spdlog::info("logged lidar imu data");
 
-        }
-
-
-        // log to dv msgs lidar field 
-        // auto timestamp = result.second->get_first_valid_packet_timestamp(); // need to catch the std runtime error if no packets are available
-        // auto frame_status = result.second->frame_status; // todo - see what status the lidar can be
-        // auto body_to_world = result.second->body_to_world();
+        // }
 
         // write xyz directly into the foxglove pointcloud buffer
         const auto& lut = _lut[index];
@@ -136,7 +120,7 @@ void comms::OusterComms::_loop() {
         ouster::sdk::core::impl::cartesianT<float>(points, range, lut.direction, lut.offset);
 
         // full resolution to mcap
-        core::MCAPLogger::instance().log_msg(pc);
+        core::MCAPLogger::instance().log_msg(pc); // TODO fix timestamp
 
         // stream just every Nth point that has a return (range 0 = no return)
         constexpr int stream_stride = 16;

@@ -13,10 +13,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(HOOTL "Build with HOOTL sim interface" OFF)
 option(JETSON "Build for the Jetson Orin (else Pi)" OFF)
 
-### Packages for custom libs
-find_package(ht_proto REQUIRED CONFIG)
-find_package(ht_can REQUIRED CONFIG)
-
 #################################
 # Custom libs
 #################################
@@ -47,6 +43,13 @@ endif()
 #################################
 # Upstreams (non-conan)
 #################################
+# FetchContent_Declare(
+#     HT_Proto 
+#     GIT_REPOSITORY https://github.com/hytech-racing/HT_proto.git
+#     GIT_TAG d98c8a3892007eb215ac780c30d50a4577d9ecdc
+# )
+# FetchContent_MakeAvailable(HT_Proto)
+add_subdirectory(../HT_proto ${CMAKE_BINARY_DIR}/HT_proto)
 
 FetchContent_Declare(
     vn_driver_lib
@@ -55,16 +58,13 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(vn_driver_lib)
 
-
 FetchContent_Declare(
-    HT_Proto 
-    GIT_REPOSITORY https://github.com/hytech-racing/HT_proto.git
-    GIT_TAG feat/lidar_data
+    HT_CAN
+    URL "https://github.com/hytech-racing/HT_CAN/releases/download/268/drivebrain_can_lib.tar.gz"
 )
-FetchContent_MakeAvailable(HT_Proto)
+FetchContent_MakeAvailable(HT_CAN)
 
-
-#find_package(OusterSDK REQUIRED)
+find_package(OusterSDK REQUIRED)
 
 #################################
 # Linking to main app
@@ -85,7 +85,6 @@ target_include_directories(drivebrain PUBLIC drivebrain_app/include)
 # )
 
 
-
 if(HOOTL)
     target_compile_definitions(drivebrain PRIVATE HOOTL_ENABLED)
     target_compile_definitions(drivebrain_core PRIVATE HOOTL_ENABLED)
@@ -98,15 +97,14 @@ if(JETSON)
     target_compile_definitions(drivebrain_core PRIVATE JETSON_ENABLED)
 endif()
 
-
 target_link_libraries(drivebrain PUBLIC 
     foxglove-websocket::foxglove-websocket 
     foxglove-schemas-protobuf::foxglove-schemas-protobuf
     mcap::mcap
     protobuf::libprotobuf 
     boost::boost
-    ht_proto::hytech_msgs_cpp_lib
-    ht_can::hytech_can_msgs_cpp_lib
+    hytech_msgs_cpp_lib
+    hytech_can_msgs_cpp_lib
     drivebrain_core
     drivebrain_comms
     drivebrain_control

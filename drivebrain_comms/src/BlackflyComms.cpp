@@ -108,13 +108,7 @@ void BlackflyComms::_aravis_receive_loop() {
                 cv::resize(bgr, resized, cv::Size(out_width, out_height), 0, 0, cv::INTER_AREA);
                 std::vector<uchar> jpeg_buf;
                 cv::imencode(".jpg", resized, jpeg_buf, {cv::IMWRITE_JPEG_QUALITY, 80});
-
-                std::shared_ptr<foxglove::CompressedImage> raw_image = std::make_shared<foxglove::CompressedImage>();
-                raw_image->mutable_timestamp()->set_seconds(secs);
-                raw_image->mutable_timestamp()->set_nanos(nanos);
-                raw_image->set_frame_id(_name);
-                raw_image->set_format("jpeg");
-                raw_image->set_data(jpeg_buf.data(), jpeg_buf.size());
+>ata(jpeg_buf.data(), jpeg_buf.size());
                 core::log_foxglove_only(raw_image, _name + "/compressed");
 
             } else {

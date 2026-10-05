@@ -5,7 +5,7 @@ services:
       - conan-cache:/root/.conan2
       - ./:/app
       - /tmp:/tmp
-      # - ../HT_proto:/HT_proto
+      - ../HT_proto:/HT_proto
     working_dir: /app
     tty: true
     stdin_open: true
