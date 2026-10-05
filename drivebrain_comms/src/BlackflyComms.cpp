@@ -14,7 +14,7 @@ BlackflyComms::~BlackflyComms() {
     if (_blackfly_receive_thread.joinable()) {
         _blackfly_receive_thread.join();
     }
-    arv_camera_stop_acquisition(_camera, nullptr);
+    if (_camera)arv_camera_stop_acquisition(_camera, nullptr);
     g_object_unref(_stream);
     g_object_unref(_camera);
 }
@@ -85,6 +85,12 @@ void BlackflyComms::_aravis_receive_loop() {
 
                 int width, height;
                 arv_buffer_get_image_region(buffer, nullptr, nullptr, &width, &height);
+
+                if (width <= 0 || height <= 0 || buffer_size < static_cast<size_t>(width * height)) {
+                    spdlog::error("[{}] bad frame {}x{} size {}", _name, width, height, buffer_size);
+                    arv_stream_push_buffer(_stream, buffer);
+                    continue;
+                }
 
                 cv::Mat bayer(cv::Size(width, height), CV_8UC1, (void*)data);
 
