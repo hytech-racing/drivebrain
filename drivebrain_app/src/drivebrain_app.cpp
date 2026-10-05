@@ -42,12 +42,13 @@ DrivebrainApp::~DrivebrainApp() {
 void DrivebrainApp::run() {
   std::signal(SIGINT, sig_handler);
 
-  core::MCAPLogger::create("", mcap::McapWriterOptions(""), _json_params_path);
+  core::MCAPLogger::create(mcap::McapWriterOptions(""), _json_params_path);
   core::FoxgloveServer::create(_json_params_path);
   core::StateTracker::create();
 
-  core::MCAPLogger::instance().open_new_mcap();
-  core::MCAPLogger::instance().init_logging();
+  if (core::MCAPLogger::instance().open_new_mcap() == 0) {
+    core::MCAPLogger::instance().init_logging();
+  }
 
   spdlog::info("Constructed logging singletons");
 

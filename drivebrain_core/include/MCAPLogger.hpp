@@ -32,10 +32,9 @@ namespace core {
             /**
              * Constructor for initializing a new MCAPLogger singleton instance 
              * 
-             * @param base_dir the directory in which the log file should be created
              * @param options options to create the mcap with 
              */
-            static void create(const std::string &base_dir, const mcap::McapWriterOptions &options, const std::string &params_file);
+            static void create(const mcap::McapWriterOptions &options, const std::string &params_file);
 
             /**
              * Fetches MCAPLogger singleton instance
@@ -73,16 +72,6 @@ namespace core {
              * @return 0 on success, negative err code on failure
              */
             int open_new_mcap(const std::string &file_name = "");
-
-            /**
-             * Returns the base directory where MCAP recordings are saved.
-             */
-            const std::string& get_base_dir() const;
-
-            /**
-             * Updates the base directory where MCAP recordings are saved.
-             */
-            void set_base_dir(const std::string &dir);
 
             /**
              * Closes the current mcap file. Only runs if there is a file open. 
@@ -133,7 +122,7 @@ namespace core {
         private: 
           
             /* Private constructor to be called by init method */
-            MCAPLogger(const std::string &base_dir, const mcap::McapWriterOptions &options, const std::string &params_file);
+            MCAPLogger(const mcap::McapWriterOptions &options, const std::string &params_file);
 
             /**
              * Spawned by thread, loops until end of program life or error occurs. 
@@ -168,7 +157,6 @@ namespace core {
             nlohmann::json _initial_params;
             std::unordered_map<std::string, uint32_t> _name_to_id_map;
             std::unordered_map<std::string, uint16_t> _type_to_schema_id_map;
-            std::string _base_dir;
             std::string _log_name = "NONE";
             bool _logging = false;
             bool _running = true;

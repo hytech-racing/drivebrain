@@ -2,7 +2,6 @@
 #include "ControllerManager.hpp"
 #include "StateTracker.hpp"
 #include <DrivebrainControllerInterface.hpp>
-#include <MCAPLogger.hpp>
 #include <cstddef>
 #include <FoxgloveServer.hpp>
 
@@ -47,10 +46,6 @@ void core::DrivebrainControllerInterface::_handle_parameter_updates(const std::u
         _request_controller_change(*controller_index);
     }
 
-    if (auto rec_dir = process_param_update<std::string>(new_params, "mcap_recordings_dir")) {
-        core::MCAPLogger::instance().set_base_dir(*rec_dir);
-    }
-
     spdlog::info("Exiting drivebrain controller interface parameter updates.");
 
 }
@@ -59,8 +54,9 @@ void core::DrivebrainControllerInterface::_request_start_logging() {
     std::tuple<std::string, bool> mcap_status = core::MCAPLogger::instance().status();
     bool is_logging = std::get<1>(mcap_status);
     if (!is_logging) {
-        core::MCAPLogger::instance().open_new_mcap(); 
-        core::MCAPLogger::instance().init_logging();
+        if (core::MCAPLogger::instance().open_new_mcap() == 0) {
+            core::MCAPLogger::instance().init_logging();
+        }
     }
 }
 

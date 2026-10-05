@@ -6,9 +6,9 @@
 #include <MCAPLogger.hpp>
 
 #if JETSON_ENABLED
-constexpr const char* DEFAULT_RECORDINGS_DIR = "/mnt/ssd/recordings";
+constexpr const char* RECORDINGS_DIR = "/mnt/ssd/recordings";
 #else
-constexpr const char* DEFAULT_RECORDINGS_DIR = "/home/nixos/recordings";
+constexpr const char* RECORDINGS_DIR = "/home/nixos/recordings";
 #endif
 
 /****************************************************************
@@ -18,11 +18,8 @@ static std::string get_next_logfile_name(const std::string &dir_path) {
   int max_file_number = 0;
 
   try {
-    std::error_code ec;
-    if (!std::filesystem::exists(dir_path, ec)) {
-      std::filesystem::create_directories(dir_path, ec);
-    }
-    for (const auto& entry : std::filesystem::directory_iterator(dir_path, ec)) {
+    std::filesystem::create_directories(dir_path);
+    for (const auto& entry : std::filesystem::directory_iterator(dir_path)) {
       if (entry.is_regular_file()) {
         std::string stem = entry.path().stem().string();
         try {
@@ -39,7 +36,7 @@ static std::string get_next_logfile_name(const std::string &dir_path) {
     }
   } catch (const std::filesystem::filesystem_error& e) {
     spdlog::error("Filesystem error scanning {}: {}", dir_path, e.what());
-    return "1.mcap";
+    return "";
   } 
 
   return std::to_string(max_file_number + 1) + ".mcap";
@@ -120,9 +117,9 @@ static nlohmann::json generate_json_schema(const nlohmann::json& obj) {
 /****************************************************************
  * PUBLIC CLASS METHOD IMPLEMENTATIONS
  ****************************************************************/
-void core::MCAPLogger::create(const std::string &base_dir, const mcap::McapWriterOptions &options, const std::string &params_file) {
+void core::MCAPLogger::create(const mcap::McapWriterOptions &options, const std::string &params_file) {
     MCAPLogger* expected = nullptr;
-    MCAPLogger* local = new MCAPLogger(base_dir, options, params_file);
+    MCAPLogger* local = new MCAPLogger(options, params_file);
     if(!_s_instance.compare_exchange_strong(expected, local, std::memory_order_release, std::memory_order_relaxed)) {
         // Already initialized, delete local instance
         delete local;
@@ -146,12 +143,15 @@ int core::MCAPLogger::open_new_mcap(const std::string &file_name) {
 #if HOOTL_ENABLED
     _log_name = file_name.empty() ? "sim_data.mcap" : file_name;
 #else
-    std::string mcap_name = file_name.empty() ? get_next_logfile_name(_base_dir) : file_name;
+    std::string mcap_name = file_name.empty() ? get_next_logfile_name(RECORDINGS_DIR) : file_name;
+    if (mcap_name.empty()) {
+        return -1;
+    }
     std::filesystem::path p(mcap_name);
     if (p.is_absolute()) {
         _log_name = p.string();
     } else {
-        _log_name = (std::filesystem::path(_base_dir) / p).string();
+        _log_name = (std::filesystem::path(RECORDINGS_DIR) / p).string();
     }
 #endif
     spdlog::info("Attempting to open new MCAP file: {}", _log_name);
@@ -162,6 +162,7 @@ int core::MCAPLogger::open_new_mcap(const std::string &file_name) {
         std::filesystem::create_directories(log_path.parent_path(), ec);
         if (ec) {
             spdlog::error("Failed to create directory {}: {}", log_path.parent_path().string(), ec.message());
+            return -1;
         }
     }
 
@@ -248,7 +249,7 @@ int core::MCAPLogger::log_msg(core::MsgType message, const std::string &topic) {
 /****************************************************************
  * PRIVATE CLASS METHOD IMPLEMENTATIONS
  ****************************************************************/
-core::MCAPLogger::MCAPLogger(const std::string &base_dir, const mcap::McapWriterOptions &options, const std::string &params_file) : _options(options) {
+core::MCAPLogger::MCAPLogger(const mcap::McapWriterOptions &options, const std::string &params_file) : _options(options) {
     nlohmann::json params_config;
     std::fstream raw_param_file(params_file);
     if (raw_param_file.is_open()) {
@@ -260,16 +261,6 @@ core::MCAPLogger::MCAPLogger(const std::string &base_dir, const mcap::McapWriter
     } else {
         spdlog::warn("Could not open params file: {}", params_file);
     }
-
-    if (params_config.contains("mcap_recordings_dir") && params_config["mcap_recordings_dir"].is_string() && !params_config["mcap_recordings_dir"].get<std::string>().empty()) {
-        _base_dir = params_config["mcap_recordings_dir"].get<std::string>();
-    } else if (!base_dir.empty() && base_dir != "recordings/") {
-        _base_dir = base_dir;
-    } else {
-        _base_dir = DEFAULT_RECORDINGS_DIR;
-    }
-
-    spdlog::info("MCAPLogger initialized with base recordings directory: {}", _base_dir);
 
     _initial_params = params_config; // Used in open_new_mcap to log initial params
     _params_schema_json = generate_json_schema(params_config);
@@ -326,13 +317,3 @@ int core::MCAPLogger::log_params(nlohmann::json params) {
 
     return 0;
 }
-
-const std::string& core::MCAPLogger::get_base_dir() const {
-    return _base_dir;
-}
-
-void core::MCAPLogger::set_base_dir(const std::string &dir) {
-    _base_dir = dir;
-    spdlog::info("MCAPLogger base recordings directory changed to: {}", _base_dir);
-}
-
