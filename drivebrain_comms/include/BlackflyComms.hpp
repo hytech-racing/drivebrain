@@ -43,7 +43,6 @@ class BlackflyComms {
 
         void _aravis_receive_loop(); 
 
-        std::thread _veh_recv_thread; 
         std::atomic<bool> _running{false};
 
         ArvCamera *_camera{nullptr};

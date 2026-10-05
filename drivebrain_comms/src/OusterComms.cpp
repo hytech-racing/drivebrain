@@ -14,10 +14,13 @@
  ****************************************************************/
 comms::OusterComms::OusterComms() {
     // Initialize the Ouster interface
-    int rc = _init();
-    if (rc < 0) {
-        spdlog::error("Failed to initialize Ouster communications interface");
-    }
+    _thread = std::thread([this]() {
+          while (_running && _init() < 0) {
+              spdlog::warn("Retrying Ouster initialization");
+              std::this_thread::sleep_for(std::chrono::seconds(2));
+          }
+          _loop();
+    });
 }
 
 /****************************************************************
@@ -25,11 +28,13 @@ comms::OusterComms::OusterComms() {
  ****************************************************************/
 int comms::OusterComms::_init() {
 
+    _sensors.clear();
+
     // Establish communications with the Ouster
     ouster::sdk::core::SensorConfig config; 
     config.udp_dest = "169.254.0.1"; // TODO validate that this works reliably
     config.timestamp_mode = ouster::sdk::core::TimestampMode::TIME_FROM_PTP_1588; // use jetson's PTP clock
-    spdlog::info("init called");
+    spdlog::info("Entering Ouster _init: Attempting to open sensor at 169.254.77.2");
 
     try {
         _sensors.emplace_back("169.254.77.2", config);
@@ -51,8 +56,6 @@ int comms::OusterComms::_init() {
     spdlog::info("initialized Ouster LUT");
 
     _running = true; 
-    _thread = std::thread([this]() { _loop();});
-
     return 0;
 }
 

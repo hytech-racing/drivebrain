@@ -21,7 +21,7 @@
 std::atomic<bool> running{true};
 
 void sig_handler(int signal) {
-    if(signal == SIGINT) {
+    if(signal == SIGINT || signal == SIGTERM) {
       spdlog::warn("Interrupted, stopping Drivebrain app");
       running = false;
     }
@@ -41,6 +41,7 @@ DrivebrainApp::~DrivebrainApp() {
 
 void DrivebrainApp::run() {
   std::signal(SIGINT, sig_handler);
+  std::signal(SIGTERM, sig_handler);
 
   core::MCAPLogger::create("recordings/", mcap::McapWriterOptions(""), _json_params_path);
   core::FoxgloveServer::create(_json_params_path);
@@ -73,12 +74,7 @@ void DrivebrainApp::run() {
     spdlog::error("Failed to initialize vectornav driver");
   }
 
-  bool ouster_init_not_successful; 
-  const char* ouster_hostname = "os-122634002484.local";
-  _ouster_driver = std::make_unique<comms::OusterComms>(ouster_hostname, ouster_init_not_successful);
-  if (ouster_init_not_successful) {
-    spdlog::error("Failed to initialize Ouster driver");
-  } 
+  _ouster_driver = std::make_unique<comms::OusterComms>();
 
   spdlog::info("ouster driver init");
 
@@ -90,8 +86,14 @@ void DrivebrainApp::run() {
 #endif
 
   // start every GigE camera aravis can find
-  arv_update_device_list();
-  const unsigned int num_cameras = arv_get_n_devices();
+  constexpr unsigned int expected_cameras = 2; 
+  unsigned int num_cameras = 0;
+  for (int attempt = 0; attempt < 15; ++attempt) {
+    arv_update_device_list();
+    num_cameras = arv_get_n_devices();
+    if (num_cameras >= expected_cameras) break;
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+  }
   spdlog::info("Found {} cameras", num_cameras);
   for (unsigned int i = 0; i < num_cameras; i++) {
     auto camera = std::make_unique<comms::BlackflyComms>();

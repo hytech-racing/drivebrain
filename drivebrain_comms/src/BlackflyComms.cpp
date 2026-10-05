@@ -10,10 +10,13 @@ BlackflyComms::BlackflyComms() {
 }
 
 BlackflyComms::~BlackflyComms() {
+    _running = false;
+    if (_blackfly_receive_thread.joinable()) {
+        _blackfly_receive_thread.join();
+    }
     arv_camera_stop_acquisition(_camera, nullptr);
     g_object_unref(_stream);
     g_object_unref(_camera);
-    _running = false;
 }
 
 bool BlackflyComms::start(const std::string& id, const std::string& name, const std::string& pixel_format, double fps) {
@@ -52,6 +55,7 @@ bool BlackflyComms::start(const std::string& id, const std::string& name, const 
         arv_stream_push_buffer(_stream, buffer);
     }
     arv_camera_start_acquisition(_camera, &_error);
+
 
     if (!_camera || !_stream) {
         _running = false;
@@ -108,7 +112,13 @@ void BlackflyComms::_aravis_receive_loop() {
                 cv::resize(bgr, resized, cv::Size(out_width, out_height), 0, 0, cv::INTER_AREA);
                 std::vector<uchar> jpeg_buf;
                 cv::imencode(".jpg", resized, jpeg_buf, {cv::IMWRITE_JPEG_QUALITY, 80});
->ata(jpeg_buf.data(), jpeg_buf.size());
+
+                std::shared_ptr<foxglove::CompressedImage> raw_image = std::make_shared<foxglove::CompressedImage>();
+                raw_image->mutable_timestamp()->set_seconds(secs);
+                raw_image->mutable_timestamp()->set_nanos(nanos);
+                raw_image->set_frame_id(_name);
+                raw_image->set_format("jpeg");
+                raw_image->set_data(jpeg_buf.data(), jpeg_buf.size());
                 core::log_foxglove_only(raw_image, _name + "/compressed");
 
             } else {
