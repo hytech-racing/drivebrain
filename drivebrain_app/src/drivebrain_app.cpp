@@ -74,9 +74,10 @@ void DrivebrainApp::run() {
     spdlog::error("Failed to initialize vectornav driver");
   }
 
+#if JETSON_ENABLED
   _ouster_driver = std::make_unique<comms::OusterComms>();
-
   spdlog::info("ouster driver init");
+#endif
 
 #if !JETSON_ENABLED
   // CAN device names are defined in the drivebrain JSON config
@@ -85,6 +86,7 @@ void DrivebrainApp::run() {
   spdlog::info("Initialized CAN drivers");
 #endif
 
+#if JETSON_ENABLED
   // start every GigE camera aravis can find
   constexpr unsigned int expected_cameras = 2; 
   unsigned int num_cameras = 0;
@@ -100,7 +102,7 @@ void DrivebrainApp::run() {
     camera->start(arv_get_device_id(i), std::string("blackfly_") + arv_get_device_serial_nbr(i), "BayerRG8", 15.0);
     _camera_drivers.push_back(std::move(camera));
   }
-
+#endif
 
   // Initialize controllers
   const size_t num_controllers = 1;
@@ -186,7 +188,7 @@ void DrivebrainApp::_loop() {
             torque_limit_msg->set_drivebrain_torque_rl(speedControl->torque_lim_nm.RL);
             torque_limit_msg->set_drivebrain_torque_rr(speedControl->torque_lim_nm.RR);
 
-            #if !JETSON_ENABLED
+#if !JETSON_ENABLED
             _telem_can->send_message(desired_rpm_msg);
             _telem_can->send_message(torque_limit_msg);
             _aux_can->send_message(desired_rpm_msg);

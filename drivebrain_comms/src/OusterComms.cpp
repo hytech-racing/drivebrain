@@ -55,7 +55,6 @@ int comms::OusterComms::_init() {
     _lut.emplace_back(*_source->sensor_info()[0], true);
     spdlog::info("initialized Ouster LUT");
 
-    _running = true; 
     return 0;
 }
 
