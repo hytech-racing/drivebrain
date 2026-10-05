@@ -32,7 +32,8 @@ bool BlackflyComms::start(const std::string& id, const std::string& name, const 
     arv_camera_set_pixel_format_from_string(_camera, pixel_format.c_str(), &_error);
     arv_camera_set_acquisition_mode(_camera, ARV_ACQUISITION_MODE_CONTINUOUS, &_error);
     arv_camera_set_frame_rate(_camera, fps, &_error);
-    arv_camera_gv_set_packet_size(_camera, 9000, &_error);
+    arv_camera_gv_set_packet_size(_camera, 1500, &_error);
+    arv_camera_gv_set_packet_delay(_camera, 2000, &_error);
     // sync the camera clock to the jetson's PTP master (newer firmware calls it PtpEnable)
     const char* ptp_feature = arv_camera_is_feature_available(_camera, "PtpEnable", nullptr) ? "PtpEnable" : "GevIEEE1588";
     arv_camera_set_boolean(_camera, ptp_feature, TRUE, &_error);
