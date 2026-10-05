@@ -43,13 +43,13 @@ endif()
 #################################
 # Upstreams (non-conan)
 #################################
-# FetchContent_Declare(
-#     HT_Proto 
-#     GIT_REPOSITORY https://github.com/hytech-racing/HT_proto.git
-#     GIT_TAG d98c8a3892007eb215ac780c30d50a4577d9ecdc
-# )
-# FetchContent_MakeAvailable(HT_Proto)
-add_subdirectory(../HT_proto ${CMAKE_BINARY_DIR}/HT_proto)
+FetchContent_Declare(
+    HT_Proto 
+    GIT_REPOSITORY https://github.com/hytech-racing/HT_proto.git
+    GIT_TAG d98c8a3892007eb215ac780c30d50a4577d9ecdc
+)
+FetchContent_MakeAvailable(HT_Proto)
+# add_subdirectory(../HT_proto ${CMAKE_BINARY_DIR}/HT_proto)
 
 FetchContent_Declare(
     vn_driver_lib
