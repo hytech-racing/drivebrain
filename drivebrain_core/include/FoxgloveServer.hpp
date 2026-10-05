@@ -19,6 +19,7 @@
 #include <spdlog/spdlog.h>
 
 #include "hytech_msgs.pb.h"
+#include <foxglove/CompressedImage.pb.h>
 
 namespace core {
 
@@ -78,13 +79,12 @@ namespace core {
             }
             
             /**
-             * Sends a protobuf to be viewed in foxglove. 
-             * broadcastMessage() is thread safe so this method can be called
-             * by different threads without a mutex.
+             * Sends a protobuf to be viewed in Foxglove.
              * 
              * @param msg the message to be sent
+             * @param topic topic to send on, defaults to the message type name. A new topic gets its channel on first use.
              */
-            void send_live_telem_msg(std::shared_ptr<google::protobuf::Message> msg);
+            void send_live_telem_msg(std::shared_ptr<google::protobuf::Message> msg, const std::string &topic = "");
 
             /**
              * Registers a callback function to be run whenever a parameter is updated in Foxglove.
@@ -155,6 +155,7 @@ namespace core {
             foxglove::ServerOptions _server_options;
 
             std::mutex _parameter_mutex; 
+            std::mutex _channel_mutex;
     };
 }
 
