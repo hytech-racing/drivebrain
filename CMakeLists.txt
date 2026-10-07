@@ -1,10 +1,11 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.13)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 project(drivebrain)
 
 include(FetchContent)
 list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/cmake")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cuda_modules")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 #################################
@@ -95,6 +96,9 @@ endif()
 if(JETSON)
     target_compile_definitions(drivebrain PRIVATE JETSON_ENABLED)
     target_compile_definitions(drivebrain_core PRIVATE JETSON_ENABLED)
+    include(TensorRT)
+    set(CMAKE_SKIP_BUILD_RPATH ON)
+    target_link_libraries(drivebrain PRIVATE TensorRT)
 endif()
 
 target_link_libraries(drivebrain PUBLIC 
@@ -116,6 +120,7 @@ target_link_libraries(drivebrain PUBLIC
     opencv_imgproc
     opencv_imgcodecs
     drivebrain_estimation
+    TensorRT
 )
 
 
