@@ -11,6 +11,7 @@ find_package(OusterSDK REQUIRED)
 find_package(aravis REQUIRED)
 find_package(foxglove-schemas-protobuf REQUIRED)
 find_package(OpenCV REQUIRED CONFIG)
+find_package(zstd REQUIRED CONFIG)
 
 
 set(DRIVEBRAIN_COMMS_SRCS
@@ -19,6 +20,7 @@ set(DRIVEBRAIN_COMMS_SRCS
     src/ETHSendComms.cpp
     src/OusterComms.cpp
     src/BlackflyComms.cpp
+    src/DataCompression.cpp
 )
 
 if(HOOTL)
@@ -55,6 +57,7 @@ target_link_libraries(drivebrain_comms PUBLIC
     opencv_core
     opencv_imgproc
     opencv_imgcodecs
+    zstd::libzstd_static
 )
 
 if(JETSON)
