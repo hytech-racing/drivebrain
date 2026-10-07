@@ -69,6 +69,9 @@ bool BlackflyComms::start(const std::string& id, const std::string& name, const 
 
 #if JETSON_ENABLED
     try {
+        // FOLLOW UP: depending on performance we may want to run 
+        // the detector in a seperate thread and pop off of a queue
+        // but we'll see how this does.
         _detector = std::make_unique<Detector>("/home/hytech/engines/cones.engine");
     } catch (const std::exception& e) {
         spdlog::error("[{}] Cone detection disabled: {}", _name, e.what());
