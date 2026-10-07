@@ -29,7 +29,7 @@ fi
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
-conan remote add artifactory "$ARTIFACTORY_URL" --force
+# conan remote add artifactory "$ARTIFACTORY_URL" --force
 
 # let cmake infer this
 unset CC
@@ -43,8 +43,6 @@ if [ "$localCacheOnly" = 1 ]; then
     --build=missing \
     --profile:build=default \
     --profile:host="$profile" \
-    -s:h compiler.cppstd=20 \
-    -s:b compiler.cppstd=20 \
     -of=cmake \
     --no-remote
 else
@@ -52,8 +50,6 @@ else
     --build=missing \
     --profile:build=default \
     --profile:host="$profile" \
-    -s:h compiler.cppstd=20 \
-    -s:b compiler.cppstd=20 \
     -of=cmake
 fi
 

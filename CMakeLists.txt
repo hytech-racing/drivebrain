@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.10)
+project(drivebrain)
+
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-project(drivebrain)
 
 include(FetchContent)
 list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/cmake")
@@ -44,7 +46,7 @@ endif()
 # Upstreams (non-conan)
 #################################
 FetchContent_Declare(
-    HT_Proto 
+    HT_Proto
     GIT_REPOSITORY https://github.com/hytech-racing/HT_proto.git
     GIT_TAG d98c8a3892007eb215ac780c30d50a4577d9ecdc
 )
@@ -97,11 +99,11 @@ if(JETSON)
     target_compile_definitions(drivebrain_core PRIVATE JETSON_ENABLED)
 endif()
 
-target_link_libraries(drivebrain PUBLIC 
-    foxglove-websocket::foxglove-websocket 
+target_link_libraries(drivebrain PUBLIC
+    foxglove-websocket::foxglove-websocket
     foxglove-schemas-protobuf::foxglove-schemas-protobuf
     mcap::mcap
-    protobuf::libprotobuf 
+    protobuf::libprotobuf
     boost::boost
     hytech_msgs_cpp_lib
     hytech_can_msgs_cpp_lib

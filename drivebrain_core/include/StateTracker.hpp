@@ -307,8 +307,19 @@ namespace core {
              */
             std::pair<core::VehicleState, bool> get_latest_state_and_validity();
 
-            
-        private: 
+            /**
+             * Returns the latest steering angle and whether it's usable. Unlike
+             * get_latest_state_and_validity(), this only depends on the steering
+             * sensor, so it works on a bench without the rest of the car.
+             *
+             * @param max_age how old the latest steering reading may be and still count as valid
+             * @return steering angle in degrees, and true if it's recent and the sensor reports no faults
+             */
+            std::pair<float, bool> get_steering_angle_and_validity(
+                std::chrono::microseconds max_age = std::chrono::microseconds(500000));
+
+
+        private:
 
             template <size_t index, typename inverter_dynamics_message>
             void _handle_set_inverter_dynamics(std::shared_ptr<google::protobuf::Message> msg);
@@ -329,7 +340,8 @@ namespace core {
             RawInputData _raw_input_data = { };
             std::mutex _state_mutex;
             std::array<std::chrono::microseconds, 4> _timestamp_array;
-            
+            bool _steering_sensor_ok = false;
+
             /* Private constructor called by the init method */
             StateTracker() {}; 
             
