@@ -20,7 +20,8 @@ set(DRIVEBRAIN_COMMS_SRCS
     src/ETHSendComms.cpp
     src/OusterComms.cpp
     src/BlackflyComms.cpp
-    src/DataCompression.cpp
+    src/ImageCompression.cpp
+    src/RangeCompression.cpp
 )
 
 if(HOOTL)

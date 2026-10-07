@@ -1,4 +1,4 @@
-#include "DataCompression.hpp"
+#include "ImageCompression.hpp"
 
 #include <limits>
 #include <memory>
