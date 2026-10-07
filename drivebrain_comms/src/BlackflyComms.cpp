@@ -109,8 +109,6 @@ void BlackflyComms::_aravis_receive_loop() {
                     continue;
                 }
 
-                cv::Mat bayer(cv::Size(width, height), CV_8UC1, (void*)data);
-
                 auto now = std::chrono::system_clock::now().time_since_epoch();
                 auto secs = std::chrono::duration_cast<std::chrono::seconds>(now).count();
                 auto nanos = std::chrono::duration_cast<std::chrono::nanoseconds>(now).count() % 1000000000;
@@ -132,14 +130,7 @@ void BlackflyComms::_aravis_receive_loop() {
                     spdlog::error("[{}] Failed to compress camera frame", _name);
                 }
 
-                // stream compressed image over foxglove stream
-                cv::Mat bgr;
-                cv::cvtColor(bayer, bgr, cv::COLOR_BayerBG2BGR);
-                cv::rotate(bgr, bgr, cv::ROTATE_180); // TODO apply this in camera settings
-                cv::Mat resized;
-                const int out_width = 640;
-                const int out_height = height * out_width / width;
-                cv::resize(bgr, resized, cv::Size(out_width, out_height), 0, 0, cv::INTER_AREA);
+
 #if JETSON_ENABLED
                 if (_detector) {
                     const auto detections = _detector->detect(bgr, 0.5f);
@@ -189,8 +180,14 @@ void BlackflyComms::_aravis_receive_loop() {
                     core::log_foxglove_only(make_annotations(static_cast<float>(out_width) / width, false), _name + "/detections"); // matches <name>/compressed
                 }
 #endif
+                // stream compressed image over foxglove stream
+                cv::Mat bgr;
+                // no need to resize as 2x2 averaging already halves the dimensions
+                averageBayer2x2ToBgr(static_cast<const uint8_t*>(data), width, height, bgr);
+                cv::rotate(bgr, bgr, cv::ROTATE_180); // TODO apply this in camera settings
+
                 std::vector<uchar> jpeg_buf;
-                cv::imencode(".jpg", resized, jpeg_buf, {cv::IMWRITE_JPEG_QUALITY, 80});
+                cv::imencode(".jpg", bgr, jpeg_buf, {cv::IMWRITE_JPEG_QUALITY, 80});
 
                 std::shared_ptr<foxglove::CompressedImage> raw_image = std::make_shared<foxglove::CompressedImage>();
                 raw_image->mutable_timestamp()->set_seconds(secs);
