@@ -55,8 +55,11 @@ target_link_libraries(drivebrain_comms PUBLIC
     opencv_core
     opencv_imgproc
     opencv_imgcodecs
-    TensorRT
 )
+
+if(JETSON)
+    target_link_libraries(drivebrain_comms PUBLIC TensorRT)
+endif()
 
 if(HOOTL)
     target_link_libraries(drivebrain_comms

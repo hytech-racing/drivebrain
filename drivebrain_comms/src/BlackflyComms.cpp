@@ -129,9 +129,6 @@ void BlackflyComms::_aravis_receive_loop() {
 #if JETSON_ENABLED
                 if (_detector) {
                     const auto detections = _detector->detect(bgr, 0.5f);
-
-                    // Boxes + labels in the pixel space of the image they're overlaid on.
-                    // unrotate maps back to the raw (pre-ROTATE_180) image logged to the mcap.
                     auto make_annotations = [&](float scale, bool unrotate) {
                         auto annotations = std::make_shared<foxglove::ImageAnnotations>();
                         for (const auto& det : detections) {
