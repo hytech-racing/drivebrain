@@ -1,4 +1,6 @@
 #include "BlackflyComms.hpp"
+#include <DataCompression.hpp>
+
 #include <chrono>
 #include <foxglove/websocket/common.hpp>
 #include <memory>
@@ -113,17 +115,22 @@ void BlackflyComms::_aravis_receive_loop() {
                 auto secs = std::chrono::duration_cast<std::chrono::seconds>(now).count();
                 auto nanos = std::chrono::duration_cast<std::chrono::nanoseconds>(now).count() % 1000000000;
 
-                // Log full uncompressed image to mcap
+                // Log full compressed image to mcap
+                std::size_t compressed_size = 0;
+                std::unique_ptr<uint8_t[]> compressed_buffer = compressBayerImage(static_cast<const uint8_t*>(data), width, height, compressed_size);
+
                 auto mcap_image = std::make_shared<foxglove::RawImage>();
                 mcap_image->mutable_timestamp()->set_seconds(secs);
                 mcap_image->mutable_timestamp()->set_nanos(nanos);
                 mcap_image->set_frame_id(_name);
                 mcap_image->set_width(width);
                 mcap_image->set_height(height);
-                mcap_image->set_encoding("bayer_rggb8");
-                mcap_image->set_step(width);
-                mcap_image->set_data(data, buffer_size);
-                core::log_mcap_only(mcap_image, _name + "/raw");
+                if (compressed_buffer) {
+                    mcap_image->set_data(compressed_buffer.get(), compressed_size);
+                    core::log_mcap_only(mcap_image, _name + "/raw");
+                } else {
+                    spdlog::error("[{}] Failed to compress camera frame", _name);
+                }
 
                 // stream compressed image over foxglove stream
                 cv::Mat bgr;
