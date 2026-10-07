@@ -67,13 +67,17 @@ bool BlackflyComms::start(const std::string& id, const std::string& name, const 
         return false;
     }
 
+#if JETSON_ENABLED
+    try {
+        _detector = std::make_unique<Detector>("/home/hytech/engines/cones.engine");
+    } catch (const std::exception& e) {
+        spdlog::error("[{}] Cone detection disabled: {}", _name, e.what());
+    }
+#endif
+
     // Start the receive thread
     _running = true;
     _blackfly_receive_thread = std::thread(&BlackflyComms::_aravis_receive_loop, this);
-#if JETSON_ENABLED
-    _detector = std::make_unique<Detector>("/home/hytech/engines/cones.engine");
-#endif
-    
 
     return true;
 }
