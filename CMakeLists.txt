@@ -120,8 +120,11 @@ target_link_libraries(drivebrain PUBLIC
     opencv_imgproc
     opencv_imgcodecs
     drivebrain_estimation
-    TensorRT
 )
+
+if(JETSON)
+    target_link_libraries(drivebrain PUBLIC TensorRT)
+endif()
 
 
 #################################
