@@ -1,5 +1,5 @@
 #include "BlackflyComms.hpp"
-#include <DataCompression.hpp>
+#include <ImageCompression.hpp>
 
 #include <chrono>
 #include <foxglove/websocket/common.hpp>
@@ -131,7 +131,24 @@ void BlackflyComms::_aravis_receive_loop() {
                 }
 
 
-#if JETSON_ENABLED
+                // stream compressed image over foxglove stream
+                cv::Mat bgr;
+                // no need to resize as 2x2 averaging already halves the dimensions
+                averageBayer2x2ToBgr(static_cast<const uint8_t*>(data), width, height, bgr);
+                cv::rotate(bgr, bgr, cv::ROTATE_180); // TODO apply this in camera settings
+
+                std::vector<uchar> jpeg_buf;
+                cv::imencode(".jpg", bgr, jpeg_buf, {cv::IMWRITE_JPEG_QUALITY, 80});
+
+                std::shared_ptr<foxglove::CompressedImage> raw_image = std::make_shared<foxglove::CompressedImage>();
+                raw_image->mutable_timestamp()->set_seconds(secs);
+                raw_image->mutable_timestamp()->set_nanos(nanos);
+                raw_image->set_frame_id(_name);
+                raw_image->set_format("jpeg");
+                raw_image->set_data(jpeg_buf.data(), jpeg_buf.size());
+                core::log_foxglove_only(raw_image, _name + "/compressed");
+
+                #if JETSON_ENABLED
                 if (_detector) {
                     const auto detections = _detector->detect(bgr, 0.5f);
                     auto make_annotations = [&](float scale, bool unrotate) {
@@ -177,25 +194,9 @@ void BlackflyComms::_aravis_receive_loop() {
                     };
 
                     core::log_mcap_only(make_annotations(1.0f, true), _name + "/detections");                                     // matches <name>/raw
-                    core::log_foxglove_only(make_annotations(static_cast<float>(out_width) / width, false), _name + "/detections"); // matches <name>/compressed
+                    core::log_foxglove_only(make_annotations(2.0f, false), _name + "/detections"); // matches <name>/compressed
                 }
 #endif
-                // stream compressed image over foxglove stream
-                cv::Mat bgr;
-                // no need to resize as 2x2 averaging already halves the dimensions
-                averageBayer2x2ToBgr(static_cast<const uint8_t*>(data), width, height, bgr);
-                cv::rotate(bgr, bgr, cv::ROTATE_180); // TODO apply this in camera settings
-
-                std::vector<uchar> jpeg_buf;
-                cv::imencode(".jpg", bgr, jpeg_buf, {cv::IMWRITE_JPEG_QUALITY, 80});
-
-                std::shared_ptr<foxglove::CompressedImage> raw_image = std::make_shared<foxglove::CompressedImage>();
-                raw_image->mutable_timestamp()->set_seconds(secs);
-                raw_image->mutable_timestamp()->set_nanos(nanos);
-                raw_image->set_frame_id(_name);
-                raw_image->set_format("jpeg");
-                raw_image->set_data(jpeg_buf.data(), jpeg_buf.size());
-                core::log_foxglove_only(raw_image, _name + "/compressed");
 
             } else {
                 spdlog::error("[{}] Failed to retrieve buffer from Aravis stream, status {}", _name, static_cast<int>(arv_buffer_get_status(buffer)));
