@@ -7,14 +7,7 @@
 
 namespace comms {
 
-inline bool valid_image(const uint8_t* input, std::size_t width, std::size_t height) {
-    return input != nullptr && width != 0 && height != 0;
-}
-
-
 std::unique_ptr<uint8_t[]> splitBayerImage(const uint8_t* input, std::size_t width, std::size_t height) {
-    if (!valid_image(input, width, height)) return nullptr;
-
     auto output = std::make_unique<uint8_t[]>(width * height);
     std::size_t offset = 0;
 
@@ -43,8 +36,6 @@ std::unique_ptr<uint8_t[]> splitBayerImage(const uint8_t* input, std::size_t wid
 }
 
 std::unique_ptr<uint8_t[]> computeDifferences(const uint8_t* input, std::size_t width, std::size_t height) {
-    if (!valid_image(input, width, height)) return nullptr;
-
     auto output = std::make_unique<uint8_t[]>(width * height);
     output[0] = input[0];
     for (std::size_t i = 1; i < width * height; ++i) {
@@ -71,10 +62,6 @@ std::unique_ptr<uint8_t[]> applyZstdCompression(const uint8_t* input, std::size_
 std::unique_ptr<uint8_t[]> compressBayerImage(const uint8_t* input, std::size_t width,
                                                std::size_t height, std::size_t& output_size) {
     output_size = 0;
-    if (!valid_image(input, width, height) ||
-        width > std::numeric_limits<std::size_t>::max() / height) {
-        return nullptr;
-    }
 
     auto planes = splitBayerImage(input, width, height);
     if (!planes) return nullptr;
@@ -83,6 +70,22 @@ std::unique_ptr<uint8_t[]> compressBayerImage(const uint8_t* input, std::size_t 
     if (!differences) return nullptr;
 
     return applyZstdCompression(differences.get(), width * height, output_size);
+}
+
+void averageBayer2x2ToBgr(const uint8_t* input, int width, int height, cv::Mat& output) {
+
+    output.create(height / 2, width / 2, CV_8UC3); // don't handle edge cases empty image is still valid
+    for (int y = 0; y + 1 < height; y += 2) {
+        for (int x = 0; x + 1 < width; x += 2) {
+            // start at red pixel and average adjacent values into a BGR entry
+            const uint8_t red = input[y * width + x];
+            const uint8_t green_top = input[y * width + x + 1];
+            const uint8_t green_bottom = input[(y+1) * width + x];
+            const uint8_t blue = input[(y+1) * width + x + 1];
+            const uint8_t green = static_cast<uint8_t>((green_top + green_bottom) / 2);
+            output.at<cv::Vec3b>(y / 2, x / 2) = cv::Vec3b(blue, green, red);
+        }
+    }
 }
 
 } // namespace comms
