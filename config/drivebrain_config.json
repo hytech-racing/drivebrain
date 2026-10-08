@@ -28,7 +28,7 @@
         "joystick_device_path": "/dev/input/js0",
         "accel_axis": 5,
         "brake_axis": 2,
-        "steering_axis": 0,
+        "steering_axis": 1,
         "invert_accel_axis": false,
         "invert_brake_axis": false,
         "invert_steering_axis": false,
