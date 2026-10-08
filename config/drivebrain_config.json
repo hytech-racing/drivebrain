@@ -57,8 +57,8 @@
     "use_scale_comms": false,
     "use_laptimer": false,
     "kraken_comms": {
-        "device_id": 40,
-        "canbus_name": "can_steer",
+        "device_id": 0,
+        "canbus_name": "can1",
         "send_rate_hz": 200,
         "reduction": 1.0,
         "min_angle_deg": -90.0,

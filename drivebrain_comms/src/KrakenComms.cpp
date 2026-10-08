@@ -10,6 +10,9 @@
 
 #include "StateTracker.hpp"
 
+// Bring-up debug output: loaded config, once-a-second status line, and SetControl failures.
+// Set to false to silence it (errors/warnings elsewhere stay on).
+static constexpr bool kDebugPrints = true;
 
 namespace comms
 {
@@ -82,6 +85,21 @@ namespace comms
             .motion_magic_jerk_deg_s3 = motion_magic_jerk_deg_s3.value(),
         };
 
+        if (kDebugPrints)
+        {
+            spdlog::info("KrakenComms[dbg]: config device_id={} bus={} rate={}Hz reduction={} limits=[{},{}]deg "
+                         "stator_limit={}A enable_timeout={}ms max_disagreement={}deg",
+                         _config.device_id, _config.canbus_name, _config.send_rate_hz, _config.reduction,
+                         _config.min_angle_deg, _config.max_angle_deg, _config.stator_current_limit_a,
+                         _config.enable_timeout_ms, _config.max_disagreement_deg);
+            spdlog::info("KrakenComms[dbg]: tuning kP={} kI={} kD={} kS={} kV={} kA={} cruise={}deg/s accel={}deg/s^2 jerk={}deg/s^3",
+                         _tuning_params.kraken_P, _tuning_params.kraken_I, _tuning_params.kraken_D,
+                         _tuning_params.kraken_S, _tuning_params.kraken_V, _tuning_params.kraken_A,
+                         _tuning_params.motion_magic_cruise_velocity_deg_s,
+                         _tuning_params.motion_magic_acceleration_deg_s2,
+                         _tuning_params.motion_magic_jerk_deg_s3);
+        }
+
         if (_config.send_rate_hz <= 0)
         {
             spdlog::error("KrakenComms: send_rate_hz must be > 0, got {}", _config.send_rate_hz);
@@ -122,6 +140,10 @@ namespace comms
             return false;
         }
 
+        if (kDebugPrints)
+        {
+            spdlog::info("KrakenComms[dbg]: creating TalonFX id={} on bus '{}'", _config.device_id, _config.canbus_name);
+        }
         _kraken = std::make_unique<ctre::phoenix6::hardware::TalonFX>(_config.device_id, _config.canbus_name);
 
         ctre::phoenix6::configs::TalonFXConfiguration talon_config{};
@@ -153,6 +175,11 @@ namespace comms
             spdlog::error("KrakenComms: failed to apply TalonFX config: {}", status.GetName());
             return false;
         }
+        if (kDebugPrints)
+        {
+            spdlog::info("KrakenComms[dbg]: TalonFX config applied (soft limits [{},{}]deg, stator limit {}A)",
+                         _config.min_angle_deg, _config.max_angle_deg, _config.stator_current_limit_a);
+        }
 
         // Test override; missing params just leave test mode off
         _test_mode = foxglove.get_param<bool>("kraken_comms/test_mode").value_or(false);
@@ -166,6 +193,12 @@ namespace comms
             [this](const std::unordered_map<std::string, core::DBParam> &params) {
                 _handle_param_updates(params);
             });
+
+        if (kDebugPrints)
+        {
+            spdlog::info("KrakenComms[dbg]: init OK, test_mode={} test_angle={}deg, starting control thread",
+                         _test_mode.load(), _test_angle_deg.load());
+        }
 
         _running = true;
         _thread = std::thread([this]() {
@@ -221,6 +254,10 @@ namespace comms
 
         if (auto new_test_angle = core::process_param_update<float>(new_param_map, "kraken_comms/test_angle_deg"))
         {
+            if (kDebugPrints && *new_test_angle != _test_angle_deg.load())
+            {
+                spdlog::info("KrakenComms[dbg]: test_angle_deg {} -> {}", _test_angle_deg.load(), *new_test_angle);
+            }
             _test_angle_deg = *new_test_angle;
         }
 
@@ -374,6 +411,20 @@ namespace comms
         int overruns_since_warn = 0;
         std::optional<steady_clock::time_point> disagreement_start;
 
+        // debug status line state
+        const auto status_period = seconds(1);
+        auto last_status_print = steady_clock::time_point{};
+        auto last_control_fail_warn = steady_clock::time_point{};
+        float last_target_deg = 0.0f;
+        float last_disagreement_deg = 0.0f;
+        bool last_steering_valid = false;
+        float last_steering_deg = 0.0f;
+
+        if (kDebugPrints)
+        {
+            spdlog::info("KrakenComms[dbg]: control loop started, period={}us", period.count());
+        }
+
         while (_running)
         {
             next_tick += period;
@@ -393,6 +444,9 @@ namespace comms
             auto [steering_deg, steering_valid] = core::StateTracker::instance().get_steering_angle_and_validity(
                 is_motor_seeded ? agreement_max_sensor_age : seed_max_sensor_age);
 
+            last_steering_valid = steering_valid;
+            last_steering_deg = steering_deg;
+
             if (is_motor_faulted)
             {
                 _kraken->SetControl(neutral);
@@ -403,7 +457,12 @@ namespace comms
                 if (steering_valid && steady_clock::now() - last_seed_attempt >= seed_retry_period)
                 {
                     last_seed_attempt = steady_clock::now();
-                    is_seed_ok = _kraken->SetPosition(_deg_to_turns(steering_deg), seed_timeout).IsOK();
+                    const auto seed_status = _kraken->SetPosition(_deg_to_turns(steering_deg), seed_timeout);
+                    is_seed_ok = seed_status.IsOK();
+                    if (kDebugPrints && !is_seed_ok)
+                    {
+                        spdlog::warn("KrakenComms[dbg]: SetPosition({} deg) failed: {}", steering_deg, seed_status.GetName());
+                    }
                 }
 
                 if (is_seed_ok)
@@ -431,6 +490,7 @@ namespace comms
                 {
                     const float measured_deg = get_measured_angle_deg();
                     const float disagreement_deg = std::abs(measured_deg - steering_deg);
+                    last_disagreement_deg = disagreement_deg;
                     if (disagreement_deg > _config.max_disagreement_deg)
                     {
                         if (!disagreement_start)
@@ -465,8 +525,30 @@ namespace comms
                         target_deg = _angle_deg;
                     }
 
-                    _kraken->SetControl(request.WithPosition(_deg_to_turns(target_deg)));
+                    last_target_deg = target_deg;
+                    const auto control_status = _kraken->SetControl(request.WithPosition(_deg_to_turns(target_deg)));
+                    if (kDebugPrints && !control_status.IsOK() && steady_clock::now() - last_control_fail_warn > seconds(1))
+                    {
+                        spdlog::warn("KrakenComms[dbg]: SetControl(target {} deg) returned {}", target_deg, control_status.GetName());
+                        last_control_fail_warn = steady_clock::now();
+                    }
                 }
+            }
+
+            if (kDebugPrints && steady_clock::now() - last_status_print >= status_period)
+            {
+                last_status_print = steady_clock::now();
+                const char *state = is_motor_faulted ? "FAULTED" : (is_motor_seeded ? "seeded" : "UNSEEDED");
+                spdlog::info("KrakenComms[dbg]: state={} test_mode={} | sensor={:.2f}deg(valid={}) measured={:.2f}deg "
+                             "target={:.2f}deg commanded={:.2f}deg disagreement={:.2f}deg | motorV={:.2f}V stator={:.1f}A "
+                             "supply={:.1f}V vel={:.1f}deg/s temp={:.0f}C",
+                             state, _test_mode.load(), last_steering_deg, last_steering_valid,
+                             get_measured_angle_deg(), last_target_deg, get_commanded_angle_deg(), last_disagreement_deg,
+                             _kraken->GetMotorVoltage().GetValueAsDouble(),
+                             _kraken->GetStatorCurrent().GetValueAsDouble(),
+                             _kraken->GetSupplyVoltage().GetValueAsDouble(),
+                             _kraken->GetVelocity().GetValueAsDouble() * 360.0,
+                             _kraken->GetDeviceTemp().GetValueAsDouble());
             }
 
             auto now = steady_clock::now();
