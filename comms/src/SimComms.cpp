@@ -5,6 +5,7 @@
 #include "StateTracker.hpp"
 #include "dv_msgs.pb.h"
 #include <cstdlib>
+#include "autonomy_msgs.pb.h"
 
 namespace comms {
 
@@ -166,6 +167,7 @@ void SimComms::_veh_recv_loop() {
             core::log(msg);
             core::render_pose(std::static_pointer_cast<hytech_msgs::pose>(msg), "ground_truth_pose");
             core::StateTracker::instance().set_vehicle_sim_pose(std::static_pointer_cast<const hytech_msgs::pose>(msg));
+            core::StateTracker::instance().handle_receive_protobuf_message(msg);
         } else if (desc == foxglove::FrameTransform::descriptor()) {
             core::log(msg);
         } else {
