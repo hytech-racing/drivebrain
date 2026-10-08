@@ -11,6 +11,9 @@
 #include <opencv2/imgcodecs.hpp>
 
 #include "Telemetry.hpp"
+#if JETSON_ENABLED
+#include "Detector.hpp"
+#endif
 
 namespace comms {
 
@@ -51,6 +54,10 @@ class BlackflyComms {
         std::string _name; // frame id and topic prefix
 
         std::thread _blackfly_receive_thread; 
+
+#if JETSON_ENABLED
+        std::unique_ptr<Detector> _detector;
+#endif      
 
 };
 
