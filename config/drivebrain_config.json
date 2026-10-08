@@ -20,6 +20,21 @@
         "dt_rate_hz": 1000.0,
         "apply_vectoring_in_regen": true
     },
+    "TeleopController": {
+        "max_torque": 10.0,
+        "max_regen_torque": 10.0,
+        "max_steering_angle_deg": 45.0,
+        "dt_rate_hz": 1000.0,
+        "joystick_device_path": "/dev/input/js0",
+        "accel_axis": 5,
+        "brake_axis": 2,
+        "steering_axis": 0,
+        "invert_accel_axis": false,
+        "invert_brake_axis": false,
+        "invert_steering_axis": false,
+        "axis_deadzone": 0.05,
+        "stale_timeout_ms": 250
+    },
     "vn_driver": {
         "device_name": "/dev/ttyUSB0",
         "baud_rate": 921600, 
@@ -44,8 +59,8 @@
         "port_name": "/dev/ttyUSB0"
     },
     "DrivebrainControllerInterface": {
-        "should_log": true, 
-        "controller_index": 1
+        "should_log": true,
+        "controller_index": 0
     },
     "FzEstimator": {
         "Q_gain": 0.1,

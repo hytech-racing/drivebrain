@@ -105,13 +105,18 @@ void DrivebrainApp::run() {
 #endif
 
   // Initialize controllers
-  const size_t num_controllers = 1;
-  _mode1 = std::make_shared<control::LoadCellTorqueController>(); 
+  const size_t num_controllers = 2;
+  _mode1 = std::make_shared<control::LoadCellTorqueController>();
   if (!_mode1->init()) {
     spdlog::error("Failed to initialize mode 1");
   }
 
-  std::array<std::shared_ptr<control::Controller<core::ControllerOutput, core::VehicleState>>, num_controllers> controllers{_mode1};
+  _mode2 = std::make_shared<control::TeleopController>();
+  if (!_mode2->init()) {
+    spdlog::error("Failed to initialize mode 2 (teleop)");
+  }
+
+  std::array<std::shared_ptr<control::Controller<core::ControllerOutput, core::VehicleState>>, num_controllers> controllers{_mode1, _mode2};
   
   // Create controller manager instance
   ControllerManager<control::Controller<ControllerOutput, VehicleState>, num_controllers>::create(controllers);
@@ -158,6 +163,7 @@ void DrivebrainApp::_loop() {
   auto desired_rpm_msg = std::make_shared<hytech::drivebrain_speed_set_input>();
   auto torque_limit_msg = std::make_shared<hytech::drivebrain_torque_lim_input>();
   auto desired_torque_msg = std::make_shared<hytech::drivebrain_desired_torque_input>();
+  auto steering_msg = std::make_shared<hytech::drivebrain_steering_input>();
 
   while(running) {
 
@@ -165,7 +171,7 @@ void DrivebrainApp::_loop() {
 
     auto state_and_validity = core::StateTracker::instance().get_latest_state_and_validity();
 
-    auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, 1>::instance();
+    auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, 2>::instance();
     auto out_struct = controller_manager.step_active_controller(state_and_validity.first);
 
     std::variant<core::SpeedControlOut, core::TorqueControlOut, std::monostate> cmd_out = out_struct.out;
@@ -212,7 +218,18 @@ void DrivebrainApp::_loop() {
 #endif
 
            core::log(desired_torque_msg);
-            
+
+        }
+
+        if (out_struct.steering_angle_deg_cmd.has_value()) {
+            steering_msg->set_drivebrain_steering(out_struct.steering_angle_deg_cmd.value());
+
+#if !JETSON_ENABLED
+            _telem_can->send_message(steering_msg);
+            _aux_can->send_message(steering_msg);
+#endif
+
+            core::log(steering_msg);
         }
     }
 

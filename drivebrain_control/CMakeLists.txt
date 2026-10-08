@@ -10,11 +10,12 @@ find_package(dbcppp REQUIRED)
 add_library(drivebrain_control
     src/LoadCellTorqueController.cpp
     src/SimplePowerLimiter.cpp
+    src/TeleopController.cpp
 )
 
 target_include_directories(drivebrain_control PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
-target_link_libraries(drivebrain_control PUBLIC 
+target_link_libraries(drivebrain_control PUBLIC
     drivebrain_core
     spdlog::spdlog
     nlohmann_json::nlohmann_json

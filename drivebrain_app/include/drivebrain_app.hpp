@@ -8,6 +8,7 @@
 #include <memory>
 #include <foxglove/websocket/base64.hpp>
 #include "LoadCellTorqueController.hpp"
+#include "TeleopController.hpp"
 #include "VNComms.hpp"
 #include "OusterComms.hpp"
 
@@ -62,6 +63,7 @@ private:
   
   /* Controllers */
   std::shared_ptr<control::LoadCellTorqueController> _mode1;
+  std::shared_ptr<control::TeleopController> _mode2;
 
   /* Vectornav */
   std::unique_ptr<comms::VNDriver> _vn_driver; 

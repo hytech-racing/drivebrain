@@ -6,9 +6,10 @@
 #include <foxglove/websocket/server_factory.hpp>
 #include <google/protobuf/descriptor.pb.h>
 #include <google/protobuf/util/time_util.h>
-#include <vector> 
-#include <string> 
-#include <fstream> 
+#include <vector>
+#include <string>
+#include <fstream>
+#include <optional>
 #include <thread>
 #include <spdlog/spdlog.h>
 
@@ -175,10 +176,14 @@ namespace core {
 
 
     /**
-     * @struct A controller output 
+     * @struct A controller output
      */
     struct ControllerOutput {
         std::variant<SpeedControlOut, TorqueControlOut, std::monostate> out;
+
+        /* Steering target, degrees. Only set by controllers that drive steering (e.g. teleop);
+           left unset by controllers that leave steering mechanical/human-driven. */
+        std::optional<float> steering_angle_deg_cmd{};
     };
 
     /**

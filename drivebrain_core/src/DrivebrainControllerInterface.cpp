@@ -69,7 +69,7 @@ void core::DrivebrainControllerInterface::_request_stop_logging() {
 }
 
 void core::DrivebrainControllerInterface::_request_controller_change(int controller_index) {
-    const size_t num_controllers = 1;
+    const size_t num_controllers = 2;
     auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, num_controllers>::instance();
 
     if (controller_index == controller_manager.get_active_controller_index()) {
