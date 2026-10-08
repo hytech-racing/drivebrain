@@ -30,7 +30,7 @@ fi
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
-conan remote add artifactory "$ARTIFACTORY_URL" --force
+# conan remote add artifactory "$ARTIFACTORY_URL" --force
 
 # let cmake infer this
 unset CC

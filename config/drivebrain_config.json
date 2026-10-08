@@ -55,7 +55,27 @@
     "use_fake_vn": false,
     "use_surrey_aero": false,
     "use_scale_comms": false,
-    "use_laptimer": false
-
+    "use_laptimer": false,
+    "kraken_comms": {
+        "device_id": 0,
+        "canbus_name": "can1",
+        "send_rate_hz": 200,
+        "reduction": 1.0,
+        "min_angle_deg": -90.0,
+        "max_angle_deg": 90.0,
+        "stator_current_limit_a": 40.0,
+        "enable_timeout_ms": 100,
+        "max_disagreement_deg": 10.0,
+        "kp": 0.0,
+        "ki": 0.0,
+        "kd": 0.0,
+        "ks": 0.0,
+        "kv": 0.0,
+        "ka": 0.0,
+        "mm_cruise_velocity_deg_s": 180.0,
+        "mm_acceleration_deg_s2": 720.0,
+        "mm_jerk_deg_s3": 0.0,
+        "test_mode": false,
+        "test_angle_deg": 0.0
+    }
 }
-

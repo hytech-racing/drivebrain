@@ -1,4 +1,5 @@
-FROM ubuntu:22.04
+ARG BASE_PLATFORM=linux/amd64
+FROM --platform=${BASE_PLATFORM} ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -10,12 +11,14 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     git \
     wget \
+    curl \
     vim \
     pkg-config \
     python3 \
     python3-pip \
     python3-setuptools \
     python3-venv \
+    binutils-aarch64-linux-gnu \
     && apt-get clean
 
 # Cross-compilation CUDA setup
@@ -40,11 +43,20 @@ RUN wget -q ${NV_REPO}/t/tensorrt/libnvinfer-plugin10_${TRT}_arm64.deb
 RUN wget -q ${NV_REPO}/t/tensorrt/libnvinfer-plugin-dev_${TRT}_arm64.deb
 RUN wget -q ${NV_REPO}/t/tensorrt/libnvinfer-headers-plugin-dev_${TRT}_arm64.deb
 
+ARG PHOENIX6_VERSION=26.3.0
+ARG PHOENIX6_SHA256=0175e4c52cbe646a0a02d069f04d6d58ad655574ea88dc65de0cd7fd9f14ee59
+
+RUN wget -q --user-agent="Debian APT-HTTP/1.3" https://deb.ctr-electronics.com/libs/2026/packages/phoenix6/${PHOENIX6_VERSION}/phoenix6_${PHOENIX6_VERSION}_arm64.deb \
+    && echo "${PHOENIX6_SHA256}  phoenix6_${PHOENIX6_VERSION}_arm64.deb" | sha256sum -c -
+
 RUN mkdir -p ${JETSON_SYSROOT} \
     && for deb in *.deb; do dpkg-deb -x "$deb" ${JETSON_SYSROOT}; done \
     && rm -rf /tmp/jetson-debs \
         ${JETSON_SYSROOT}/usr/share/doc \
-        ${JETSON_SYSROOT}/usr/lib/aarch64-linux-gnu/*_static.a
+        ${JETSON_SYSROOT}/usr/lib/aarch64-linux-gnu/*_static.a \
+    && test -f ${JETSON_SYSROOT}/usr/include/ctre/phoenix6/TalonFX.hpp \
+    && test -f ${JETSON_SYSROOT}/usr/lib/phoenix6/libCTRE_Phoenix6.so \
+    && test -f ${JETSON_SYSROOT}/usr/lib/phoenix6/libCTRE_PhoenixTools.so
 
 WORKDIR /
 

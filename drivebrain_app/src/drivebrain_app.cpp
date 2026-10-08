@@ -79,6 +79,14 @@ void DrivebrainApp::run() {
   spdlog::info("ouster driver init");
 #endif
 
+#if KRAKEN_ENABLED
+  _kraken_comms = std::make_unique<comms::KrakenComms>();
+  if (!_kraken_comms->init()) {
+    spdlog::error("Failed to initialize KrakenComms");
+    _kraken_comms.reset();
+  }
+#endif
+
 #if !JETSON_ENABLED
   // CAN device names are defined in the drivebrain JSON config
   _telem_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("telem_can_device").value(), _dbc_path);
@@ -164,6 +172,12 @@ void DrivebrainApp::_loop() {
     next_tick += loop_time_ms;
 
     auto state_and_validity = core::StateTracker::instance().get_latest_state_and_validity();
+
+#if KRAKEN_ENABLED
+    if (_kraken_comms && state_and_validity.second) {
+      _kraken_comms->set_angle(state_and_validity.first.steering_angle_deg);
+    }
+#endif
 
     auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, 1>::instance();
     auto out_struct = controller_manager.step_active_controller(state_and_validity.first);

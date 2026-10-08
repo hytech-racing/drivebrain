@@ -3,6 +3,9 @@
 #if HOOTL_ENABLED
 # include "SimComms.hpp"
 #endif
+#if KRAKEN_ENABLED
+# include "KrakenComms.hpp"
+#endif
 #include <MCAPLogger.hpp>
 #include <boost/asio.hpp>
 #include <memory>
@@ -65,6 +68,11 @@ private:
 
   /* Vectornav */
   std::unique_ptr<comms::VNDriver> _vn_driver; 
+
+#if KRAKEN_ENABLED
+  /* Steering */
+  std::unique_ptr<comms::KrakenComms> _kraken_comms;
+#endif
 
   /* Cameras */
   std::vector<std::unique_ptr<comms::BlackflyComms>> _camera_drivers;
