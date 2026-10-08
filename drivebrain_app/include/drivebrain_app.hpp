@@ -2,7 +2,8 @@
 #include "CANComms.hpp"
 #if HOOTL_ENABLED
 # include "SimComms.hpp"
-#else
+#endif
+#if KRAKEN_ENABLED
 # include "KrakenComms.hpp"
 #endif
 #include <MCAPLogger.hpp>
@@ -68,7 +69,7 @@ private:
   /* Vectornav */
   std::unique_ptr<comms::VNDriver> _vn_driver; 
 
-#if !HOOTL_ENABLED
+#if KRAKEN_ENABLED
   /* Steering */
   std::unique_ptr<comms::KrakenComms> _kraken_comms;
 #endif

@@ -1,12 +1,13 @@
 #!/usr/bin/env sh
 set -e
 
+linkflags="-static"
 for a in "$@"; do
   case "$a" in
     --test) shouldTest=1 ;;
     --clean) shouldClean=1 ;;
     --local-cache-only) localCacheOnly=1 ;;
-    --jetson) jetson="-DJETSON=ON" ;;
+    --jetson) jetson="-DJETSON=ON"; linkflags="" ;;
   esac
 done
 
@@ -63,15 +64,12 @@ cmake .. \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_TOOLCHAIN_FILE=../cmake/conan_toolchain.cmake \
   -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+  -DCMAKE_EXE_LINKER_FLAGS="$linkflags" \
   $hootl \
   $jetson \
   --log-level=NOTICE
 
 make -j
-
-if [ "$1" != "--test" ]; then
-  python3 ../bundle_runtime_libs.py drivebrain lib
-fi
 
 # run unit tests
 if [ "$shouldTest" = 1 ]; then

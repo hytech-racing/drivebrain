@@ -19,23 +19,7 @@ RUN apt-get update && apt-get install -y \
     python3-setuptools \
     python3-venv \
     binutils-aarch64-linux-gnu \
-    patchelf \
     && apt-get clean
-
-RUN sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list \
-    && dpkg --add-architecture arm64 \
-    && echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy main universe" > /etc/apt/sources.list.d/arm64-ports.list \
-    && echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main universe" >> /etc/apt/sources.list.d/arm64-ports.list \
-    && echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-security main universe" >> /etc/apt/sources.list.d/arm64-ports.list \
-    && curl -fsSL --compressed -o /usr/share/keyrings/ctr-pubkey.gpg "https://deb.ctr-electronics.com/ctr-pubkey.gpg" \
-    && echo "deb [signed-by=/usr/share/keyrings/ctr-pubkey.gpg] https://deb.ctr-electronics.com/libs/2026 stable main" > /etc/apt/sources.list.d/ctr2026.list \
-    && apt-get update \
-    && apt-get install -y phoenix6:arm64 \
-    && apt-get clean \
-    && sed -i \
-        -e 's#set(phoenix6_LIBRARIES "-lCTRE_Phoenix6 -lCTRE_PhoenixTools")#set(phoenix6_LIBRARIES "${libdir}/libCTRE_Phoenix6.so;${libdir}/libCTRE_PhoenixTools.so")#' \
-        -e 's#INTERFACE_LINK_LIBRARIES \${phoenix6_LIBRARIES})#INTERFACE_LINK_LIBRARIES "${phoenix6_LIBRARIES}")#' \
-        /usr/lib/phoenix6/cmake/phoenix6-config.cmake
 
 # Cross-compilation CUDA setup
 ARG NV_REPO=https://repo.download.nvidia.com/jetson/common/pool/main
@@ -59,11 +43,20 @@ RUN wget -q ${NV_REPO}/t/tensorrt/libnvinfer-plugin10_${TRT}_arm64.deb
 RUN wget -q ${NV_REPO}/t/tensorrt/libnvinfer-plugin-dev_${TRT}_arm64.deb
 RUN wget -q ${NV_REPO}/t/tensorrt/libnvinfer-headers-plugin-dev_${TRT}_arm64.deb
 
+ARG PHOENIX6_VERSION=26.3.0
+ARG PHOENIX6_SHA256=0175e4c52cbe646a0a02d069f04d6d58ad655574ea88dc65de0cd7fd9f14ee59
+
+RUN wget -q --user-agent="Debian APT-HTTP/1.3" https://deb.ctr-electronics.com/libs/2026/packages/phoenix6/${PHOENIX6_VERSION}/phoenix6_${PHOENIX6_VERSION}_arm64.deb \
+    && echo "${PHOENIX6_SHA256}  phoenix6_${PHOENIX6_VERSION}_arm64.deb" | sha256sum -c -
+
 RUN mkdir -p ${JETSON_SYSROOT} \
     && for deb in *.deb; do dpkg-deb -x "$deb" ${JETSON_SYSROOT}; done \
     && rm -rf /tmp/jetson-debs \
         ${JETSON_SYSROOT}/usr/share/doc \
-        ${JETSON_SYSROOT}/usr/lib/aarch64-linux-gnu/*_static.a
+        ${JETSON_SYSROOT}/usr/lib/aarch64-linux-gnu/*_static.a \
+    && test -f ${JETSON_SYSROOT}/usr/include/ctre/phoenix6/TalonFX.hpp \
+    && test -f ${JETSON_SYSROOT}/usr/lib/phoenix6/libCTRE_Phoenix6.so \
+    && test -f ${JETSON_SYSROOT}/usr/lib/phoenix6/libCTRE_PhoenixTools.so
 
 WORKDIR /
 

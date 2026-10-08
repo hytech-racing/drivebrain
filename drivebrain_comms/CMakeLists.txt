@@ -26,8 +26,9 @@ if(HOOTL)
     list(APPEND DRIVEBRAIN_COMMS_SRCS
         src/SimComms.cpp
     )
-else()
-    find_package(phoenix6 REQUIRED)
+elseif(JETSON)
+    # steering (Kraken) runs on the Jetson only; Phoenix 6 comes from the Docker sysroot like TensorRT
+    include(Phoenix6)
     list(APPEND DRIVEBRAIN_COMMS_SRCS
         src/KrakenComms.cpp
     )
@@ -71,9 +72,10 @@ if(HOOTL)
         PUBLIC
             cppzmq
     )
-else()
+elseif(JETSON)
     target_link_libraries(drivebrain_comms
         PUBLIC
             phoenix6
     )
+    target_compile_definitions(drivebrain_comms PUBLIC KRAKEN_ENABLED)
 endif()

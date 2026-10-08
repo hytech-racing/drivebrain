@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(FetchContent)
 list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/cmake")
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cuda_modules")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake_modules")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 #################################
@@ -47,7 +47,7 @@ endif()
 # Upstreams (non-conan)
 #################################
 FetchContent_Declare(
-    HT_Proto
+    HT_Proto 
     GIT_REPOSITORY https://github.com/hytech-racing/HT_proto.git
     GIT_TAG d98c8a3892007eb215ac780c30d50a4577d9ecdc
 )
@@ -103,11 +103,11 @@ if(JETSON)
     target_link_libraries(drivebrain PRIVATE TensorRT)
 endif()
 
-target_link_libraries(drivebrain PUBLIC
-    foxglove-websocket::foxglove-websocket
+target_link_libraries(drivebrain PUBLIC 
+    foxglove-websocket::foxglove-websocket 
     foxglove-schemas-protobuf::foxglove-schemas-protobuf
     mcap::mcap
-    protobuf::libprotobuf
+    protobuf::libprotobuf 
     boost::boost
     hytech_msgs_cpp_lib
     hytech_can_msgs_cpp_lib
