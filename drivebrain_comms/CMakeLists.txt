@@ -35,6 +35,12 @@ endif()
 
 add_library(drivebrain_comms ${DRIVEBRAIN_COMMS_SRCS})
 
+if(JETSON)
+    target_sources(drivebrain_comms PRIVATE src/Detector.cpp)
+    target_link_libraries(drivebrain_comms PUBLIC TensorRT)
+    target_compile_definitions(drivebrain_comms PUBLIC JETSON_ENABLED)
+endif()
+
 target_include_directories(drivebrain_comms PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 target_link_libraries(drivebrain_comms PUBLIC 
@@ -54,6 +60,7 @@ target_link_libraries(drivebrain_comms PUBLIC
     opencv_core
     opencv_imgproc
     opencv_imgcodecs
+    TensorRT
 )
 
 if(HOOTL)

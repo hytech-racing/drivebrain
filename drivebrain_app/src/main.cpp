@@ -9,6 +9,10 @@
 #include <optional>
 #include <filesystem>
 #include <drivebrain_app.hpp>
+#if JETSON_ENABLED
+#include <NvInfer.h>
+#include <cuda_runtime_api.h>
+#endif
 
 std::optional<std::string> json_file; 
 std::optional<std::string> dbc_file;
@@ -57,6 +61,12 @@ int parse_arguments(int &argc, char* argv[]) {
 }
 
 int main(int argc, char* argv[]) {
+#if JETSON_ENABLED
+    int devices = 0; 
+    cudaError_t err = cudaGetDeviceCount(&devices);
+    std::printf("CUDA: %s, %d device(s), TensorRT %d\n",
+                  cudaGetErrorString(err), devices, getInferLibVersion());
+#endif
     // Argument Handling
     int return_code = parse_arguments(argc, argv);
     if (return_code != 0) {
