@@ -63,7 +63,7 @@ def interpreter_name(elf_path):
 
 
 def find_search_dirs():
-    dirs = ["/usr/lib/phoenix6", "/lib/aarch64-linux-gnu", "/usr/lib/aarch64-linux-gnu"]
+    dirs = ["/usr/lib/phoenix6", "/lib/aarch64-linux-gnu", "/usr/lib/aarch64-linux-gnu", "/usr/aarch64-linux-gnu/lib"]
     conan_home = os.environ.get("CONAN_HOME", os.path.expanduser("~/.conan2"))
     packages_dir = os.path.join(conan_home, "p")
     if os.path.isdir(packages_dir):
