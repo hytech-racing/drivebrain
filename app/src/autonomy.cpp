@@ -65,18 +65,21 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
   _longitudinal_controller.setGains(dv.velocity_controller_pid_gains);
   
   // run control loops
-  out.desired_steering_deg = _lateral_controller.step_controller(vehicle_state, *dv.path); // pure pursuit
+  if (dv.path && !dv.path->empty()) {
+    out.desired_steering_deg = _lateral_controller.step_controller(vehicle_state, *dv.path); // pure pursuit
+  }
   out.out = _longitudinal_controller.step_controller(vehicle_state); // velocity controller
 
   // fetch pure pursuit logs
-  auto msg = _lateral_controller.getLoggingData();
+  // auto msg = _lateral_controller.getLoggingData();
   
-  #if HOOTL_ENABLED
-    // std::cout << msg.
-    comms::SimComms::instance().send_message(msg);
-  #endif
+  // #if HOOTL_ENABLED
+  //   // std::cout << msg.
+  //   comms::SimComms::instance().send_message(msg);
+  // #endif
 
   return out;
+  
 }
 
 void Autonomy::_run() {

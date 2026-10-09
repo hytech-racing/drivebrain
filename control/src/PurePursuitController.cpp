@@ -12,6 +12,7 @@ namespace control {
 namespace driverless {
 
 std::vector<core::xyz_vec<float>> PurePursuitController::getGoalPointCandidates(const std::vector<core::xyz_vec<float>>& path, core::xyz_vec<float> vehicle_pos, float lookahead_distance) {
+    spdlog::info("inside getGoalPointCandidates");
     if (path.empty()) {
         return {};
     }
@@ -56,6 +57,7 @@ std::vector<core::xyz_vec<float>> PurePursuitController::getGoalPointCandidates(
 }
 
 core::xyz_vec<float> PurePursuitController::selectGoalPoint(const std::vector<core::xyz_vec<float>>& goal_point_candidates, core::xyz_vec<float> vehicle_pos, core::xyz_vec<float> vehicle_heading) {
+    spdlog::info("inside selectGoal point");
     core::xyz_vec<float> closest_point;
  
     auto colinearity = [vehicle_pos, vehicle_heading](const core::xyz_vec<float>& point) {
@@ -87,6 +89,7 @@ core::xyz_vec<float> PurePursuitController::selectGoalPoint(const std::vector<co
 }
 
 float PurePursuitController::getCurvature(core::xyz_vec<float> vehicle_pos, core::xyz_vec<float> vehicle_heading, core::xyz_vec<float> goal_point) {
+    spdlog::info("inside get curvature");
     core::xyz_vec<float> to_goal = goal_point - vehicle_pos;
     //std::cout << "Vehicle pos: (" << vehicle_pos.x << ", " << vehicle_pos.y << "), Goal point: (" << goal_point.x << ", " << goal_point.y << "), To goal: (" << to_goal.x << ", " << to_goal.y << ")\n";
     float cross_product = vehicle_heading.x * to_goal.y - vehicle_heading.y * to_goal.x;
@@ -99,6 +102,7 @@ float PurePursuitController::getCurvature(core::xyz_vec<float> vehicle_pos, core
 }
 
 float PurePursuitController::getSteeringCommand(float curvature, float wheelbase) {
+    spdlog::info("inside get steering command");
     return std::atan(curvature * wheelbase);
 }
 
@@ -108,6 +112,7 @@ bool PurePursuitController::init() {
 } 
 
 std::optional<float> PurePursuitController::step_controller(const core::VehicleState& in, std::vector<core::xyz_vec<float>> path) {
+    spdlog::info("inside step controller");
     const core::xyz_vec<float> vehicle_pos{in.vehicle_position_map_frame.x, in.vehicle_position_map_frame.y};
     const core::xyz_vec<float> vehicle_heading{in.vehicle_heading_map_frame_unit_vector};
     // std::cout << vehicle_pos.x << ", " << vehicle_pos.y << ", " << vehicle_heading.x << ", " << vehicle_heading.y << "\n";

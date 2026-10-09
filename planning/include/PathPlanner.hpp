@@ -38,14 +38,16 @@ namespace planning {
       std::vector<core::xyz_vec<float>> midpoints; // Set of points to follow
       std::vector<double> coords; // Cone coordinates used to make the delaunay triangulation
 
-      // Position and orientation updating only uses sim zmq message - need to update to work with sensor data for real life validation!!
-      float vehicle_x = core::StateTracker::instance().vehicle_sim_pos().vehicle_x;
-      float vehicle_y = core::StateTracker::instance().vehicle_sim_pos().vehicle_y;
+      auto vehicle_data = core::StateTracker::instance().vehicle_sim_pos();
 
-      float w = core::StateTracker::instance().vehicle_sim_pos().orientation_w;
-      float x = core::StateTracker::instance().vehicle_sim_pos().orientation_x;
-      float y = core::StateTracker::instance().vehicle_sim_pos().orientation_y;
-      float z = core::StateTracker::instance().vehicle_sim_pos().orientation_z;
+      // Position and orientation updating only uses sim zmq message - need to update to work with sensor data for real life validation!!
+      float vehicle_x = vehicle_data.vehicle_x;
+      float vehicle_y = vehicle_data.vehicle_y;
+
+      float w = vehicle_data.orientation_w;
+      float x = vehicle_data.orientation_x;
+      float y = vehicle_data.orientation_y;
+      float z = vehicle_data.orientation_z;
 
 
       // Finding yaw from quaternion orientation
