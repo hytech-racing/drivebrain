@@ -65,17 +65,18 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
   _longitudinal_controller.setGains(dv.velocity_controller_pid_gains);
   
   // run control loops
-  out.desired_steering_deg = _lateral_controller.step_controller(vehicle_state);
-  out.out = _longitudinal_controller.step_controller(vehicle_state);
+  out.desired_steering_deg = _lateral_controller.step_controller(vehicle_state, *dv.path); // pure pursuit
+  out.out = _longitudinal_controller.step_controller(vehicle_state); // velocity controller
 
   // fetch pure pursuit logs
   auto msg = _lateral_controller.getLoggingData();
   
-#if HOOTL_ENABLED
-  // std::cout << msg.
-  comms::SimComms::instance().send_message(msg);
-#endif
-return out;
+  #if HOOTL_ENABLED
+    // std::cout << msg.
+    comms::SimComms::instance().send_message(msg);
+  #endif
+
+  return out;
 }
 
 void Autonomy::_run() {
@@ -87,12 +88,14 @@ void Autonomy::_run() {
 
     auto dv = StateTracker::instance().dv_state();
 
+    // TODO: put slam engine here instead of in another thread - make _run() a public function, bypass the slam thread(?)
+    
     if (dv.lidar_is_valid && dv.lidar_cloud != last_scan && dv.cone_observations) {
       last_scan = dv.lidar_cloud;
 
       // TODO: cone classifier needs to be invoked here
       auto path = planning::plan_path(*StateTracker::instance().dv_state().cone_observations);
-      render_path(path, "planned_path", "map");
+      render_path(path, "planned_path", "map"); //draws a line between path points 
       StateTracker::instance().set_dv_path(
           std::make_shared<const std::vector<xyz_vec<float>>>(std::move(path)));
     }

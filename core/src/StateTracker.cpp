@@ -120,6 +120,8 @@ void StateTracker::handle_receive_protobuf_message(std::shared_ptr<google::proto
     } else {
         _receive_low_level_state(msg);
     }
+
+
 }
 
 std::pair<core::VehicleState, bool> StateTracker::vehicle_state() {

@@ -74,6 +74,30 @@ namespace core {
         T x;
         T y;
         T z;
+
+        xyz_vec operator+(const xyz_vec& other) const {
+            return {x + other.x, y + other.y};
+        }
+
+        xyz_vec operator-(const xyz_vec& other) const {
+            return {x - other.x, y - other.y};
+        }
+
+        T operator*(const xyz_vec& other) const {
+            return x * other.x + y * other.y;
+        }
+
+        xyz_vec operator*(const float scalar) const {
+            return {x * scalar, y * scalar};
+        }
+
+        bool operator==(const xyz_vec& other) const {
+            return x == other.x && y == other.y;
+        }
+
+        float length() const {
+            return std::sqrt(x * x + y * y);
+        }
     };
 
     /**
@@ -289,8 +313,8 @@ namespace core {
         DrivetrainData dt_data;
         AccumulatorData acc_data;
 
-        xy_vec<float> vehicle_position_map_frame;
-        xy_vec<float> vehicle_heading_map_frame_unit_vector;
+        xyz_vec<float> vehicle_position_map_frame;
+        xyz_vec<float> vehicle_heading_map_frame_unit_vector;
     };
 
     enum class ControllerManagerStatus

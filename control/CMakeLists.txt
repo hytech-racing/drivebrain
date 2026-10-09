@@ -10,7 +10,7 @@ find_package(dbcppp REQUIRED)
 add_library(control
     src/LoadCellTorqueController.cpp
     src/SimplePowerLimiter.cpp
-    driverless/src/PurePursuitController.cpp
+    src/PurePursuitController.cpp
 )
 
 target_include_directories(control PUBLIC
