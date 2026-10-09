@@ -1,4 +1,5 @@
 #include "autonomy.hpp"
+#include "SimComms.hpp"
 
 #include <memory>
 #include <variant>
@@ -9,6 +10,12 @@
 #include <Telemetry.hpp>
 #include <StateTracker.hpp>
 #include <PathPlanner.hpp>
+#include <autonomy_msgs.pb.h>
+
+// todo: abstract this out to a config file or something, but for now just hardcode it to 25Hz
+#define LOOP_TIME 0.004 
+#define CONTROLLER_LOOP_TIME 0.01
+#define PRESCALE_COUNTER ((int)(CONTROLLER_LOOP_TIME / LOOP_TIME))
 
 namespace core {
 
@@ -37,24 +44,52 @@ void Autonomy::stop() {
 }
 
 bool Autonomy::is_valid() {
+  return true;
   auto dv = StateTracker::instance().dv_state();
   return dv.lidar_is_valid && dv.path && !dv.path->empty();
 }
 
-// TODO: Pure pursuit impl should be invoked here. Hardcoded for now to verify the
-// command path from drivebrain through to the sim's vehicle dynamics.
-ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
-  // TorqueControlOut torque;
-  // torque.desired_torques_nm = {2.0f, 2.0f, 2.0f, 2.0f};
 
+ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
+
+
+  static uint8_t prescale_counter = 0;
+  auto dv = StateTracker::instance().dv_state();
   ControllerOutput out;
-  out.out = std::monostate{};
-  // out.out = torque;
-  // out.desired_steering_deg = 10.0f;
+
+  // if (++prescale_counter < PRESCALE_COUNTER) {
+  //   return out;
+  // }
+  // prescale_counter = 0;
+
+  // update PID gains for longitudinal controller
+  _longitudinal_controller.setGains(dv.velocity_controller_pid_gains);
+  
+  // run control loops
+  if (dv.path && !dv.path->empty()) {
+    out.desired_steering_deg = _lateral_controller.step_controller(vehicle_state, *dv.path); // pure pursuit
+    out.out = TorqueControlOut{0.5f, 0.5f, 0.5f, 0.5f};
+  } else {
+    out.out = std::monostate{};
+  }
+
+  //out.out = _longitudinal_controller.step_controller(vehicle_state); // velocity controller
+
+
+  // fetch pure pursuit logs
+  // auto msg = _lateral_controller.getLoggingData();
+  
+  // #if HOOTL_ENABLED
+  //   // std::cout << msg.
+  //   comms::SimComms::instance().send_message(msg);
+  // #endif
+
   return out;
+  
 }
 
 void Autonomy::_run() {
+  spdlog::info("in autonomy run");
   auto next_tick = std::chrono::steady_clock::now();
   std::shared_ptr<const foxglove::PointCloud> last_scan;
 
@@ -62,16 +97,17 @@ void Autonomy::_run() {
     next_tick += _period;
 
     auto dv = StateTracker::instance().dv_state();
-
-    if (dv.lidar_is_valid && dv.lidar_cloud != last_scan) {
+    
+    if (dv.lidar_is_valid && dv.lidar_cloud != last_scan && dv.cone_observations) {
       last_scan = dv.lidar_cloud;
 
       // TODO: cone classifier needs to be invoked here
       auto path = planning::plan_path(*StateTracker::instance().dv_state().cone_observations);
-      render_path(path, "planned_path", "lidar");
+      render_path(path, "planned_path", "map"); //draws a line between path points 
       StateTracker::instance().set_dv_path(
           std::make_shared<const std::vector<xyz_vec<float>>>(std::move(path)));
     }
+    spdlog::info("rendered path");
 
     std::this_thread::sleep_until(next_tick);
   }

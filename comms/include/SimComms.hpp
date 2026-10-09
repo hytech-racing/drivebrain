@@ -62,7 +62,6 @@ class SimComms {
         void _veh_recv_loop();
         void _lidar_recv_loop();
 
-        static constexpr char _endpoint_prefix[] = "ipc:///tmp/drivebrain_sim_";
         static constexpr uint16_t _recv_socket_port = 6767;
         static constexpr uint16_t _send_socket_port = 5940;
         static constexpr uint16_t _lidar_socket_port = 1155;

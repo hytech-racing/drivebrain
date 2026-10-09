@@ -19,5 +19,8 @@
     }
   },
 
-  "remoteUser": "root"
+  "remoteUser": "root",
+  "mounts": [
+    "source=/tmp,target=/tmp,type=bind"
+  ]
 }

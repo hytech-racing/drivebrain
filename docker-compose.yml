@@ -2,12 +2,17 @@ services:
   dev:
     # TODO: update docker hub image
     # image: kkittur/drivebrain_cross_compile 
+    platform: linux/amd64
     build:
       context: .
       target: dev-sim
+    ipc: "host"
     volumes:
       - conan-cache:/root/.conan2
       - ./:/app
+      - /tmp:/tmp
+    environment:
+      - SIM_HOST=host.docker.internal
     working_dir: /app
     tty: true
     stdin_open: true

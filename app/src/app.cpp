@@ -16,7 +16,6 @@
 #include "Telemetry.hpp"
 #include "ControllerManager.hpp"
 #include "DrivebrainControllerInterface.hpp"
-#include "PathPlanner.hpp"
 
 #include "dv_msgs.pb.h"
 #include "hytech_msgs.pb.h"
@@ -68,6 +67,7 @@ void DrivebrainApp::run() {
 #if HOOTL_ENABLED
   comms::SimComms::create(); 
   comms::SimComms::instance().start();
+  spdlog::info("Initialized simcomms instance");
 #endif
 
   bool vn_init_not_successful;

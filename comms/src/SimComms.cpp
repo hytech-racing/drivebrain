@@ -4,6 +4,8 @@
 #include <memory>
 #include "StateTracker.hpp"
 #include "dv_msgs.pb.h"
+#include <cstdlib>
+#include "autonomy_msgs.pb.h"
 
 namespace comms {
 
@@ -26,7 +28,9 @@ static std::shared_ptr<google::protobuf::Message> parse_by_name(const std::strin
 }
 
 static std::string endpoint(uint16_t port) {
-    return "ipc:///tmp/drivebrain_sim_" + std::to_string(port);
+    const char* host = std::getenv("SIM_HOST");
+    if (!host) host = "127.0.0.1";
+    return "tcp://" + std::string(host) + ":" + std::to_string(port);
 }
 
 /****************************************************************
@@ -176,13 +180,17 @@ void SimComms::_veh_recv_loop() {
             // Right now for testing purposes, we assume that all cones of the track are visible
             core::StateTracker::instance().set_cone_observations(std::static_pointer_cast<dv_msgs::Cones>(msg));
         } else if (desc == hytech_msgs::pose::descriptor()) {
+            core::log(msg);
             core::render_pose(std::static_pointer_cast<hytech_msgs::pose>(msg), "ground_truth_pose");
+            core::StateTracker::instance().set_vehicle_sim_pose(std::static_pointer_cast<const hytech_msgs::pose>(msg));
+            core::StateTracker::instance().handle_receive_protobuf_message(msg);
         } else if (desc == foxglove::FrameTransform::descriptor()) {
             core::log(msg);
         } else {
             core::log(msg);
             core::StateTracker::instance().handle_receive_protobuf_message(msg);
         }
+
     }
 }
 

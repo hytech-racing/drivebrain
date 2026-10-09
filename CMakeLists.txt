@@ -12,6 +12,26 @@ list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/cmake")
 option(HOOTL "Build with HOOTL sim interface" OFF)
 
 #################################
+# Upstreams needed by the custom libs below
+#################################
+FetchContent_Declare(
+    delaunator
+    GIT_REPOSITORY https://github.com/delfrrr/delaunator-cpp.git
+    GIT_TAG v0.4.0
+    SOURCE_SUBDIR  none
+)
+FetchContent_MakeAvailable(delaunator)
+
+FetchContent_Declare(
+    geometric_tools
+    GIT_REPOSITORY https://github.com/davideberly/GeometricTools.git
+    GIT_TAG GTE-version-8.2 
+    GIT_SHALLOW TRUE
+    SOURCE_SUBDIR none
+)
+FetchContent_MakeAvailable(geometric_tools)
+
+#################################
 # Custom libs
 #################################
 add_subdirectory(core)
@@ -47,7 +67,7 @@ endif()
 FetchContent_Declare(
     HT_Proto 
     GIT_REPOSITORY https://github.com/hytech-racing/HT_proto.git
-    GIT_TAG 535746d
+    GIT_TAG 711970d63e174c9a22beef4407677ebb61c457bf
 )
 FetchContent_MakeAvailable(HT_Proto)
 
@@ -60,7 +80,7 @@ FetchContent_MakeAvailable(vn_driver_lib)
 
 FetchContent_Declare(
     HT_CAN
-    URL "https://github.com/hytech-racing/HT_CAN/releases/download/268/drivebrain_can_lib.tar.gz"
+    URL "https://github.com/hytech-racing/HT_CAN/releases/download/269/drivebrain_can_lib.tar.gz"
 )
 FetchContent_MakeAvailable(HT_CAN)
 
@@ -76,6 +96,7 @@ FetchContent_Declare(
     URL "https://github.com/hytech-racing/drivebrain_simulink_models/releases/download/rel57/codegen_outputs.tar.gz"
 )
 FetchContent_MakeAvailable(drivebrain_simulink_models)
+
 
 #################################
 # Linking to main app
@@ -110,7 +131,7 @@ target_link_libraries(drivebrain PUBLIC
     perception
     slam
     matlab_model
-    simulink_automation_msgs_proto_cpp
+    #simulink_automation_msgs_proto_cpp
 )
 
 #################################
