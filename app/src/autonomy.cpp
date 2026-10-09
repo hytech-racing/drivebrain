@@ -52,6 +52,7 @@ bool Autonomy::is_valid() {
 
 ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
 
+
   static uint8_t prescale_counter = 0;
   auto dv = StateTracker::instance().dv_state();
   ControllerOutput out;
@@ -65,10 +66,15 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
   _longitudinal_controller.setGains(dv.velocity_controller_pid_gains);
   
   // run control loops
-  if (dv.path && !dv.path->empty()) {
-    out.desired_steering_deg = _lateral_controller.step_controller(vehicle_state, *dv.path); // pure pursuit
+  if (dv.path->empty()) {
+    out.out = std::monostate{};
+    return out;
   }
-  out.out = _longitudinal_controller.step_controller(vehicle_state); // velocity controller
+
+  out.desired_steering_deg = _lateral_controller.step_controller(vehicle_state, *dv.path); // pure pursuit
+
+  //out.out = _longitudinal_controller.step_controller(vehicle_state); // velocity controller
+
 
   // fetch pure pursuit logs
   // auto msg = _lateral_controller.getLoggingData();
@@ -83,6 +89,7 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
 }
 
 void Autonomy::_run() {
+  spdlog::info("in autonomy run");
   auto next_tick = std::chrono::steady_clock::now();
   std::shared_ptr<const foxglove::PointCloud> last_scan;
 
@@ -90,8 +97,6 @@ void Autonomy::_run() {
     next_tick += _period;
 
     auto dv = StateTracker::instance().dv_state();
-
-    // TODO: put slam engine here instead of in another thread - make _run() a public function, bypass the slam thread(?)
     
     if (dv.lidar_is_valid && dv.lidar_cloud != last_scan && dv.cone_observations) {
       last_scan = dv.lidar_cloud;
@@ -102,6 +107,7 @@ void Autonomy::_run() {
       StateTracker::instance().set_dv_path(
           std::make_shared<const std::vector<xyz_vec<float>>>(std::move(path)));
     }
+    spdlog::info("rendered path");
 
     std::this_thread::sleep_until(next_tick);
   }
