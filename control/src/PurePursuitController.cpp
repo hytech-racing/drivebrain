@@ -26,6 +26,7 @@ std::vector<core::xyz_vec<float>> PurePursuitController::getGoalPointCandidates(
         // if segment is degenerate (p1 == p2), skip it
         if (d * d == 0.0f) {
             p1 = p2;
+            spdlog::error("duplicate path points");
             continue; 
         }
 

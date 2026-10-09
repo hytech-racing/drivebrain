@@ -57,21 +57,21 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
   auto dv = StateTracker::instance().dv_state();
   ControllerOutput out;
 
-  if (++prescale_counter < PRESCALE_COUNTER) {
-    return out;
-  }
-  prescale_counter = 0;
+  // if (++prescale_counter < PRESCALE_COUNTER) {
+  //   return out;
+  // }
+  // prescale_counter = 0;
 
   // update PID gains for longitudinal controller
   _longitudinal_controller.setGains(dv.velocity_controller_pid_gains);
   
   // run control loops
-  if (dv.path->empty()) {
+  if (dv.path && !dv.path->empty()) {
+    out.desired_steering_deg = _lateral_controller.step_controller(vehicle_state, *dv.path); // pure pursuit
+    out.out = TorqueControlOut{0.5f, 0.5f, 0.5f, 0.5f};
+  } else {
     out.out = std::monostate{};
-    return out;
   }
-
-  out.desired_steering_deg = _lateral_controller.step_controller(vehicle_state, *dv.path); // pure pursuit
 
   //out.out = _longitudinal_controller.step_controller(vehicle_state); // velocity controller
 
