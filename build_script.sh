@@ -13,7 +13,7 @@ done
 
 profile="rpi_profile"
 build_folder="build-arm"
-ARTIFACTORY_URL="http://54.198.162.181:8082/artifactory/api/conan/conan"
+ARTIFACTORY_URL="${ARTIFACTORY_URL:-http://54.198.162.181:8082/artifactory/api/conan/conan}"
 
 hootl=""
 if [ "$shouldTest" = 1 ]; then
@@ -31,6 +31,9 @@ python3 -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
 conan remote add artifactory "$ARTIFACTORY_URL" --force
+if [ -n "${ARTIFACTORY_USERNAME:-}" ] && [ -n "${ARTIFACTORY_TOKEN:-}" ]; then
+  conan remote login artifactory "$ARTIFACTORY_USERNAME" --password "$ARTIFACTORY_TOKEN"
+fi
 
 # let cmake infer this
 unset CC
