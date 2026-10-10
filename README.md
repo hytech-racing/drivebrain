@@ -44,11 +44,11 @@ docker run -it \
   --mount type=volume,source=drivebrain_conan-cache,target=/root/.conan2 \
   --mount type=bind,source="$(pwd)",target=/app \
   --memory=16g \
-  --cpus=4 \ 
+  --cpus=4 \
   -w /app \
   --ipc=host \
   -v /tmp:/tmp \
-  kkittur/drivebrain_cross_compile /bin/bash 
+  kkittur/drivebrain_cross_compile /bin/bash
 ```
 and pass in whatever flags you see fit. 
 

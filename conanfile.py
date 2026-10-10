@@ -25,6 +25,7 @@ class DrivebrainSoftware(ConanFile):
         self.requires("boost/1.80.0")
         self.requires("spdlog/1.13.0")
         self.requires("mcap/2.0.2")
+        self.requires("zstd/1.5.5")
         self.requires("dbcppp/3.2.6")
         self.requires("cppzmq/4.11.0")
         self.requires("libzip/1.11.4")
