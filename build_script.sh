@@ -71,10 +71,6 @@ cmake .. \
 
 make -j
 
-if [ "$1" != "--test" ]; then
-  python3 ../bundle_runtime_libs.py drivebrain lib
-fi
-
 # run unit tests
 if [ "$shouldTest" = 1 ]; then
   ctest --rerun-failed --output-on-failure

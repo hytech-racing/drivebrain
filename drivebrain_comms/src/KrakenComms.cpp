@@ -124,8 +124,10 @@ namespace comms
 
         _kraken = std::make_unique<ctre::phoenix6::hardware::TalonFX>(_config.device_id, _config.canbus_name);
 
+        std::cout << "KRAKEN INITIALIZED!!!!" << std::endl;
+
         ctre::phoenix6::configs::TalonFXConfiguration talon_config{};
-        talon_config.MotorOutput.NeutralMode = ctre::phoenix6::signals::NeutralModeValue::Brake;
+        talon_config.MotorOutput.NeutralMode = ctre::phoenix6::signals::NeutralModeValue::Coast;
         /**
          * Convention: clockwise steering-wheel rotation, as seen by the driver, is positive.
          * CTRE defines clockwise looking at the motor's shaft face. The motor's shaft faces the
@@ -395,7 +397,7 @@ namespace comms
 
             if (is_motor_faulted)
             {
-                _kraken->SetControl(neutral);
+                // _kraken->SetControl(neutral);
             }
             else if (!is_motor_seeded)
             {
@@ -403,7 +405,7 @@ namespace comms
                 if (steering_valid && steady_clock::now() - last_seed_attempt >= seed_retry_period)
                 {
                     last_seed_attempt = steady_clock::now();
-                    is_seed_ok = _kraken->SetPosition(_deg_to_turns(steering_deg), seed_timeout).IsOK();
+                    is_seed_ok = _kraken->SetPosition(_deg_to_turns(0.0), seed_timeout).IsOK(); // TODO fix
                 }
 
                 if (is_seed_ok)
@@ -417,7 +419,7 @@ namespace comms
                 }
                 else
                 {
-                    _kraken->SetControl(neutral);
+                    // _kraken->SetControl(neutral);
                     if (steady_clock::now() - last_unseeded_warn > seconds(1))
                     {
                         spdlog::warn("KrakenComms: waiting to seed motor position (steering sensor valid: {})", steering_valid);
@@ -440,7 +442,7 @@ namespace comms
                         else if (steady_clock::now() - *disagreement_start >= disagreement_persist_time)
                         {
                             is_motor_faulted = true;
-                            _kraken->SetControl(neutral);
+                            // _kraken->SetControl(neutral);
                             spdlog::error("KrakenComms: FAULT motor angle {} deg disagrees with steering sensor {} deg "
                                           "(limit {} deg). Motor set to neutral until restart. Check Inverted and sensor sign.",
                                           measured_deg, steering_deg, _config.max_disagreement_deg);
@@ -465,7 +467,7 @@ namespace comms
                         target_deg = _angle_deg;
                     }
 
-                    _kraken->SetControl(request.WithPosition(_deg_to_turns(target_deg)));
+                    // _kraken->SetControl(request.WithPosition(_deg_to_turns(target_deg)));
                 }
             }
 

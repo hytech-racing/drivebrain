@@ -27,7 +27,7 @@ if(HOOTL)
         src/SimComms.cpp
     )
 else()
-    find_package(phoenix6 REQUIRED)
+    find_package(phoenix6 MODULE REQUIRED)
     list(APPEND DRIVEBRAIN_COMMS_SRCS
         src/KrakenComms.cpp
     )

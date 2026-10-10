@@ -1,3 +1,3 @@
-scp build-arm/drivebrain nixos@192.168.203.1:/opt/drivebrain/drivebrain
-scp -r build-arm/lib nixos@192.168.203.1:/opt/drivebrain/lib
-scp build-arm/ht_can-src/dbc/hytech.dbc nixos@192.168.203.1:/home/nixos/config/hytech.dbc
+scp build-arm/drivebrain hytech@192.168.10.1:/home/hytech/drivebrain
+scp config/drivebrain_config.json hytech@192.168.10.1:/home/hytech/drivebrain_config.json
+scp build-arm/_deps/ht_can-src/dbc/hytech.dbc hytech@192.168.10.1:/home/hytech/hytech.dbc

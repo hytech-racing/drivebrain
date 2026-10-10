@@ -1,6 +1,6 @@
 {
-    "telem_can_device": "can_primary",
-    "aux_can_device": "can_secondary",
+    "telem_can_device": "can0",
+    "aux_can_device": "can1",
     "SimpleSpeedController": {
         "max_torque": 21.0,
         "max_regen_torque": 10.0,
@@ -57,13 +57,13 @@
     "use_scale_comms": false,
     "use_laptimer": false,
     "kraken_comms": {
-        "device_id": 40,
-        "canbus_name": "can_steer",
+        "device_id": 0,
+        "canbus_name": "can1",
         "send_rate_hz": 200,
         "reduction": 1.0,
         "min_angle_deg": -90.0,
         "max_angle_deg": 90.0,
-        "stator_current_limit_a": 40.0,
+        "stator_current_limit_a": 20.0,
         "enable_timeout_ms": 100,
         "max_disagreement_deg": 10.0,
         "kp": 0.0,
