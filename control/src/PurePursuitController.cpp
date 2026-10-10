@@ -108,7 +108,7 @@ bool PurePursuitController::init() {
     return true;
 } 
 
-std::optional<float> PurePursuitController::step_controller(const core::VehicleState& in, std::vector<core::xyz_vec<float>> path) {
+std::optional<float> PurePursuitController::step_controller(const core::VehicleState& in, std::vector<core::xyz_vec<float>> path, const float& curvature_in) {
     const core::xyz_vec<float> vehicle_pos{in.vehicle_position_map_frame.x, in.vehicle_position_map_frame.y};
     const core::xyz_vec<float> vehicle_heading{in.vehicle_heading_map_frame_unit_vector};
     // std::cout << vehicle_pos.x << ", " << vehicle_pos.y << ", " << vehicle_heading.x << ", " << vehicle_heading.y << "\n";
@@ -139,6 +139,7 @@ std::optional<float> PurePursuitController::step_controller(const core::VehicleS
         .steering_command = steering_command,
     };
    //setLoggingData(data);
+    curvature_ = curvature; // store the curvature for velocity planner
     return output;
 }
 

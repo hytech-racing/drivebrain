@@ -62,13 +62,12 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
   // }
   // prescale_counter = 0;
 
-  // update PID gains for longitudinal controller
-  _longitudinal_controller.setGains(dv.velocity_controller_pid_gains);
   
   // run control loops
   if (dv.path && !dv.path->empty()) {
-    out.desired_steering_deg = _lateral_controller.step_controller(vehicle_state, *dv.path); // pure pursuit
-    out.out = TorqueControlOut{0.5f, 0.5f, 0.5f, 0.5f};
+    float curvature;
+    out.desired_steering_deg = _lateral_controller.step_controller(vehicle_state, *dv.path, curvature); // pure pursuit
+    out.out = _longitudinal_controller.step_controller(vehicle_state, curvature); // velocity controller
   } else {
     out.out = std::monostate{};
   }

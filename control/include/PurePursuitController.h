@@ -25,7 +25,7 @@ class PurePursuitController {
 
         bool init();
 
-        std::optional<float> step_controller(const core::VehicleState& in, std::vector<core::xyz_vec<float>> path);
+        std::optional<float> step_controller(const core::VehicleState& in, std::vector<core::xyz_vec<float>> path, const float& curvature_in);
 
         /** 
             * Calculates the intersection points of the circle of radius lookahead_distance centered at vehicle_pos with the polyline path
