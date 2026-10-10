@@ -31,8 +31,16 @@ jobs:
           docker pull kkittur/drivebrain_cross_compile:latest
 
       - name: Enter container and build
+        env:
+          ARTIFACTORY_TOKEN: ${{ secrets.ARTIFACTORY_TOKEN }}
+          ARTIFACTORY_URL: ${{ secrets.ARTIFACTORY_URL }}
+          ARTIFACTORY_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
         run: |
-          docker compose run --rm dev ./build_script.sh
+          docker compose run --rm \
+            -e ARTIFACTORY_TOKEN \
+            -e ARTIFACTORY_URL \
+            -e ARTIFACTORY_USERNAME \
+            dev ./build_script.sh
 
       - name: Extract binary from build
         run: |
