@@ -1,11 +1,13 @@
 #pragma once
 
+#include "Controller.hpp"
 #include <StateTracker.hpp>
 
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <vector>
-inline constexpr std::size_t PATH_POINTS_AHEAD = 20;
+inline constexpr std::size_t kPathPointsAhead = 20;
 
 
 namespace planning {
@@ -14,25 +16,30 @@ struct PathPoint {
     core::xy_vec<float> point;
     float curvature;                  // signed, 1/m
     float velocity;             // m/s
-    float longitudinal_accel;     // m/s^2
 };
 
 class VelocityPlanner {
 public:
     explicit VelocityPlanner(float max_car_velocity = 20.0f);
 
-    // Run one planning cycle. The returned samples begin at the nearest point ahead.
-    const std::vector<PathPoint>& tick(const core::VehicleState& state,  const float pose_to_path_curvature);
+    /**
+    Main method picking the closest forward point on path, estimating velocity limits from curvature, running solvers and returning torque request.
+    @param state The current vehicle state.
+    @param pose_to_path_curvature Pure Pursuit arc curvature that will be followed to keep the car on the path.
+    @return The torque control output to send to the vehicle.
+     */
+    core::TorqueControlOut step_controller(const core::VehicleState& state,  const float pose_to_path_curvature);
     
     void setPath(const std::vector<core::xy_vec<float>>& path) {
         path_ = path;
     }
 
+
 private:
     std::vector<core::xy_vec<float>> path_;
     std::size_t start_point_index_ = SIZE_MAX;
     std::size_t end_point_index_ = SIZE_MAX;
-    std::size_t lookahead_distance_index_ = PATH_POINTS_AHEAD; // 10 points ahead from start
+    std::size_t lookahead_distance_index_ = kPathPointsAhead; // 10 points ahead from start
     float max_car_velocity_ = 20.0f; // m/s
     std::vector<PathPoint> path_points_;
 
@@ -41,8 +48,16 @@ private:
      * @param state The current vehicle state.
      * @param pose_to_path_curvature Pure Pursuit arc curvature that will be followed to keep the car on the path.
      * @param forward Whether to solve forward or backward.
+     * @return True if the solver completed successfully, false if there was an error (e.g., lateral acceleration exceeded limits).
      */
-    void solver(const core::VehicleState& state, const float pose_to_path_curvature, bool forward = true);
+    bool solver(const core::VehicleState& state, const float pose_to_path_curvature, bool forward = true);
+
+
+    const std::optional<float> getAccel(const core::VehicleState& state,  const float pose_to_path_curvature, size_t start_point_index);
+
+
+    std::size_t getHorizonPointIndex(const core::VehicleState& state); // get path index from which we will start calculation
+
 };
 
 } // namespace planning
