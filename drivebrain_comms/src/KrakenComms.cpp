@@ -2,13 +2,13 @@
 
 #include <algorithm>
 #include <chrono>
-#include <cmath>
-#include <optional>
 
 #include <ctre/phoenix6/unmanaged/Unmanaged.hpp>
+#include <google/protobuf/wrappers.pb.h>
 #include <spdlog/spdlog.h>
 
-#include "StateTracker.hpp"
+#include "Telemetry.hpp"
+
 
 
 namespace comms
@@ -351,22 +351,13 @@ namespace comms
         const auto period = microseconds(static_cast<long long>(1'000'000.0 / _config.send_rate_hz));
         auto next_tick = steady_clock::now();
 
-        // FOC needs a Phoenix Pro license, so stick to standard commutation
-        ctre::phoenix6::controls::MotionMagicVoltage request{units::angle::turn_t{0.0}};
-        request.WithEnableFOC(false);
+        ctre::phoenix6::controls::PositionVoltage request{units::angle::turn_t{0.0}};
+        request.WithEnableFOC(true);
         ctre::phoenix6::controls::NeutralOut neutral{};
 
         // SetPosition blocks until the motor ACKs or this times out; keep it well under the enable timeout
         const units::time::second_t seed_timeout{0.02};
         const auto seed_retry_period = milliseconds(500);
-
-        // A disagreement must persist this long before faulting
-        const auto disagreement_persist_time = milliseconds(50);
-
-        // Seeding can use any recent reading, but the agreement check needs a fresh one: comparing a
-        // moving motor against a frozen reading (e.g. a short CAN dropout) would look like a disagreement
-        const auto seed_max_sensor_age = milliseconds(500);
-        const auto agreement_max_sensor_age = milliseconds(40);
 
         bool is_motor_seeded = false;
         bool is_motor_faulted = false;
@@ -374,7 +365,11 @@ namespace comms
         auto last_unseeded_warn = steady_clock::time_point{};
         auto last_overrun_warn = steady_clock::time_point{};
         int overruns_since_warn = 0;
-        std::optional<steady_clock::time_point> disagreement_start;
+
+        // The encoder is the only position reference, so stream it (and what we're commanding) to Foxglove
+        const auto telem_period = milliseconds(20);
+        auto last_telem = steady_clock::time_point{};
+        float last_target_deg = 0.0f;
 
         while (_running)
         {
@@ -383,92 +378,76 @@ namespace comms
             // Motor disables itself if this stops being fed (e.g. drivebrain hangs)
             ctre::phoenix::unmanaged::FeedEnable(_config.enable_timeout_ms);
 
-            // The motor's encoder resets to 0 if it reboots (e.g. a brownout), though its config persists.
-            // Re-seed instead of letting the agreement check fault on the bogus position.
+            // The steering sensor is not used: the encoder is zeroed once at startup (wheel assumed centered) and is the
+            // only position reference afterwards. If the motor reboots (e.g. a brownout) its encoder resets to 0 wherever
+            // the wheel is, so there is nothing to re-seed from; fault instead.
             if (is_motor_seeded && !is_motor_faulted && _kraken->HasResetOccurred())
             {
-                spdlog::warn("KrakenComms: motor reset detected, re-seeding position from steering sensor");
-                is_motor_seeded = false;
-                disagreement_start.reset();
+                is_motor_faulted = true;
+                spdlog::error("KrakenComms: FAULT motor reset detected, position reference lost. "
+                              "Motor set to neutral until restart.");
             }
-
-            auto [steering_deg, steering_valid] = core::StateTracker::instance().get_steering_angle_and_validity(
-                is_motor_seeded ? agreement_max_sensor_age : seed_max_sensor_age);
 
             if (is_motor_faulted)
             {
-                // _kraken->SetControl(neutral);
+                _kraken->SetControl(neutral);
             }
             else if (!is_motor_seeded)
             {
                 bool is_seed_ok = false;
-                if (steering_valid && steady_clock::now() - last_seed_attempt >= seed_retry_period)
+                if (steady_clock::now() - last_seed_attempt >= seed_retry_period)
                 {
                     last_seed_attempt = steady_clock::now();
-                    is_seed_ok = _kraken->SetPosition(_deg_to_turns(0.0), seed_timeout).IsOK(); // TODO fix
+                    is_seed_ok = _kraken->SetPosition(_deg_to_turns(0.0), seed_timeout).IsOK();
                 }
 
                 if (is_seed_ok)
                 {
                     {
                         std::scoped_lock lock(_angle_mutex);
-                        _angle_deg = std::clamp(steering_deg, _config.min_angle_deg, _config.max_angle_deg);
+                        _angle_deg = 0.0f;
                     }
                     is_motor_seeded = true;
-                    spdlog::info("KrakenComms: seeded motor position to {} deg from steering sensor", steering_deg);
+                    spdlog::info("KrakenComms: seeded motor position to 0 deg");
                 }
                 else
                 {
-                    // _kraken->SetControl(neutral);
+                    _kraken->SetControl(neutral);
                     if (steady_clock::now() - last_unseeded_warn > seconds(1))
                     {
-                        spdlog::warn("KrakenComms: waiting to seed motor position (steering sensor valid: {})", steering_valid);
+                        spdlog::warn("KrakenComms: waiting to seed motor position");
                         last_unseeded_warn = steady_clock::now();
                     }
                 }
             }
             else // no fault and seeded branch
             {
-                if (steering_valid)
+                // For now the motor only drives in test mode; otherwise it coasts so the wheel turns freely
+                // while the encoder keeps reporting the angle
+                if (_test_mode)
                 {
-                    const float measured_deg = get_measured_angle_deg();
-                    const float disagreement_deg = std::abs(measured_deg - steering_deg);
-                    if (disagreement_deg > _config.max_disagreement_deg)
-                    {
-                        if (!disagreement_start)
-                        {
-                            disagreement_start = steady_clock::now();
-                        }
-                        else if (steady_clock::now() - *disagreement_start >= disagreement_persist_time)
-                        {
-                            is_motor_faulted = true;
-                            // _kraken->SetControl(neutral);
-                            spdlog::error("KrakenComms: FAULT motor angle {} deg disagrees with steering sensor {} deg "
-                                          "(limit {} deg). Motor set to neutral until restart. Check Inverted and sensor sign.",
-                                          measured_deg, steering_deg, _config.max_disagreement_deg);
-                        }
-                    }
-                    else
-                    {
-                        disagreement_start.reset();
-                    }
+                    const float target_deg = std::clamp(_test_angle_deg.load(), _config.min_angle_deg, _config.max_angle_deg);
+                    _kraken->SetControl(request.WithPosition(_deg_to_turns(target_deg)));
+                    last_target_deg = target_deg;
                 }
-
-                if (!is_motor_faulted)
+                else
                 {
-                    float target_deg;
-                    if (_test_mode)
-                    {
-                        target_deg = std::clamp(_test_angle_deg.load(), _config.min_angle_deg, _config.max_angle_deg);
-                    }
-                    else
-                    {
-                        std::scoped_lock lock(_angle_mutex);
-                        target_deg = _angle_deg;
-                    }
-
-                    // _kraken->SetControl(request.WithPosition(_deg_to_turns(target_deg)));
+                    _kraken->SetControl(neutral);
                 }
+            }
+
+            const float measured_deg = get_measured_angle_deg();
+
+            if (steady_clock::now() - last_telem >= telem_period)
+            {
+                last_telem = steady_clock::now();
+                auto measured_msg = std::make_shared<google::protobuf::FloatValue>();
+                measured_msg->set_value(measured_deg);
+                core::log_foxglove_only(measured_msg, "kraken/measured_angle_deg");
+
+                auto target_msg = std::make_shared<google::protobuf::FloatValue>();
+                target_msg->set_value(last_target_deg);
+                core::log_foxglove_only(target_msg, "kraken/target_angle_deg");
             }
 
             auto now = steady_clock::now();

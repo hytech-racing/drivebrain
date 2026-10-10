@@ -9,15 +9,15 @@
 
 #include <boost/signals2/connection.hpp>
 #include <ctre/phoenix6/TalonFX.hpp>
-#include <ctre/phoenix6/controls/MotionMagicVoltage.hpp>
+#include <ctre/phoenix6/controls/PositionVoltage.hpp>
 #include <ctre/phoenix6/controls/NeutralOut.hpp>
 #include "FoxgloveServer.hpp"
 
 namespace comms
 {
     /**
-     * All closed-loop control runs on the Kraken's TalonFX. Drivebrain only seeds the motor's encoder
-     * from the steering sensor, streams a target angle, and feeds the enable watchdog.
+     * All closed-loop control runs on the Kraken's TalonFX. Drivebrain only zeroes the motor's encoder
+     * once at startup, streams a target angle, and feeds the enable watchdog.
     */
     class KrakenComms
     {
@@ -96,7 +96,7 @@ namespace comms
     private:
 
         /**
-         * Seeds the motor encoder once the steering sensor is valid, then sends the current
+         * Zeroes the motor encoder once at startup (wheel assumed centered), then sends the current
          * angle target to the Kraken at config.send_rate_hz.
         */
         void _run();
