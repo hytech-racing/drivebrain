@@ -52,7 +52,7 @@ void DrivebrainApp::run() {
 
   spdlog::info("Constructed logging singletons");
 
-  core::DrivebrainControllerInterface::create(); 
+  core::DrivebrainControllerInterface::create();
 
   spdlog::info("Constructed drivebrain controller interface");
 
@@ -64,7 +64,7 @@ void DrivebrainApp::run() {
   spdlog::info("Initialized ethernet drivers");
 
 #if HOOTL_ENABLED
-  comms::SimComms::create(); 
+  comms::SimComms::create();
   comms::SimComms::instance().start();
 #endif
 
@@ -79,16 +79,25 @@ void DrivebrainApp::run() {
   spdlog::info("ouster driver init");
 #endif
 
-#if !JETSON_ENABLED
+#if !HOOTL_ENABLED
+  _kraken_comms = std::make_unique<comms::KrakenComms>();
+  if (!_kraken_comms->init()) {
+    spdlog::error("Failed to initialize KrakenComms");
+    _kraken_comms.reset();
+  }
+#endif
+
+
   // CAN device names are defined in the drivebrain JSON config
   _telem_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("telem_can_device").value(), _dbc_path);
+#if !JETSON_ENABLED
   _aux_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("aux_can_device").value(), _dbc_path);
-  spdlog::info("Initialized CAN drivers");
 #endif
+  spdlog::info("Initialized CAN drivers");
 
 #if JETSON_ENABLED
   // start every GigE camera aravis can find
-  constexpr unsigned int expected_cameras = 2; 
+  constexpr unsigned int expected_cameras = 2;
   unsigned int num_cameras = 0;
   for (int attempt = 0; attempt < 15; ++attempt) {
     arv_update_device_list();
@@ -126,7 +135,7 @@ void DrivebrainApp::run() {
 
   spdlog::info("Constructed controller manager");
 
-  running = true; 
+  running = true;
   _io_context_thread = std::thread([this]() {
     try {
       _io_context.run();
@@ -146,7 +155,7 @@ void DrivebrainApp::run() {
     spdlog::error("_loop thread exiting, running={}", running.load());
   });
   spdlog::info("Spawned threads");
-  
+
   // Join threads when loop thread finishes
   if(_loop_thread.joinable()) _loop_thread.join();
   _io_context.stop();
@@ -171,6 +180,12 @@ void DrivebrainApp::_loop() {
 
     auto state_and_validity = core::StateTracker::instance().get_latest_state_and_validity();
 
+#if !HOOTL_ENABLED
+    if (_kraken_comms && state_and_validity.second) {
+      _kraken_comms->set_angle(state_and_validity.first.steering_angle_deg);
+    }
+#endif
+
     auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, 2>::instance();
     auto out_struct = controller_manager.step_active_controller(state_and_validity.first);
 
@@ -182,7 +197,7 @@ void DrivebrainApp::_loop() {
     if (state_is_valid) {
 
         if (const core::SpeedControlOut* speedControl = std::get_if<core::SpeedControlOut>(&cmd_out)) { // speed controller, set RPM
-       
+
             desired_rpm_msg->set_drivebrain_set_rpm_fl(speedControl->desired_rpms.FL);
             desired_rpm_msg->set_drivebrain_set_rpm_fr(speedControl->desired_rpms.FR);
             desired_rpm_msg->set_drivebrain_set_rpm_rl(speedControl->desired_rpms.RL);

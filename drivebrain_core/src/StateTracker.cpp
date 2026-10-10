@@ -95,6 +95,16 @@ std::pair<core::VehicleState, bool> StateTracker::get_latest_state_and_validity(
     return {current_state, state_is_valid};
 }
 
+std::pair<float, bool> StateTracker::get_steering_angle_and_validity(std::chrono::microseconds max_age) {
+    auto curr_time = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::high_resolution_clock::now().time_since_epoch());
+
+    std::unique_lock lk(_state_mutex);
+    auto steering_stamp = _timestamp_array[3];
+    bool is_fresh = steering_stamp.count() > 0 && (curr_time - steering_stamp) <= max_age;
+    return {_vehicle_state.steering_angle_deg, is_fresh && _steering_sensor_ok};
+}
+
 /****************************************************************
  * Private class methods
  ****************************************************************/
@@ -166,7 +176,8 @@ void StateTracker::_receive_low_level_state(std::shared_ptr<google::protobuf::Me
                 std::chrono::high_resolution_clock::now().time_since_epoch());
             _raw_input_data.raw_steering_analog = in_msg->steering_analog_raw();
             _raw_input_data.raw_steering_digital = in_msg->steering_digital_raw();
-            _vehicle_state.steering_angle_deg = _raw_input_data.raw_steering_analog;
+            _vehicle_state.steering_angle_deg = in_msg->steering_output_steering_angle();
+            _steering_sensor_ok = !in_msg->steering_both_sensors_fail() && !in_msg->steering_interface_sensor_error();
         }
     } else if (msg->GetDescriptor() == hytech::em_measurement::descriptor()) {
         auto in_msg = std::static_pointer_cast<hytech::em_measurement>(msg);
