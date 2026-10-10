@@ -33,9 +33,9 @@ namespace planning {
   */  
 
   // Returns the next set of coordinates for the car to follow as a path
-  inline std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones) {
+  inline std::vector<core::xy_vec<float>> plan_path(const dv_msgs::Cones& cones) {
       /* Initializations */
-      std::vector<core::xyz_vec<float>> midpoints; // Set of points to follow
+      std::vector<core::xy_vec<float>> midpoints; // Set of points to follow
       std::vector<double> coords; // Cone coordinates used to make the delaunay triangulation
 
       auto vehicle_data = core::StateTracker::instance().vehicle_sim_pos();
@@ -104,7 +104,7 @@ namespace planning {
           
           float mx = (delaunay.coords[2* curr_edge] + delaunay.coords[2* twin_edge]) / (2.0);
           float my = (delaunay.coords[2*curr_edge + 1] + delaunay.coords[2* twin_edge + 1]) / (2.0);
-          midpoints.push_back({mx, my, 0.0f});
+          midpoints.push_back({mx, my});
           
         }
       }
@@ -174,4 +174,3 @@ namespace planning {
       
   } // plan_path
 } // planning namespace
-

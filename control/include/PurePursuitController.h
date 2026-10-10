@@ -16,16 +16,16 @@ namespace driverless {
 class PurePursuitController {
     public:
         struct LoggingData {
-            std::vector<core::xyz_vec<float>> path;
-            core::xyz_vec<float> vehicle_pos;
-            core::xyz_vec<float> target_point;
+            std::vector<core::xy_vec<float>> path;
+            core::xy_vec<float> vehicle_pos;
+            core::xy_vec<float> target_point;
             float curvature;
             float steering_command;
         };
 
         bool init();
 
-        std::optional<float> step_controller(const core::VehicleState& in, std::vector<core::xyz_vec<float>> path, const float& curvature_in);
+        std::optional<float> step_controller(const core::VehicleState& in, std::vector<core::xy_vec<float>> path, float& curvature_in);
 
         /** 
             * Calculates the intersection points of the circle of radius lookahead_distance centered at vehicle_pos with the polyline path
@@ -34,7 +34,7 @@ class PurePursuitController {
             * @param lookahead_distance Parameter for pure pursuit
             * @return A vector of 0-N intersection points.
         */
-        std::vector<core::xyz_vec<float>> getGoalPointCandidates(const std::vector<core::xyz_vec<float>>& path, core::xyz_vec<float> vehicle_pos, float lookahead_distance);
+        std::vector<core::xy_vec<float>> getGoalPointCandidates(const std::vector<core::xy_vec<float>>& path, core::xy_vec<float> vehicle_pos, float lookahead_distance);
 
         /**
         * Selects the most appropriate goal point from a set of candidates based on the vehicle's position and heading.
@@ -43,7 +43,7 @@ class PurePursuitController {
         * @param vehicle_heading The current heading of the vehicle (map frame).
         * @return The selected goal point.
         */
-        core::xyz_vec<float> selectGoalPoint(const std::vector<core::xyz_vec<float>>& goal_point_candidates, core::xyz_vec<float> vehicle_pos, core::xyz_vec<float> vehicle_heading);
+        core::xy_vec<float> selectGoalPoint(const std::vector<core::xy_vec<float>>& goal_point_candidates, core::xy_vec<float> vehicle_pos, core::xy_vec<float> vehicle_heading);
 
 
         /**
@@ -75,8 +75,7 @@ class PurePursuitController {
     private:
         LoggingData logging_data_;
         float lookahead_distance_{2.5f};
-        float wheelbase_{1.0f};
-        float k_p_speed_to_lookahead_{1.0f};
+        float wheelbase_{1.53f};
         float curvature_;
         /** 
         Get an arc of constant curvature from current point to target whose tangent is instantaneous heading of vehicle.
@@ -85,7 +84,7 @@ class PurePursuitController {
         * @param goal_point The target point to reach (map frame)
         * @return The curvature of the arc connecting the vehicle's position to the goal point.
         */
-        float getCurvature(core::xyz_vec<float> vehicle_pos, core::xyz_vec<float> vehicle_heading, core::xyz_vec<float> goal_point);
+        float getCurvature(core::xy_vec<float> vehicle_pos, core::xy_vec<float> vehicle_heading, core::xy_vec<float> goal_point);
 
         /**
         Converts the curvature to a steering command based on bicycle model.

@@ -39,8 +39,8 @@ private:
     std::vector<core::xy_vec<float>> path_;
     std::size_t start_point_index_ = SIZE_MAX;
     std::size_t end_point_index_ = SIZE_MAX;
-    std::size_t lookahead_distance_index_ = kPathPointsAhead; // 10 points ahead from start
-    float max_car_velocity_ = 20.0f; // m/s
+    std::size_t lookahead_distance_ = kPathPointsAhead; // 20 points ahead including start
+    float max_car_velocity_ = 10.0f; // m/s
     std::vector<PathPoint> path_points_;
 
     /**
@@ -48,9 +48,10 @@ private:
      * @param state The current vehicle state.
      * @param pose_to_path_curvature Pure Pursuit arc curvature that will be followed to keep the car on the path.
      * @param forward Whether to solve forward or backward.
+     * @param path_length The number of points in the path ahead of the car
      * @return True if the solver completed successfully, false if there was an error (e.g., lateral acceleration exceeded limits).
      */
-    bool solver(const core::VehicleState& state, const float pose_to_path_curvature, bool forward = true);
+    bool solver(const core::VehicleState& state, const float pose_to_path_curvature, const int path_length, bool forward = true);
 
 
     const std::optional<float> getAccel(const core::VehicleState& state,  const float pose_to_path_curvature, size_t start_point_index);
