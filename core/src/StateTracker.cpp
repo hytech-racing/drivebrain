@@ -161,7 +161,7 @@ core::DriverlessState StateTracker::dv_state() {
     return current_state;
 }
 
-void StateTracker::set_dv_path(std::shared_ptr<const std::vector<xyz_vec<float>>> path) {
+void StateTracker::set_dv_path(std::shared_ptr<const std::vector<xy_vec<float>>> path) {
     std::unique_lock lk(_dv_state_mutex);
     _dv_state.path = std::move(path);
 }

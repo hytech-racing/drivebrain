@@ -1,10 +1,16 @@
 #pragma once
 
+#include "Controller.hpp"
 #include <StateTracker.hpp>
 
 #include <cstddef>
+#include <fstream>
+#include <nlohmann/json.hpp>
+#include <optional>
 #include <string>
 #include <vector>
+inline constexpr std::size_t kPathPointsAhead = 20;
+
 
 namespace planning {
 
@@ -12,28 +18,53 @@ struct PathPoint {
     core::xy_vec<float> point;
     float curvature;                  // signed, 1/m
     float velocity;             // m/s
-    float longitudinal_accel;     // m/s^2
 };
 
 class VelocityPlanner {
 public:
-    explicit VelocityPlanner(std::string path_filename = "path.csv",
-                             float max_car_velocity = 20.0f);
+    explicit VelocityPlanner(float max_car_velocity);
 
-    // Run one planning cycle. The returned samples begin at the nearest point ahead.
-    const std::vector<PathPoint>& tick(const core::VehicleState& state,  const float pose_to_path_curvature);
+    /**
+    Main method picking the closest forward point on path, estimating velocity limits from curvature, running solvers and returning torque request.
+    @param state The current vehicle state.
+    @param pose_to_path_curvature Pure Pursuit arc curvature that will be followed to keep the car on the path.
+    @return The torque control output to send to the vehicle.
+     */
+    core::TorqueControlOut step_controller(const core::VehicleState& state, const float pose_to_path_curvature);
     
+    void setPath(const std::vector<core::xy_vec<float>>& path) {
+        path_ = path;
+    }
+
+
 private:
     std::vector<core::xy_vec<float>> path_;
     std::size_t start_point_index_ = SIZE_MAX;
     std::size_t end_point_index_ = SIZE_MAX;
-    std::size_t lookahead_distance_index_ = 10; // 10 points ahead from start
-    float max_car_velocity_ = 20.0f; // m/s
+    std::size_t lookahead_distance_ = kPathPointsAhead; // 20 points ahead including start
+    float max_car_velocity_ = 10.0f; // m/s
     std::vector<PathPoint> path_points_;
+    std::ofstream trace_file_;
+    std::size_t trace_iteration_ = 0;
 
-    void solver(const core::VehicleState& state, const float pose_to_path_curvature, bool forward = true);
-    std::size_t getHorizonPointIndex(const core::VehicleState& state);
-    static std::vector<core::xy_vec<float>> loadPathFromCsv(const std::string& filename);
+    /**
+     * Walk the path in direction given by `forward` and assign the maximum velocity to each point based on curvature and current speed.
+     * @param state The current vehicle state.
+     * @param pose_to_path_curvature Pure Pursuit arc curvature that will be followed to keep the car on the path.
+     * @param forward Whether to solve forward or backward.
+     * @param path_length The number of points in the path ahead of the car
+     * @return True if the solver completed successfully, false if there was an error (e.g., lateral acceleration exceeded limits).
+     */
+    bool solver(const core::VehicleState& state, const float pose_to_path_curvature, const int path_length, const core::xy_vec<float>& car_position, const float longitudinal_velocity, const bool forward, nlohmann::json* trace);
+
+
+
+    const std::optional<float> getAccel(const core::VehicleState& state,  const float pose_to_path_curvature, size_t start_point_index, const core::xy_vec<float>& car_position, const float longitudinal_velocity, nlohmann::json* trace);
+
+
+
+    std::size_t getHorizonPointIndex(const core::VehicleState& state, const core::xy_vec<float>& position, const core::xy_vec<float>& heading); // get path index from which we will start calculation
+
 };
 
 } // namespace planning

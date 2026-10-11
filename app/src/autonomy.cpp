@@ -55,20 +55,26 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
 
   static uint8_t prescale_counter = 0;
   auto dv = StateTracker::instance().dv_state();
-  ControllerOutput out;
-
+  ControllerOutput out = {};
+  
   // if (++prescale_counter < PRESCALE_COUNTER) {
   //   return out;
   // }
   // prescale_counter = 0;
 
-  // update PID gains for longitudinal controller
-  _longitudinal_controller.setGains(dv.velocity_controller_pid_gains);
   
   // run control loops
   if (dv.path && !dv.path->empty()) {
-    out.desired_steering_deg = _lateral_controller.step_controller(vehicle_state, *dv.path); // pure pursuit
-    out.out = TorqueControlOut{0.5f, 0.5f, 0.5f, 0.5f};
+    float curvature;
+    std::optional<float> steering_angle = _lateral_controller.step_controller(vehicle_state, *dv.path, curvature); // pure pursuit
+    if (steering_angle.has_value()) {
+      out.desired_steering_deg = steering_angle.value();
+      _longitudinal_controller.setPath(*dv.path);
+      out.out = _longitudinal_controller.step_controller(vehicle_state, curvature); // velocity controller
+    } else {
+      spdlog::error("Pure Pursuit controller failed to compute steering angle");
+      out.out = std::monostate{};
+    }
   } else {
     out.out = std::monostate{};
   }
@@ -105,7 +111,7 @@ void Autonomy::_run() {
       auto path = planning::plan_path(*StateTracker::instance().dv_state().cone_observations);
       render_path(path, "planned_path", "map"); //draws a line between path points 
       StateTracker::instance().set_dv_path(
-          std::make_shared<const std::vector<xyz_vec<float>>>(std::move(path)));
+          std::make_shared<const std::vector<xy_vec<float>>>(std::move(path)));
     }
     spdlog::info("rendered path");
 

@@ -106,7 +106,7 @@ inline void render_pose(std::shared_ptr<hytech_msgs::pose> pose, std::string id,
  * @param id The identifier of the path (used to distinguish e.g. a midline from a raceline)
  * @param frame_id The frame the path points are expressed in.
  */
-inline void render_path(const std::vector<xyz_vec<float>>& path, std::string id, std::string frame_id = "map") {
+inline void render_path(const std::vector<xy_vec<float>>& path, std::string id, std::string frame_id = "map") {
     auto scene = std::make_shared<foxglove::SceneUpdate>();
     auto* entity = scene->add_entities();
     entity->set_frame_id(frame_id);
@@ -128,7 +128,7 @@ inline void render_path(const std::vector<xyz_vec<float>>& path, std::string id,
         auto* p = line->add_points();
         p->set_x(point.x);
         p->set_y(point.y);
-        p->set_z(point.z);
+        p->set_z(0.0f);
     }
     auto* color = line->mutable_color();
     color->set_r(0.0);

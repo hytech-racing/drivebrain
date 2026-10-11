@@ -131,6 +131,13 @@ namespace core {
         float length() const {
             return std::sqrt(x * x + y * y);
         }
+
+        float projectOnto(const xy_vec& direction) const {
+            if (direction.length() < 1e-6f) {
+                throw std::invalid_argument("Cannot project onto a zero-length vector");
+            }
+            return (*this * direction) / direction.length();
+        }
     };
 
 
@@ -356,7 +363,7 @@ namespace core {
         std::shared_ptr<const foxglove::PointCloud> lidar_cloud;
         bool lidar_is_valid;
         std::shared_ptr<const dv_msgs::Cones> cone_observations;
-        std::shared_ptr<const std::vector<xyz_vec<float>>> path;
+        std::shared_ptr<const std::vector<xy_vec<float>>> path;
 
         PIDGains velocity_controller_pid_gains;
 
@@ -443,7 +450,7 @@ namespace core {
              *
              * @param path the planned path, map frame
              */
-            void set_dv_path(std::shared_ptr<const std::vector<xyz_vec<float>>> path);
+            void set_dv_path(std::shared_ptr<const std::vector<xy_vec<float>>> path);
 
             /**
              * Sets the latest cone observations produced by perception.
