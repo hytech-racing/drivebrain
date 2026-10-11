@@ -55,7 +55,7 @@ private:
 
   slam::GraphSlam _slam;
   control::driverless::PurePursuitController _lateral_controller{};
-  planning::VelocityPlanner _longitudinal_controller{};
+  planning::VelocityPlanner _longitudinal_controller{10.0f};
 
   // Rate of OS1 LiDAR
   static constexpr std::chrono::milliseconds _period{100}; 
