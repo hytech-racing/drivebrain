@@ -32,8 +32,7 @@
         "invert_accel_axis": false,
         "invert_brake_axis": false,
         "invert_steering_axis": false,
-        "axis_deadzone": 0.05,
-        "stale_timeout_ms": 250
+        "axis_deadzone": 0.05
     },
     "vn_driver": {
         "device_name": "/dev/ttyUSB0",

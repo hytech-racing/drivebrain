@@ -193,6 +193,12 @@ namespace comms
     {
         std::scoped_lock lock(_angle_mutex);
         _angle_deg = std::clamp(angle_deg, _config.min_angle_deg, _config.max_angle_deg);
+        _is_drive_enabled = true;
+    }
+
+    void KrakenComms::release()
+    {
+        _is_drive_enabled = false;
     }
 
     float KrakenComms::get_commanded_angle_deg() const
@@ -422,11 +428,17 @@ namespace comms
             }
             else // no fault and seeded branch
             {
-                // For now the motor only drives in test mode; otherwise it coasts so the wheel turns freely
-                // while the encoder keeps reporting the angle
+                // Drives to the test angle in test mode, or to the set_angle() target while enabled; otherwise it
+                // coasts so the wheel turns freely while the encoder keeps reporting the angle
                 if (_test_mode)
                 {
                     const float target_deg = std::clamp(_test_angle_deg.load(), _config.min_angle_deg, _config.max_angle_deg);
+                    _kraken->SetControl(request.WithPosition(_deg_to_turns(target_deg)));
+                    last_target_deg = target_deg;
+                }
+                else if (_is_drive_enabled)
+                {
+                    const float target_deg = get_commanded_angle_deg();
                     _kraken->SetControl(request.WithPosition(_deg_to_turns(target_deg)));
                     last_target_deg = target_deg;
                 }

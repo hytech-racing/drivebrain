@@ -20,6 +20,10 @@ namespace control
      * triggers map to drive torque and the steering stick maps to a target steering angle.
      * Reads the gamepad directly via the Linux joystick API (/dev/input/jsX) on a background
      * thread. Fails safe to zero torque and centered steering unless the gamepad is connected.
+     *
+     * Triggers are mapped to [0, 1] (joydev reports them as -32767 at rest). Each trigger must be seen
+     * at rest once after the device opens before it can command torque, since some drivers report
+     * an untouched trigger as 0 (i.e. half pressed).
     */
     class TeleopController : public Controller<core::ControllerOutput, core::VehicleState> {
     public:
@@ -39,7 +43,6 @@ namespace control
             bool invert_brake_axis;
             bool invert_steering_axis;
             float axis_deadzone;  // [0, 1), applied to the normalized axis value
-            int stale_timeout_ms; // no event within this window -> joystick treated as disconnected
         };
 
         TeleopController() = default;
@@ -67,10 +70,14 @@ namespace control
         */
         void _run_joystick();
 
+        /** @return raw stick value mapped to [-1, 1] */
         static float _normalize_axis(int16_t raw, bool invert, float deadzone);
 
-        /** @return true if the device is open and produced an event within config.stale_timeout_ms */
-        bool _joystick_connected() const;
+        /** @return raw trigger value mapped to [0, 1], 0 at rest */
+        static float _normalize_trigger(int16_t raw, bool invert, float deadzone);
+
+        /** Zeroes all inputs and disarms the triggers, e.g. after losing the device */
+        void _reset_inputs();
 
         std::mutex _config_mutex;
         config _config{};
@@ -82,6 +89,7 @@ namespace control
         std::atomic<float> _accel{0.0f};
         std::atomic<float> _brake{0.0f};
         std::atomic<float> _steering{0.0f};
-        std::atomic<std::chrono::steady_clock::time_point> _last_event_time;
+        std::atomic<bool> _accel_armed{false};
+        std::atomic<bool> _brake_armed{false};
     };
 }

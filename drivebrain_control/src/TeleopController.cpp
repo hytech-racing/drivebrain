@@ -85,11 +85,9 @@ bool control::TeleopController::init()
     _config.invert_brake_axis    = foxglove.get_param<bool>("teleopcontroller/invert_brake_axis").value_or(false);
     _config.invert_steering_axis = foxglove.get_param<bool>("teleopcontroller/invert_steering_axis").value_or(false);
     _config.axis_deadzone        = foxglove.get_param<float>("teleopcontroller/axis_deadzone").value_or(0.05f);
-    _config.stale_timeout_ms     = foxglove.get_param<int>("teleopcontroller/stale_timeout_ms").value_or(250);
 
     foxglove.register_param_callback(std::bind(&control::TeleopController::_handle_param_updates, this, std::placeholders::_1));
 
-    _last_event_time = std::chrono::steady_clock::time_point{};
     _running = true;
     _joystick_thread = std::thread(&TeleopController::_run_joystick, this);
 
@@ -105,6 +103,30 @@ float control::TeleopController::_normalize_axis(int16_t raw, bool invert, float
         normalized = 0.0f;
     }
     return invert ? -normalized : normalized;
+}
+
+float control::TeleopController::_normalize_trigger(int16_t raw, bool invert, float deadzone)
+{
+    float normalized = std::clamp(static_cast<float>(raw) / 32767.0f, -1.0f, 1.0f);
+    if (invert)
+    {
+        normalized = -normalized;
+    }
+    normalized = (normalized + 1.0f) / 2.0f;
+    if (normalized < deadzone)
+    {
+        normalized = 0.0f;
+    }
+    return normalized;
+}
+
+void control::TeleopController::_reset_inputs()
+{
+    _accel = 0.0f;
+    _brake = 0.0f;
+    _steering = 0.0f;
+    _accel_armed = false;
+    _brake_armed = false;
 }
 
 void control::TeleopController::_run_joystick()
@@ -130,11 +152,12 @@ void control::TeleopController::_run_joystick()
             spdlog::warn("TeleopController: poll failed on {}: {}", _config.joystick_device_path, std::strerror(errno));
             close(_fd);
             _fd = -1;
+            _reset_inputs();
             continue;
         }
         if (poll_result == 0)
         {
-            // no event within the poll window; stale-check happens in _joystick_connected()
+            // joydev only emits events on change, so a quiet device just means the inputs are held steady
             continue;
         }
 
@@ -145,6 +168,7 @@ void control::TeleopController::_run_joystick()
             spdlog::warn("TeleopController: lost connection to {}: {}", _config.joystick_device_path, std::strerror(errno));
             close(_fd);
             _fd = -1;
+            _reset_inputs();
             continue;
         }
 
@@ -153,29 +177,30 @@ void control::TeleopController::_run_joystick()
         {
             if (event.number == _config.accel_axis)
             {
-                _accel = _normalize_axis(event.value, _config.invert_accel_axis, _config.axis_deadzone);
+                const float accel = _normalize_trigger(event.value, _config.invert_accel_axis, _config.axis_deadzone);
+                if (accel == 0.0f && !_accel_armed)
+                {
+                    _accel_armed = true;
+                    spdlog::info("TeleopController: accel trigger armed");
+                }
+                _accel = _accel_armed ? accel : 0.0f;
             }
             else if (event.number == _config.brake_axis)
             {
-                _brake = _normalize_axis(event.value, _config.invert_brake_axis, _config.axis_deadzone);
+                const float brake = _normalize_trigger(event.value, _config.invert_brake_axis, _config.axis_deadzone);
+                if (brake == 0.0f && !_brake_armed)
+                {
+                    _brake_armed = true;
+                    spdlog::info("TeleopController: brake trigger armed");
+                }
+                _brake = _brake_armed ? brake : 0.0f;
             }
             else if (event.number == _config.steering_axis)
             {
                 _steering = _normalize_axis(event.value, _config.invert_steering_axis, _config.axis_deadzone);
             }
         }
-        _last_event_time = std::chrono::steady_clock::now();
     }
-}
-
-bool control::TeleopController::_joystick_connected() const
-{
-    if (_fd < 0)
-    {
-        return false;
-    }
-    auto age = std::chrono::steady_clock::now() - _last_event_time.load();
-    return age <= std::chrono::milliseconds(_config.stale_timeout_ms);
 }
 
 ControllerOutput control::TeleopController::step_controller(const VehicleState &in)
@@ -189,7 +214,8 @@ ControllerOutput control::TeleopController::step_controller(const VehicleState &
     TorqueControlOut torque_out{};
     ControllerOutput cmd_out{};
 
-    const bool safe_to_drive = _joystick_connected();
+    // a disconnected gamepad shows up as a read error, which closes the device
+    const bool safe_to_drive = _fd >= 0;
 
     float steering_cmd_deg = 0.0f;
 
@@ -198,7 +224,8 @@ ControllerOutput control::TeleopController::step_controller(const VehicleState &
         const float brake = _brake;
         const float steering = std::clamp(_steering.load(), -1.0f, 1.0f);
 
-        const torque_nm requested_torque = (accel * cur_config.max_torque) - (brake * cur_config.max_regen_torque);
+        const torque_nm requested_torque = std::clamp((accel * cur_config.max_torque) - (brake * cur_config.max_regen_torque),
+                                                      -cur_config.max_regen_torque, cur_config.max_torque);
 
         torque_out.desired_torques_nm.FL = requested_torque;
         torque_out.desired_torques_nm.FR = requested_torque;

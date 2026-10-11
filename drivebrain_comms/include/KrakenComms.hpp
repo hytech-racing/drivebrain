@@ -78,10 +78,16 @@ namespace comms
         bool init();
 
         /**
-         * Setter for the desired steering angle.
+         * Setter for the desired steering angle. Also enables position control, so the motor
+         * drives to this angle until release() is called.
          * @param angle_deg desired steering angle in degrees.
         */
         void set_angle(float angle_deg);
+
+        /**
+         * Stops position control and lets the motor coast so the wheel turns freely.
+        */
+        void release();
 
         /**
          * @return the currently commanded angle in degrees
@@ -138,6 +144,9 @@ namespace comms
 
         mutable std::mutex _angle_mutex;
         float _angle_deg{0.0f};
+
+        /* When true, _run() drives to _angle_deg; otherwise the motor coasts */
+        std::atomic<bool> _is_drive_enabled{false};
 
         std::atomic<bool> _running{false};
         std::thread _thread;

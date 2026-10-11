@@ -180,14 +180,20 @@ void DrivebrainApp::_loop() {
 
     auto state_and_validity = core::StateTracker::instance().get_latest_state_and_validity();
 
-#if !HOOTL_ENABLED
-    if (_kraken_comms && state_and_validity.second) {
-      _kraken_comms->set_angle(state_and_validity.first.steering_angle_deg);
-    }
-#endif
-
     auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, 2>::instance();
     auto out_struct = controller_manager.step_active_controller(state_and_validity.first);
+
+#if !HOOTL_ENABLED
+    // drive steering only when the active controller commands it; otherwise let the wheel turn freely.
+    // The Kraken uses its own encoder, so this doesn't depend on the steering sensor being valid
+    if (_kraken_comms) {
+      if (out_struct.steering_angle_deg_cmd.has_value()) {
+        _kraken_comms->set_angle(out_struct.steering_angle_deg_cmd.value());
+      } else {
+        _kraken_comms->release();
+      }
+    }
+#endif
 
     std::variant<core::SpeedControlOut, core::TorqueControlOut, std::monostate> cmd_out = out_struct.out;
     core::StateTracker::instance().set_previous_control_output(out_struct);
