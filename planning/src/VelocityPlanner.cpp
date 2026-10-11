@@ -28,11 +28,7 @@ VelocityPlanner::VelocityPlanner(float max_car_velocity)
         path_points_.reserve(lookahead_distance_);
 }
 
-std::size_t VelocityPlanner::getHorizonPointIndex(const core::VehicleState& state) {
-    const core::xy_vec<float> position{state.vehicle_position_map_frame.x, state.vehicle_position_map_frame.y}; // global frame
-    const core::xy_vec<float> heading{state.vehicle_heading_map_frame_unit_vector.x, state.vehicle_heading_map_frame_unit_vector.y}; 
-
-
+std::size_t VelocityPlanner::getHorizonPointIndex(const core::VehicleState& state, const core::xy_vec<float>& position, const core::xy_vec<float>& heading) {
     // iterate with offset to allow for wraparound
     size_t index = 0;
     while (index < path_.size()) {
@@ -49,6 +45,23 @@ std::size_t VelocityPlanner::getHorizonPointIndex(const core::VehicleState& stat
 
 core::TorqueControlOut VelocityPlanner::step_controller(const core::VehicleState& state, const float pose_to_path_curvature) {
     core::TorqueControlOut out = {};
+    const core::xy_vec<float> car_position{state.vehicle_position_map_frame.x, state.vehicle_position_map_frame.y}; // global frame
+    const core::xy_vec<float> car_velocity{state.current_body_vel_ms.x, state.current_body_vel_ms.y}; // TODO: currently global frame but VNData is body frame need to add transforms to drivebrain
+    const core::xy_vec<float> car_heading{state.vehicle_heading_map_frame_unit_vector.x, state.vehicle_heading_map_frame_unit_vector.y}; // global frame 
+    float longitudinal_velocity;
+    // TODO: this assumes path heading is tangent to the path we'll be following 
+    try {
+        longitudinal_velocity = car_velocity.projectOnto(car_heading);
+    } catch (const std::invalid_argument& e) {
+        spdlog::error("Failed to project velocity onto heading: {}", e.what());
+        return out;
+    }
+
+    if (longitudinal_velocity < 0.0f) {
+        spdlog::error("Longitudinal velocity is negative, car might be moving backwards: {}", longitudinal_velocity);
+        return out;
+    }
+
     if (path_.empty()) {
         spdlog::error("Calling velocity controller on an empty path");
         return out;
@@ -59,7 +72,7 @@ core::TorqueControlOut VelocityPlanner::step_controller(const core::VehicleState
         return out;
     }
 
-    start_point_index_= getHorizonPointIndex(state);
+    start_point_index_= getHorizonPointIndex(state, car_position, car_heading);
     if (start_point_index_ == std::numeric_limits<size_t>::max()) {
         spdlog::error("Failed to find closest point on path");
         return out;
@@ -71,7 +84,7 @@ core::TorqueControlOut VelocityPlanner::step_controller(const core::VehicleState
     }
 
     path_points_.resize(std::min(lookahead_distance_, path_.size() - start_point_index_));
-    std::optional<float> accel = getAccel(state, pose_to_path_curvature, start_point_index_);
+    std::optional<float> accel = getAccel(state, pose_to_path_curvature, start_point_index_, car_position, longitudinal_velocity);
     if (!accel.has_value()) {
         spdlog::error("Failed to compute acceleration");
         return out;
@@ -85,7 +98,7 @@ core::TorqueControlOut VelocityPlanner::step_controller(const core::VehicleState
     return out;
 }
 
-const std::optional<float> VelocityPlanner::getAccel(const core::VehicleState& state, const float pose_to_path_curvature, size_t start_point_index) {
+const std::optional<float> VelocityPlanner::getAccel(const core::VehicleState& state, const float pose_to_path_curvature, size_t start_point_index, const core::xy_vec<float>& car_position, const float longitudinal_velocity) {
     size_t end_point_index = std::min(start_point_index + lookahead_distance_ - 1, path_.size() - 1);
     const size_t path_length = end_point_index - start_point_index + 1;
 
@@ -146,30 +159,25 @@ const std::optional<float> VelocityPlanner::getAccel(const core::VehicleState& s
     }
     
     // run forward and backwards solver
-    if (!solver(state, pose_to_path_curvature, path_length, true)) return {}; 
-    if (!solver(state, pose_to_path_curvature, path_length, false)) return {};
+    if (!solver(state, pose_to_path_curvature, path_length, car_position, longitudinal_velocity, true)) return {}; 
+    if (!solver(state, pose_to_path_curvature, path_length, car_position, longitudinal_velocity, false)) return {};
 
     // calculate accel from target speed at closest path point and current point (a = (v^2 - u^2) / 2d)
     const core::xy_vec<float> position{state.vehicle_position_map_frame.x, state.vehicle_position_map_frame.y}; // global frame
-    const core::xy_vec<float> velocity{state.current_body_vel_ms.x, state.current_body_vel_ms.y}; // local frame
     const core::xy_vec<float> dist = position - path_points_[0].point;
     if (dist.length() < 1e-6f) {
         spdlog::error("Distance to closest path point is too small, cannot compute acceleration");
         return {};
     }
-    const float accel = (path_points_[0].velocity * path_points_[0].velocity - velocity.length() * velocity.length()) / (2 * dist.length()); 
+    const float accel = (path_points_[0].velocity * path_points_[0].velocity - longitudinal_velocity * longitudinal_velocity) / (2 * dist.length()); 
     return std::make_optional(accel);
 }
 
-bool VelocityPlanner::solver(const core::VehicleState& state, const float pose_to_path_curvature, const int path_length, bool forward) {
-    const core::xy_vec<float> position{state.vehicle_position_map_frame.x, state.vehicle_position_map_frame.y}; // global frame
-    const core::xy_vec<float> velocity{state.current_body_vel_ms.x, state.current_body_vel_ms.y}; // local frame
-    const float speed = velocity.length();
-
+bool VelocityPlanner::solver(const core::VehicleState& state, const float pose_to_path_curvature, const int path_length, const core::xy_vec<float>& car_position, const float longitudinal_velocity, const bool forward) {
     PathPoint current_point = {
-        .point = position,
+        .point = car_position,
         .curvature = pose_to_path_curvature,
-        .velocity = speed, 
+        .velocity = longitudinal_velocity, 
     };
 
     PathPoint start_point;

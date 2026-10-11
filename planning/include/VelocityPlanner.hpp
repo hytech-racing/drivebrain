@@ -51,13 +51,15 @@ private:
      * @param path_length The number of points in the path ahead of the car
      * @return True if the solver completed successfully, false if there was an error (e.g., lateral acceleration exceeded limits).
      */
-    bool solver(const core::VehicleState& state, const float pose_to_path_curvature, const int path_length, bool forward = true);
+    bool solver(const core::VehicleState& state, const float pose_to_path_curvature, const int path_length, const core::xy_vec<float>& car_position, const float longitudinal_velocity, const bool forward);
 
 
-    const std::optional<float> getAccel(const core::VehicleState& state,  const float pose_to_path_curvature, size_t start_point_index);
+
+    const std::optional<float> getAccel(const core::VehicleState& state,  const float pose_to_path_curvature, size_t start_point_index, const core::xy_vec<float>& car_position, const float longitudinal_velocity);
 
 
-    std::size_t getHorizonPointIndex(const core::VehicleState& state); // get path index from which we will start calculation
+
+    std::size_t getHorizonPointIndex(const core::VehicleState& state, const core::xy_vec<float>& position, const core::xy_vec<float>& heading); // get path index from which we will start calculation
 
 };
 
