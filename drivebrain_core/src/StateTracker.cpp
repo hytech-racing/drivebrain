@@ -176,7 +176,6 @@ void StateTracker::_receive_low_level_state(std::shared_ptr<google::protobuf::Me
                 std::chrono::high_resolution_clock::now().time_since_epoch());
             _raw_input_data.raw_steering_analog = in_msg->steering_analog_raw();
             _raw_input_data.raw_steering_digital = in_msg->steering_digital_raw();
-            _vehicle_state.steering_angle_deg = in_msg->steering_output_steering_angle();
             _steering_sensor_ok = !in_msg->steering_both_sensors_fail() && !in_msg->steering_interface_sensor_error();
         }
     } else if (msg->GetDescriptor() == hytech::em_measurement::descriptor()) {
@@ -272,6 +271,8 @@ void StateTracker::_receive_inverter_states(std::shared_ptr<google::protobuf::Me
 
 void StateTracker::_update_estimators() {
     std::unique_lock lk(_state_mutex);
+
+    // Update the fz estimator
     estimation::fz_control_input_vector u;
     u <<
         _vehicle_state.current_body_accel_mss.x, _vehicle_state.current_body_accel_mss.y;
@@ -288,6 +289,16 @@ void StateTracker::_update_estimators() {
     fz_estimate->set_rr_fz_estimate(estimates(3));
         
     core::log(fz_estimate);
+
+    // Update the steering estimator
+    _steering_estimator.update(_raw_input_data.raw_steering_analog);
+
+    _vehicle_state.steering_angle_deg = _steering_estimator.get_steering_angle_degs();
+
+    std::shared_ptr<hytech_msgs::SteeringEstimator> steering_estimate = std::make_shared<hytech_msgs::SteeringEstimator>();
+    steering_estimate->set_steering_angle_deg(_steering_estimator.get_steering_angle_degs());
+    steering_estimate->set_steering_angle_rads(_steering_estimator.get_steering_angle_rads());
+    core::log(steering_estimate);
 }
 
 template <size_t arr_len>

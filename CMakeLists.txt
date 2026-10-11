@@ -51,7 +51,7 @@ endif()
 FetchContent_Declare(
     HT_Proto
     GIT_REPOSITORY https://github.com/hytech-racing/HT_proto.git
-    GIT_TAG d98c8a3892007eb215ac780c30d50a4577d9ecdc
+    GIT_TAG e5cb25bbf4717c2dc4c2faf3d573e773221af859
 )
 FetchContent_MakeAvailable(HT_Proto)
 # add_subdirectory(../HT_proto ${CMAKE_BINARY_DIR}/HT_proto)

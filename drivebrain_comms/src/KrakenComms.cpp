@@ -398,7 +398,10 @@ namespace comms
                 if (steady_clock::now() - last_seed_attempt >= seed_retry_period)
                 {
                     last_seed_attempt = steady_clock::now();
-                    is_seed_ok = _kraken->SetPosition(_deg_to_turns(0.0), seed_timeout).IsOK();
+                    // Get the position that we should seed to 
+                    const auto state_and_validity = core::StateTracker::instance().get_latest_state_and_validity();
+                    const auto bootup_steer_deg = state_and_validity.first.steering_angle_deg;
+                    is_seed_ok = _kraken->SetPosition(_deg_to_turns(bootup_steer_deg), seed_timeout).IsOK();
                 }
 
                 if (is_seed_ok)
@@ -440,30 +443,20 @@ namespace comms
 
             if (steady_clock::now() - last_telem >= telem_period)
             {
+                std::shared_ptr<hytech_msgs::KrakenInfo> msg_out = std::make_shared<hytech_msgs::KrakenInfo>();
+
+                msg_out->set_pos_rotation(0.0);
+                msg_out->set_steering_angle_degs(measured_deg);
+                msg_out->set_setpoint_angle_degs(last_target_deg);
+                msg_out->set_stator_current(0.0);
+                msg_out->set_supply_current(0.0);
+                msg_out->set_temp_c(0.0);
+                msg_out->set_applied_voltage(0.0);
+
                 last_telem = steady_clock::now();
-                auto measured_msg = std::make_shared<google::protobuf::FloatValue>();
-                measured_msg->set_value(measured_deg);
-                core::log_foxglove_only(measured_msg, "kraken/measured_angle_deg");
-
-                auto target_msg = std::make_shared<google::protobuf::FloatValue>();
-                target_msg->set_value(last_target_deg);
-                core::log_foxglove_only(target_msg, "kraken/target_angle_deg");
+                core::log(msg_out);
             }
-
-            auto now = steady_clock::now();
-            if (now > next_tick)
-            {
-                // Rate-limited so a stalled bus can't flood the log
-                ++overruns_since_warn;
-                if (now - last_overrun_warn > seconds(1))
-                {
-                    spdlog::warn("KrakenComms loop overrun by {}us ({} overruns in the last second)",
-                                 duration_cast<microseconds>(now - next_tick).count(), overruns_since_warn);
-                    last_overrun_warn = now;
-                    overruns_since_warn = 0;
-                }
-                next_tick = now;
-            }
+            
             std::this_thread::sleep_until(next_tick);
         }
     }

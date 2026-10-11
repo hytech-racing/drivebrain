@@ -15,6 +15,7 @@
 #include "hytech_msgs.pb.h"
 #include "ht_can.pb.h"
 #include "FzEstimator.h"
+#include "SteeringEstimator.h"
 #include "Telemetry.hpp"
 
 /**
@@ -354,5 +355,7 @@ namespace core {
 
             /* Estimators */
             estimation::FzEstimator _fz_estimator;
+
+            estimation::SteeringEstimator _steering_estimator;
     };
 }
