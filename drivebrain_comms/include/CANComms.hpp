@@ -14,7 +14,7 @@
 #include <atomic> 
 #include <fcntl.h>
 
-#include "hytech.pb.h"
+#include "ht_can.pb.h"
 #include "hytech_msgs.pb.h"
 
 #include <dbcppp/Network.h>

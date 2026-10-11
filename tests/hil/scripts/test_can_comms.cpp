@@ -1,5 +1,5 @@
 #include <CANComms.hpp> 
-#include <hytech.pb.h>
+#include <ht_can.pb.h>
 #include <thread> 
 #include <iostream>
 #include <chrono>

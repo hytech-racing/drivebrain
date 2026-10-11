@@ -2,7 +2,7 @@
 #include <exception>
 #include <google/protobuf/message.h>
 #include <hytech_msgs.pb.h>
-#include <hytech.pb.h>
+#include <ht_can.pb.h>
 #include <FoxgloveServer.hpp>
 #include <MCAPLogger.hpp>
 #include <mcap/writer.hpp>

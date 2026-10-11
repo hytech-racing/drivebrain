@@ -10,7 +10,7 @@
 #include <linux/can.h>
 #include <linux/can/raw.h>
 
-#include "hytech.pb.h"
+#include "ht_can.pb.h"
 
 int main() {
 
