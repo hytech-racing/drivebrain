@@ -3,20 +3,20 @@
 #include <cmath>
 #include <foxglove/FrameTransform.pb.h>
 #include <limits>
-#include <random>
 #include <vector>
 #include <algorithm>
-#include <numbers>
 
 #include <StateTracker.hpp>
 #include "base_msgs.pb.h"
 #include "dv_msgs.pb.h"
-#include "hytech_msgs.pb.h"
 #include <delaunator.hpp>
+#include "FoxgloveServer.hpp"
+
 
 // left side = blue
 // right side = yellow
 
+// make these tunable foxglove parameters
 inline constexpr float MAX_TRACK_WIDTH_SQ = 6.0f * 6.0f;
 inline constexpr float MIN_COS_TURN = -0.3f;      // only reject points that are clearly behind
 inline constexpr float MAX_JUMP_SQ  = 8.0f * 8.0f; 
@@ -33,9 +33,9 @@ namespace planning {
   */  
 
   // Returns the next set of coordinates for the car to follow as a path
-  inline std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones) {
+  inline std::vector<core::xy_vec<float>> plan_path(const dv_msgs::Cones& cones) {
       /* Initializations */
-      std::vector<core::xyz_vec<float>> midpoints; // Set of points to follow
+      std::vector<core::xy_vec<float>> midpoints; // Set of points to follow
       std::vector<double> coords; // Cone coordinates used to make the delaunay triangulation
 
       auto vehicle_data = core::StateTracker::instance().vehicle_sim_pos();
@@ -104,7 +104,7 @@ namespace planning {
           
           float mx = (delaunay.coords[2* curr_edge] + delaunay.coords[2* twin_edge]) / (2.0);
           float my = (delaunay.coords[2*curr_edge + 1] + delaunay.coords[2* twin_edge + 1]) / (2.0);
-          midpoints.push_back({mx, my, 0.0f});
+          midpoints.push_back({mx, my});
           
         }
       }
@@ -131,12 +131,14 @@ namespace planning {
 
       std::swap(midpoints[0], midpoints[start]); // make the index of the closest cone the start of the midpoints
 
-      // sort the rest of the midpoints based on proximity to the first one
+      // sort the rest of the midpoints based on proximity to the one closest to the car
+      // midpoints[count - 1] = the last point you added to the path so far
+      // midpoints [count] = the slot that you are looking to fill
       std::size_t count = 1;
       float hx = heading_x;
       float hy = heading_y;
       while (count < midpoints.size() && count < PATH_POINTS_AHEAD) {
-        const auto current = midpoints[count - 1];
+        const auto current = midpoints[count - 1]; 
         std::size_t best_next = midpoints.size();
         float best_cost = std::numeric_limits<float>::max(); // using a cost variable to evaluate vector distance from the first midpoint
   
@@ -144,7 +146,7 @@ namespace planning {
           float dx = midpoints[j].x - current.x;
           float dy = midpoints[j].y - current.y;
           float d_square = dx * dx + dy * dy;
-  
+
           if (d_square < 1e-6f || d_square > MAX_JUMP_SQ) continue;                       
   
           float dist = std::sqrt(d_square);
@@ -161,6 +163,7 @@ namespace planning {
   
         std::swap(midpoints[count], midpoints[best_next]);
   
+        // update the heading based on the point just added so that the points follow the shape of the path, not just a straight line from the first midpoint
         float dx = midpoints[count].x - current.x;
         float dy = midpoints[count].y - current.y;
         float dist = std::sqrt(dx * dx + dy * dy);

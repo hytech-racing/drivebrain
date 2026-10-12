@@ -68,7 +68,7 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
   // run control loops
   if (dv.path && !dv.path->empty()) {
     out.desired_steering_deg = _lateral_controller.step_controller(vehicle_state, *dv.path); // pure pursuit
-    out.out = TorqueControlOut{0.5f, 0.5f, 0.5f, 0.5f};
+    out.out = TorqueControlOut{0.5f, 0.5f, 1.0f, 1.0f};
   } else {
     out.out = std::monostate{};
   }
@@ -89,7 +89,6 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
 }
 
 void Autonomy::_run() {
-  spdlog::info("in autonomy run");
   auto next_tick = std::chrono::steady_clock::now();
   std::shared_ptr<const foxglove::PointCloud> last_scan;
 
@@ -105,9 +104,8 @@ void Autonomy::_run() {
       auto path = planning::plan_path(*StateTracker::instance().dv_state().cone_observations);
       render_path(path, "planned_path", "map"); //draws a line between path points 
       StateTracker::instance().set_dv_path(
-          std::make_shared<const std::vector<xyz_vec<float>>>(std::move(path)));
+          std::make_shared<const std::vector<xy_vec<float>>>(std::move(path)));
     }
-    spdlog::info("rendered path");
 
     std::this_thread::sleep_until(next_tick);
   }
