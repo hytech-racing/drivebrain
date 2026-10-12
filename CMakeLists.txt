@@ -1,7 +1,11 @@
 cmake_minimum_required(VERSION 3.13)
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 project(drivebrain)
+
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(FetchContent)
 list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/cmake")
@@ -47,7 +51,7 @@ endif()
 FetchContent_Declare(
     HT_Proto
     GIT_REPOSITORY https://github.com/hytech-racing/HT_proto.git
-    GIT_TAG e5cb25bbf4717c2dc4c2faf3d573e773221af859
+    GIT_TAG 2d8c4ca48ddefdb9c041d73baf118ea6a61d9e90
 )
 FetchContent_MakeAvailable(HT_Proto)
 # add_subdirectory(../HT_proto ${CMAKE_BINARY_DIR}/HT_proto)

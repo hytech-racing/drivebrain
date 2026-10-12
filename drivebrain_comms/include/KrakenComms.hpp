@@ -24,39 +24,35 @@ namespace comms
     public:
 
         /**
-         * Static configuration for the steering motor.
-         * Loaded once from Foxglove params in init() and not changed afterwards
-         * (live-updatable gains live in the separate `tuningParams` struct).
-         *
-         * Angles are in steering-shaft degrees, i.e. after the gear reduction.
+         * @struct config_s
         */
         struct config_s
         {
             int device_id;
-            std::string canbus_name;        // This should be the SocketCAN interface the motor is on (e.g. "can0" or "can1").
-            int send_rate_hz;               // Rate (Hz) at which _run() feeds the enable watchdog and sends the angle target.
+            std::string canbus_name;
+            int send_rate_hz;
             float reduction;
             float min_angle_deg;
             float max_angle_deg;
             float stator_current_limit_a;
-            int enable_timeout_ms;          // Watchdog timeout (ms) passed to FeedEnable. The motor disables itself if not fed within this window.
-            float max_disagreement_deg;     // Max allowed difference between motor and steering sensor angles before faulting.
+            int enable_timeout_ms;
+            float max_disagreement_deg;
         };
 
         /**
-         * CTRE's onboard controller tuning, updatable from Foxglove.
+         * @struct tuningParams_s
         */
         struct tuningParams_s
         {
             // Feedback gains: PID
-            float kraken_P;     // V/rot:       output per unit of position error
-            float kraken_I;     // V/(rot·s):   output per unit of integrated position error
-            float kraken_D;     // V/(rot/s):   output per unit of velocity error
+            float kraken_P;
+            float kraken_I;
+            float kraken_D;
 
             // Feedforward gains: SVA
-            float kraken_S;     // V:           output to overcome static friction
-            float kraken_V;     // V/(rot/s):   output per unit of target velocity
-            float kraken_A;     // V/(rot/s²):  output per unit of target acceleration
+            float kraken_S;
+            float kraken_V;
+            float kraken_A;
 
             float motion_magic_cruise_velocity_deg_s;
             float motion_magic_acceleration_deg_s2;

@@ -128,14 +128,9 @@ namespace comms
 
         ctre::phoenix6::configs::TalonFXConfiguration talon_config{};
         talon_config.MotorOutput.NeutralMode = ctre::phoenix6::signals::NeutralModeValue::Coast;
-        /**
-         * Convention: clockwise steering-wheel rotation, as seen by the driver, is positive.
-         * CTRE defines clockwise looking at the motor's shaft face. The motor's shaft faces the
-         * driver and drives the wheel directly, so the two views match.
-        */
+        
         talon_config.MotorOutput.Inverted = ctre::phoenix6::signals::InvertedValue::Clockwise_Positive;
 
-        // Motor reports and accepts positions in steering-shaft rotations
         talon_config.Feedback.SensorToMechanismRatio = units::dimensionless::scalar_t{_config.reduction};
 
         talon_config.Slot0 = _make_slot0_configs(_tuning_params);
@@ -156,7 +151,6 @@ namespace comms
             return false;
         }
 
-        // Test override; missing params just leave test mode off
         _test_mode = foxglove.get_param<bool>("kraken_comms/test_mode").value_or(false);
         _test_angle_deg = foxglove.get_param<float>("kraken_comms/test_angle_deg").value_or(0.0f);
         if (_test_mode)
@@ -261,8 +255,6 @@ namespace comms
 
     bool KrakenComms::_is_motion_magic_valid(const tuningParams_s &tuning_params)
     {
-        // Zero or negative velocity/acceleration leaves Motion Magic unable to move the motor.
-        // Jerk of 0 is valid and means no jerk limit.
         if (tuning_params.motion_magic_cruise_velocity_deg_s <= 0.0f ||
             tuning_params.motion_magic_acceleration_deg_s2 <= 0.0f ||
             tuning_params.motion_magic_jerk_deg_s3 < 0.0f)
@@ -321,9 +313,6 @@ namespace comms
 
         if (!slot0_status.IsOK() || !motion_magic_status.IsOK())
         {
-            // The motor may now hold a mix of old and new values. _tuning_params is left unchanged, so the next Foxglove param update
-            // (of any param) still sees a difference and retries the apply.
-            // Might want to handle this case better, what if no params are updated?
             spdlog::error("KrakenComms: failed to apply tuning (slot0: {}, motion magic: {})",
                           slot0_status.GetName(), motion_magic_status.GetName());
             return false;
@@ -366,7 +355,6 @@ namespace comms
         auto last_overrun_warn = steady_clock::time_point{};
         int overruns_since_warn = 0;
 
-        // The encoder is the only position reference, so stream it (and what we're commanding) to Foxglove
         const auto telem_period = milliseconds(20);
         auto last_telem = steady_clock::time_point{};
         float last_target_deg = 0.0f;
@@ -375,17 +363,29 @@ namespace comms
         {
             next_tick += period;
 
-            // Motor disables itself if this stops being fed (e.g. drivebrain hangs)
+            // Motor disables itself if this stops being fed
             ctre::phoenix::unmanaged::FeedEnable(_config.enable_timeout_ms);
 
-            // The steering sensor is not used: the encoder is zeroed once at startup (wheel assumed centered) and is the
-            // only position reference afterwards. If the motor reboots (e.g. a brownout) its encoder resets to 0 wherever
-            // the wheel is, so there is nothing to re-seed from; fault instead.
+
             if (is_motor_seeded && !is_motor_faulted && _kraken->HasResetOccurred())
             {
                 is_motor_faulted = true;
                 spdlog::error("KrakenComms: FAULT motor reset detected, position reference lost. "
                               "Motor set to neutral until restart.");
+            }
+
+            if (!is_motor_seeded)
+            {
+                if (steady_clock::now() - last_seed_attempt >= seed_retry_period)
+                {
+                    last_seed_attempt = steady_clock::now();
+                    const auto state_and_validity = core::StateTracker::instance().get_latest_state_and_validity();
+                    const auto bootup_steer_deg = state_and_validity.first.steering_column_angle_deg;
+                    if (state_and_validity.first.updated_steering_estimator)
+                    {
+                        is_motor_seeded = _kraken->SetPosition(_deg_to_turns(bootup_steer_deg), seed_timeout).IsOK();
+                    }
+                }
             }
 
             if (is_motor_faulted)
@@ -394,39 +394,10 @@ namespace comms
             }
             else if (!is_motor_seeded)
             {
-                bool is_seed_ok = false;
-                if (steady_clock::now() - last_seed_attempt >= seed_retry_period)
-                {
-                    last_seed_attempt = steady_clock::now();
-                    // Get the position that we should seed to 
-                    const auto state_and_validity = core::StateTracker::instance().get_latest_state_and_validity();
-                    const auto bootup_steer_deg = state_and_validity.first.steering_angle_deg;
-                    is_seed_ok = _kraken->SetPosition(_deg_to_turns(bootup_steer_deg), seed_timeout).IsOK();
-                }
-
-                if (is_seed_ok)
-                {
-                    {
-                        std::scoped_lock lock(_angle_mutex);
-                        _angle_deg = 0.0f;
-                    }
-                    is_motor_seeded = true;
-                    spdlog::info("KrakenComms: seeded motor position to 0 deg");
-                }
-                else
-                {
-                    _kraken->SetControl(neutral);
-                    if (steady_clock::now() - last_unseeded_warn > seconds(1))
-                    {
-                        spdlog::warn("KrakenComms: waiting to seed motor position");
-                        last_unseeded_warn = steady_clock::now();
-                    }
-                }
+                _kraken->SetControl(neutral);
             }
-            else // no fault and seeded branch
+            else 
             {
-                // For now the motor only drives in test mode; otherwise it coasts so the wheel turns freely
-                // while the encoder keeps reporting the angle
                 if (_test_mode)
                 {
                     const float target_deg = std::clamp(_test_angle_deg.load(), _config.min_angle_deg, _config.max_angle_deg);
@@ -451,7 +422,7 @@ namespace comms
                 msg_out->set_stator_current(0.0);
                 msg_out->set_supply_current(0.0);
                 msg_out->set_temp_c(0.0);
-                msg_out->set_applied_voltage(0.0);
+                msg_out->set_applied_voltage(_kraken->GetMotorVoltage().GetValue().value());
 
                 last_telem = steady_clock::now();
                 core::log(msg_out);

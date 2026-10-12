@@ -58,7 +58,7 @@ private:
 
   /* Ethernet drivers */
   std::unique_ptr<comms::ETHRecvComms<hytech_msgs::ACUAllData>> _acu_eth_driver;
-  std::unique_ptr<comms::ETHRecvComms<hytech_msgs::ACUCoreData>> _acu_core_eth_driver;
+  std::unique_ptr<comms::ETHRecvComms<hytech_msgs::CCUData>> _acu_core_eth_driver;
   std::unique_ptr<comms::ETHRecvComms<hytech_msgs::VCRData_s>> _vcr_eth_driver;
   std::unique_ptr<comms::ETHRecvComms<hytech_msgs::VCFData_s>> _vcf_eth_driver; 
   

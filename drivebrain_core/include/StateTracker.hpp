@@ -224,6 +224,9 @@ namespace core {
         bool state_is_valid;
         int prev_MCU_recv_millis;
         float steering_angle_deg;
+        float steering_column_angle_deg;
+        bool received_steering_angle = false;
+        bool updated_steering_estimator = false;
         ControllerOutput prev_controller_output;
         TireDynamics tire_dynamics;
         veh_vec<float> driver_torque;
