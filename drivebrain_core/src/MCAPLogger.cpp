@@ -81,7 +81,10 @@ static std::string serialize_fd_set(const google::protobuf::Descriptor *toplevel
 }
 
 std::tuple<std::string, bool> core::MCAPLogger::status() {
-    return std::make_tuple(_log_name, _logging);
+    {
+        std::lock_guard lock(_input_buffer_mutex);
+        return std::make_tuple(_log_name, _logging);
+    }
 }
 
 static nlohmann::json generate_json_schema(const nlohmann::json& obj) {
@@ -193,15 +196,17 @@ int core::MCAPLogger::close_active_mcap() {
 }
 
 void core::MCAPLogger::init_logging() {
+    {
+        std::lock_guard lock(_input_buffer_mutex);
+        _logging = true;
+    }
     _msg_log_thread = std::thread([this]() { _handle_log_to_file(); });
     spdlog::info("Msg log thread spawned");
-    _logging = true;
 }
 
 void core::MCAPLogger::stop_logging() {
     {
         std::unique_lock lock(_input_buffer_mutex);
-        _running = false;
         _logging = false;
     }
 
@@ -220,6 +225,7 @@ int core::MCAPLogger::log_msg(core::MsgType message, const std::string &topic) {
     new_message.message_name = topic.empty() ? new_message.type_name : topic;
     {
         std::unique_lock lock(_input_buffer_mutex);
+        if (!_logging) return -1; // Logging is not active, return an error code
         _input_buffer.push_back(std::move(new_message)); 
         _input_buffer_cv.notify_one(); 
    }
@@ -243,8 +249,8 @@ void core::MCAPLogger::_handle_log_to_file() {
     while (true) {
         {
             std::unique_lock lock(_input_buffer_mutex);
-            _input_buffer_cv.wait(lock, [this](){ return !_input_buffer.empty() || !_running;});
-            if (!_running && _input_buffer.empty()) {
+            _input_buffer_cv.wait(lock, [this](){ return !_input_buffer.empty() || !_logging;});
+            if (!_logging && _input_buffer.empty()) {
                 break;
             }
 

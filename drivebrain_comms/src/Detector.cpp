@@ -31,10 +31,17 @@ Detector::Detector(const std::string& engine_path) {
     if (!_engine) throw std::runtime_error("Failed to create CUDA engine from file: " + engine_path);
     _context.reset(_engine->createExecutionContext());
 
+    if (_engine->getNbIOTensors() != 2) {
+      throw std::runtime_error("Engine must have exactly one input and one output: " + engine_path);
+    }
     const char* input_name = _engine->getIOTensorName(0);
     const char* output_name = _engine->getIOTensorName(1);
     _input_h = _engine->getTensorShape(input_name).d[2];
     _input_w = _engine->getTensorShape(input_name).d[3];
+    const auto out_shape = _engine->getTensorShape(output_name);
+    if (_engine->getNbIOTensors() != 2 || out_shape.nbDims != 3 || out_shape.d[2] != 6) {
+        throw std::runtime_error("Engine output must be [1, N, 6] (export with nms=True): " + engine_path);
+    }
     _num_dets = _engine->getTensorShape(output_name).d[1];
 
     cudaStreamCreate(&_stream);

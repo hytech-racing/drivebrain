@@ -53,8 +53,10 @@ namespace core {
              */
             ~MCAPLogger() {
               spdlog::info("Destructing mcap logger");
-              _logging = false;
-              _running = false;
+              {
+                std::lock_guard lock(_input_buffer_mutex);
+                _logging = false;
+              }
 
               _s_instance.store(nullptr, std::memory_order_release);
               spdlog::info("Msg logger singleton instance released");
@@ -158,8 +160,6 @@ namespace core {
             std::unordered_map<std::string, uint16_t> _type_to_schema_id_map;
             std::string _log_name = "NONE";
             bool _logging = false;
-            bool _running = true;
-
     };
 
 }

@@ -67,13 +67,20 @@ bool BlackflyComms::start(const std::string& id, const std::string& name, const 
         return false;
     }
 
+#if JETSON_ENABLED
+    try {
+        // FOLLOW UP: depending on performance we may want to run 
+        // the detector in a seperate thread and pop off of a queue
+        // but we'll see how this does.
+        _detector = std::make_unique<Detector>("/home/hytech/engines/cones.engine");
+    } catch (const std::exception& e) {
+        spdlog::error("[{}] Cone detection disabled: {}", _name, e.what());
+    }
+#endif
+
     // Start the receive thread
     _running = true;
     _blackfly_receive_thread = std::thread(&BlackflyComms::_aravis_receive_loop, this);
-#if JETSON_ENABLED
-    _detector = std::make_unique<Detector>("/home/hytech/engines/cones.engine");
-#endif
-    
 
     return true;
 }
@@ -129,9 +136,6 @@ void BlackflyComms::_aravis_receive_loop() {
 #if JETSON_ENABLED
                 if (_detector) {
                     const auto detections = _detector->detect(bgr, 0.5f);
-
-                    // Boxes + labels in the pixel space of the image they're overlaid on.
-                    // unrotate maps back to the raw (pre-ROTATE_180) image logged to the mcap.
                     auto make_annotations = [&](float scale, bool unrotate) {
                         auto annotations = std::make_shared<foxglove::ImageAnnotations>();
                         for (const auto& det : detections) {

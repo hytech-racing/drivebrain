@@ -11,7 +11,9 @@
 #include <opencv2/imgcodecs.hpp>
 
 #include "Telemetry.hpp"
+#if JETSON_ENABLED
 #include "Detector.hpp"
+#endif
 
 namespace comms {
 
