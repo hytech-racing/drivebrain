@@ -95,16 +95,6 @@ std::pair<core::VehicleState, bool> StateTracker::get_latest_state_and_validity(
     return {current_state, state_is_valid};
 }
 
-std::pair<float, bool> StateTracker::get_steering_angle_and_validity(std::chrono::microseconds max_age) {
-    auto curr_time = std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::high_resolution_clock::now().time_since_epoch());
-
-    std::unique_lock lk(_state_mutex);
-    auto steering_stamp = _timestamp_array[3];
-    bool is_fresh = steering_stamp.count() > 0 && (curr_time - steering_stamp) <= max_age;
-    return {_vehicle_state.steering_angle_deg, is_fresh && _steering_sensor_ok};
-}
-
 /****************************************************************
  * Private class methods
  ****************************************************************/
