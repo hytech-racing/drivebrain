@@ -13,8 +13,9 @@
 #include <spdlog/spdlog.h>
 
 #include "hytech_msgs.pb.h"
-#include "hytech.pb.h"
+#include "ht_can.pb.h"
 #include "FzEstimator.h"
+#include "SteeringEstimator.h"
 #include "Telemetry.hpp"
 
 /**
@@ -223,6 +224,9 @@ namespace core {
         bool state_is_valid;
         int prev_MCU_recv_millis;
         float steering_angle_deg;
+        float steering_column_angle_deg;
+        bool received_steering_angle = false;
+        bool updated_steering_estimator = false;
         ControllerOutput prev_controller_output;
         TireDynamics tire_dynamics;
         veh_vec<float> driver_torque;
@@ -307,8 +311,7 @@ namespace core {
              */
             std::pair<core::VehicleState, bool> get_latest_state_and_validity();
 
-            
-        private: 
+        private:
 
             template <size_t index, typename inverter_dynamics_message>
             void _handle_set_inverter_dynamics(std::shared_ptr<google::protobuf::Message> msg);
@@ -329,7 +332,7 @@ namespace core {
             RawInputData _raw_input_data = { };
             std::mutex _state_mutex;
             std::array<std::chrono::microseconds, 4> _timestamp_array;
-            
+
             /* Private constructor called by the init method */
             StateTracker() {}; 
             
@@ -342,5 +345,7 @@ namespace core {
 
             /* Estimators */
             estimation::FzEstimator _fz_estimator;
+
+            estimation::SteeringEstimator _steering_estimator;
     };
 }

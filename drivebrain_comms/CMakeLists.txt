@@ -26,6 +26,11 @@ if(HOOTL)
     list(APPEND DRIVEBRAIN_COMMS_SRCS
         src/SimComms.cpp
     )
+else()
+    find_package(phoenix6 MODULE REQUIRED)
+    list(APPEND DRIVEBRAIN_COMMS_SRCS
+        src/KrakenComms.cpp
+    )
 endif()
 
 add_library(drivebrain_comms ${DRIVEBRAIN_COMMS_SRCS})
@@ -65,5 +70,10 @@ if(HOOTL)
     target_link_libraries(drivebrain_comms
         PUBLIC
             cppzmq
+    )
+else()
+    target_link_libraries(drivebrain_comms
+        PUBLIC
+            phoenix6
     )
 endif()
