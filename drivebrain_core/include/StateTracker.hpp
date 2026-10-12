@@ -332,7 +332,6 @@ namespace core {
             RawInputData _raw_input_data = { };
             std::mutex _state_mutex;
             std::array<std::chrono::microseconds, 4> _timestamp_array;
-            bool _steering_sensor_ok = false;
 
             /* Private constructor called by the init method */
             StateTracker() {}; 

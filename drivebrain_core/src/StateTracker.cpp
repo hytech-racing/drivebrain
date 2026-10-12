@@ -166,7 +166,6 @@ void StateTracker::_receive_low_level_state(std::shared_ptr<google::protobuf::Me
                 std::chrono::high_resolution_clock::now().time_since_epoch());
             _raw_input_data.raw_steering_analog = in_msg->steering_analog_raw();
             _raw_input_data.raw_steering_digital = in_msg->steering_digital_raw();
-            _steering_sensor_ok = !in_msg->steering_both_sensors_fail() && !in_msg->steering_interface_sensor_error();
             _vehicle_state.received_steering_angle = true;
         }
     } else if (msg->GetDescriptor() == hytech::em_measurement::descriptor()) {
