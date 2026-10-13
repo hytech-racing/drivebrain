@@ -77,20 +77,6 @@ and the project along with its unit tests will be compiled and ran.
 * If you run into persistent build errors, run `source .venv/bin/activate`, then `conan remove "*"` in your docker container to get rid of malformed build artifacts.
 * You can add the `--local-cache-only` flag if you need to build while offline. You need to have ran the build script at least once for this to work. 
 
-## Jetson service logs in MCAP
-
-Jetson builds record new journal entries from `drivebrain-service.service` on the
-`drivebrain_service_logs` MCAP topic while recording is active. Each JSON message
-has one string field, `message`, with the journal entry's text. MCAP timestamps
-use the original journal timestamp. Existing journal history and entries produced
-while recording is stopped are not imported.
-
-Capture uses `journalctl --unit=drivebrain-service.service --follow --lines=0
---output=json --all --no-pager`. The service's user must have permission to read
-its journal (verify by running that command as the service user). Missing
-`journalctl` or a failed reader produces a warning; vehicle telemetry recording
-continues. Capture stops when recording stops and starts again for the next file.
-
 # Windows Development
 
 ## Overview
