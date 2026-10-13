@@ -302,6 +302,7 @@ void core::MCAPLogger::_handle_service_logs() {
     }
 
     posix_spawn_file_actions_t actions;
+    pid_t child;
     int error = posix_spawn_file_actions_init(&actions);
     if (error == 0) {
         error = posix_spawn_file_actions_adddup2(&actions, output[1], STDOUT_FILENO);
@@ -309,59 +310,54 @@ void core::MCAPLogger::_handle_service_logs() {
         if (error == 0 && output[1] != STDOUT_FILENO)
             error = posix_spawn_file_actions_addclose(&actions, output[1]);
         if (error == 0) {
-            // No shell, no historical backlog, no JSON field size truncation.
             const char *args[] = {"journalctl", "--unit=drivebrain-service.service",
                 "--follow", "--lines=0", "--output=json", "--all", "--no-pager", nullptr};
-            pid_t child;
             error = posix_spawnp(&child, args[0], &actions, nullptr,
                                 const_cast<char **>(args), environ);
-            posix_spawn_file_actions_destroy(&actions);
-            close(output[1]);
-            if (error == 0) {
-                std::string pending;
-                char buffer[4096];
-                while (_service_logs_running) {
-                    pollfd fd{output[0], POLLIN, 0};
-                    const int ready = poll(&fd, 1, 100);
-                    if (ready < 0 && errno == EINTR) continue;
-                    if (ready < 0 || (fd.revents & (POLLERR | POLLNVAL))) break;
-                    if (ready == 0) continue;
-                    const auto count = read(output[0], buffer, sizeof(buffer));
-                    if (count < 0 && errno == EINTR) continue;
-                    if (count <= 0) break;
-                    pending.append(buffer, static_cast<size_t>(count));
-                    size_t start = 0;
-                    size_t end;
-                    while ((end = pending.find('\n', start)) != std::string::npos) {
-                        _queue_service_log(pending.substr(start, end - start));
-                        start = end + 1;
-                    }
-                    pending.erase(0, start);
-                }
-                if (_service_logs_running)
-                    spdlog::warn("Service log capture stopped; check journalctl access for drivebrain-service.service");
-                close(output[0]);
-                // Bounded cleanup even if journalctl stops responding.
-                kill(child, SIGTERM);
-                int status;
-                for (int attempt = 0; attempt < 5; ++attempt) {
-                    const auto result = waitpid(child, &status, WNOHANG);
-                    if (result == child || (result < 0 && errno == ECHILD)) return;
-                    std::this_thread::sleep_for(std::chrono::milliseconds(20));
-                }
-                kill(child, SIGKILL);
-                while (waitpid(child, &status, 0) < 0 && errno == EINTR) {}
-                return;
-            }
-        } else {
-            posix_spawn_file_actions_destroy(&actions);
-            close(output[1]);
         }
-    } else {
-        close(output[1]);
+        posix_spawn_file_actions_destroy(&actions);
     }
+    close(output[1]);
+    if (error != 0) {
+        close(output[0]);
+        spdlog::warn("Cannot start journalctl for service log capture: {}", std::strerror(error));
+        return;
+    }
+
+    std::string pending;
+    char buffer[4096];
+    while (_service_logs_running) {
+        pollfd fd{output[0], POLLIN, 0};
+        const int ready = poll(&fd, 1, 100);
+        if (ready < 0 && errno == EINTR) continue;
+        if (ready < 0 || (fd.revents & (POLLERR | POLLNVAL))) break;
+        if (ready == 0) continue;
+        const auto count = read(output[0], buffer, sizeof(buffer));
+        if (count < 0 && errno == EINTR) continue;
+        if (count <= 0) break;
+        pending.append(buffer, static_cast<size_t>(count));
+        size_t start = 0;
+        size_t end;
+        while ((end = pending.find('\n', start)) != std::string::npos) {
+            _queue_service_log(pending.substr(start, end - start));
+            start = end + 1;
+        }
+        pending.erase(0, start);
+    }
+    if (_service_logs_running)
+        spdlog::warn("Service log capture stopped; check journalctl access for drivebrain-service.service");
     close(output[0]);
-    spdlog::warn("Cannot start journalctl for service log capture: {}", std::strerror(error));
+
+    // Bounded cleanup even if journalctl stops responding.
+    kill(child, SIGTERM);
+    int status;
+    for (int attempt = 0; attempt < 5; ++attempt) {
+        const auto result = waitpid(child, &status, WNOHANG);
+        if (result == child || (result < 0 && errno == ECHILD)) return;
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    kill(child, SIGKILL);
+    while (waitpid(child, &status, 0) < 0 && errno == EINTR) {}
 #endif
 }
 
