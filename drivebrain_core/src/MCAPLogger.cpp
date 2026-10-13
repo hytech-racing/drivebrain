@@ -2,6 +2,18 @@
 #include <atomic>
 #include <mutex>
 #include <fstream>
+#include <cerrno>
+#include <cstring>
+
+#if defined(__linux__) && JETSON_ENABLED
+#include <fcntl.h>
+#include <poll.h>
+#include <signal.h>
+#include <spawn.h>
+#include <sys/wait.h>
+#include <unistd.h>
+extern char **environ;
+#endif
 
 #include <MCAPLogger.hpp>
 
@@ -158,6 +170,9 @@ int core::MCAPLogger::open_new_mcap() {
 
     std::vector<std::string> proto_names = {"hytech_msgs.proto", "ht_can.proto", "foxglove/PointCloud.proto", "foxglove/CompressedImage.proto", "foxglove/RawImage.proto"};
 
+    _name_to_id_map.clear();
+    _type_to_schema_id_map.clear();
+
     auto descriptors = get_pb_descriptors(proto_names);
 
     for (const auto &file_descriptor : descriptors) {
@@ -180,6 +195,13 @@ int core::MCAPLogger::open_new_mcap() {
     _writer.addChannel(config_channel);
     _name_to_id_map["drivebrain_configuration"] = config_channel.id;
 
+    mcap::Schema service_log_schema("drivebrain_service_logs", "jsonschema",
+        R"({"type":"object","properties":{"message":{"type":"string"}},"required":["message"]})");
+    _writer.addSchema(service_log_schema);
+    mcap::Channel service_log_channel("drivebrain_service_logs", "json", service_log_schema.id);
+    _writer.addChannel(service_log_channel);
+    _name_to_id_map["drivebrain_service_logs"] = service_log_channel.id;
+
     log_params(_initial_params);
 
     spdlog::info("Successfully added params schema");
@@ -188,6 +210,7 @@ int core::MCAPLogger::open_new_mcap() {
 }
 
 int core::MCAPLogger::close_active_mcap() {
+    stop_logging();
     spdlog::info("Closing mcap");
     _writer.close(); 
     _log_name = "NONE";
@@ -198,13 +221,21 @@ int core::MCAPLogger::close_active_mcap() {
 void core::MCAPLogger::init_logging() {
     {
         std::lock_guard lock(_input_buffer_mutex);
+        if (_logging) return;
         _logging = true;
     }
     _msg_log_thread = std::thread([this]() { _handle_log_to_file(); });
+#if defined(__linux__) && JETSON_ENABLED
+    _service_logs_running = true;
+    _service_log_thread = std::thread([this]() { _handle_service_logs(); });
+#endif
     spdlog::info("Msg log thread spawned");
 }
 
 void core::MCAPLogger::stop_logging() {
+    // Stop the producer before draining the writer's queue.
+    _service_logs_running = false;
+    if (_service_log_thread.joinable()) _service_log_thread.join();
     {
         std::unique_lock lock(_input_buffer_mutex);
         _logging = false;
@@ -241,6 +272,93 @@ core::MCAPLogger::MCAPLogger(const std::string &base_dir, const mcap::McapWriter
     nlohmann::json params_config = nlohmann::json::parse(raw_param_file);
     _initial_params = params_config; // Used in open_new_mcap to log initial params
     _params_schema_json = generate_json_schema(params_config);
+}
+
+void core::MCAPLogger::_queue_service_log(const std::string &entry) {
+    RawMessage_s msg;
+    try {
+        const auto record = nlohmann::json::parse(entry);
+        const auto &text = record.at("MESSAGE");
+        const std::string message = text.is_string() ? text.get<std::string>() : text.dump();
+        msg.log_time = std::stoull(record.at("__REALTIME_TIMESTAMP").get<std::string>()) * 1000;
+        msg.message_name = "drivebrain_service_logs";
+        msg.serialized_data = nlohmann::json{{"message", message}}.dump();
+    } catch (const std::exception &) {
+        return; // Ignore malformed journal entries.
+    }
+
+    std::lock_guard lock(_input_buffer_mutex);
+    if (!_logging) return;
+    _input_buffer.push_back(std::move(msg));
+    _input_buffer_cv.notify_one();
+}
+
+void core::MCAPLogger::_handle_service_logs() {
+#if defined(__linux__) && JETSON_ENABLED
+    int output[2];
+    if (pipe2(output, O_CLOEXEC) != 0) {
+        spdlog::warn("Cannot capture service logs: {}", std::strerror(errno));
+        return;
+    }
+
+    posix_spawn_file_actions_t actions;
+    pid_t child;
+    int error = posix_spawn_file_actions_init(&actions);
+    if (error == 0) {
+        error = posix_spawn_file_actions_adddup2(&actions, output[1], STDOUT_FILENO);
+        if (error == 0) error = posix_spawn_file_actions_addclose(&actions, output[0]);
+        if (error == 0 && output[1] != STDOUT_FILENO)
+            error = posix_spawn_file_actions_addclose(&actions, output[1]);
+        if (error == 0) {
+            const char *args[] = {"journalctl", "--unit=drivebrain-service.service",
+                "--follow", "--lines=0", "--output=json", "--all", "--no-pager", nullptr};
+            error = posix_spawnp(&child, args[0], &actions, nullptr,
+                                const_cast<char **>(args), environ);
+        }
+        posix_spawn_file_actions_destroy(&actions);
+    }
+    close(output[1]);
+    if (error != 0) {
+        close(output[0]);
+        spdlog::warn("Cannot start journalctl for service log capture: {}", std::strerror(error));
+        return;
+    }
+
+    std::string pending;
+    char buffer[4096];
+    while (_service_logs_running) {
+        pollfd fd{output[0], POLLIN, 0};
+        const int ready = poll(&fd, 1, 100);
+        if (ready < 0 && errno == EINTR) continue;
+        if (ready < 0 || (fd.revents & (POLLERR | POLLNVAL))) break;
+        if (ready == 0) continue;
+        const auto count = read(output[0], buffer, sizeof(buffer));
+        if (count < 0 && errno == EINTR) continue;
+        if (count <= 0) break;
+        pending.append(buffer, static_cast<size_t>(count));
+        size_t start = 0;
+        size_t end;
+        while ((end = pending.find('\n', start)) != std::string::npos) {
+            _queue_service_log(pending.substr(start, end - start));
+            start = end + 1;
+        }
+        pending.erase(0, start);
+    }
+    if (_service_logs_running)
+        spdlog::warn("Service log capture stopped; check journalctl access for drivebrain-service.service");
+    close(output[0]);
+
+    // Bounded cleanup even if journalctl stops responding.
+    kill(child, SIGTERM);
+    int status;
+    for (int attempt = 0; attempt < 5; ++attempt) {
+        const auto result = waitpid(child, &status, WNOHANG);
+        if (result == child || (result < 0 && errno == ECHILD)) return;
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    kill(child, SIGKILL);
+    while (waitpid(child, &status, 0) < 0 && errno == EINTR) {}
+#endif
 }
 
 void core::MCAPLogger::_handle_log_to_file() {
