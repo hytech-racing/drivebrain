@@ -65,6 +65,7 @@ class FzEstimator {
         fz_measurement_matrix _H; 
         fz_state_covariance _Q; 
         fz_measurement_covariance _R; 
+        double _interpolation_scalar;
 
         fz_estimates _fz_static;
         mutable std::mutex _kf_mutex;
