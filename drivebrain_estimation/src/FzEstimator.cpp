@@ -64,11 +64,12 @@ void FzEstimator::update(double load_cell_fl, double load_cell_fr, double load_c
     auto [fz_fr, fr_interp_dist] = fr_load_cell_to_fz.interpolate(load_cell_fr);
     auto [fz_rl, rl_interp_dist] = rl_load_cell_to_fz.interpolate(load_cell_rl);
     auto [fz_rr, rr_interp_dist] = rr_load_cell_to_fz.interpolate(load_cell_rr);
+    double interp_distances[] = {fl_interp_dist, fr_interp_dist, rl_interp_dist, rr_interp_dist};
     fz_measurement_covariance covariance_scalar = fz_measurement_covariance::Identity();
-    covariance_scalar(0, 0) = 1 + fl_interp_dist * _interpolation_scalar;
-    covariance_scalar(1, 1) = 1 + fr_interp_dist * _interpolation_scalar;
-    covariance_scalar(2, 2) = 1 + rl_interp_dist * _interpolation_scalar;
-    covariance_scalar(3, 3) = 1 + rr_interp_dist * _interpolation_scalar;
+    for (int i = 0; i < 4; i++) {
+        double interp_dist = interp_distances[i];
+        covariance_scalar(i, i) = interp_dist > MAX_INTERPOLATION_DISTANCE ? 1000 : (1 + interp_dist * _interpolation_scalar);
+    }
 
     fz_measurement_vector z;
     z << 

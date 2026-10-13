@@ -26,6 +26,7 @@ constexpr double FZ_FL_STATIC = 707.1;
 constexpr double FZ_FR_STATIC = 707.1;
 constexpr double FZ_RL_STATIC = 650.1;
 constexpr double FZ_RR_STATIC = 650.1;
+constexpr double MAX_INTERPOLATION_DISTANCE = 400;
 
 using namespace core;
 
