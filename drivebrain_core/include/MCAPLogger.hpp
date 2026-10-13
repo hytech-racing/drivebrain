@@ -53,10 +53,7 @@ namespace core {
              */
             ~MCAPLogger() {
               spdlog::info("Destructing mcap logger");
-              {
-                std::lock_guard lock(_input_buffer_mutex);
-                _logging = false;
-              }
+              stop_logging();
 
               _s_instance.store(nullptr, std::memory_order_release);
               spdlog::info("Msg logger singleton instance released");
@@ -131,6 +128,10 @@ namespace core {
              */
             void _handle_log_to_file();     
 
+            // Reads journal entries into the same queue as vehicle telemetry.
+            void _handle_service_logs();
+            void _queue_service_log(const std::string &entry);
+
             /* Singleton move semantics */
             MCAPLogger(const MCAPLogger&) = delete;
             MCAPLogger& operator=(const MCAPLogger&) = delete;
@@ -143,6 +144,8 @@ namespace core {
             std::mutex _input_buffer_mutex;
             std::condition_variable _input_buffer_cv; 
             std::thread _msg_log_thread;
+            std::thread _service_log_thread;
+            std::atomic<bool> _service_logs_running{false};
   
             /* Param log management */
             std::mutex _param_mutex;
