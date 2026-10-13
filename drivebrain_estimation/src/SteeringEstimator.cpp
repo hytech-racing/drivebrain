@@ -4,7 +4,8 @@ using namespace estimation;
 
 void SteeringEstimator::update(double analog_steer_meas, double steering_digital_meas) {
     std::unique_lock lk(_steering_mutex);
-    _steering_angle_degs = steer_analog_to_degs.interpolate(analog_steer_meas);
+    auto [steering_angle_degs, _] = steer_analog_to_degs.interpolate(analog_steer_meas);
+    _steering_angle_degs = steering_angle_degs;
     _column_angle_degs = (analog_steer_meas - COLUMN_OFFSET) * COLUMN_SCALING;
 }
 

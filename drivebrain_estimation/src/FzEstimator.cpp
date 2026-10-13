@@ -11,14 +11,17 @@ FzEstimator::FzEstimator() {
 
     std::optional<float> Q_gain = FoxgloveServer::instance().get_param<float>("FzEstimator/Q_gain");
     std::optional<float> R_gain = FoxgloveServer::instance().get_param<float>("FzEstimator/R_gain");
+    std::optional<float> interpolation_scalar = 
+        FoxgloveServer::instance().get_param<float>("FzEstimator/interpolation_scalar");
 
-    if (!Q_gain || !R_gain) {
-        spdlog::error("FzEstimator: Q_gain or R_gain parameter not found");
-        throw std::runtime_error("FzEstimator: Q_gain or R_gain parameter not found.");
+    if (!Q_gain || !R_gain || !interpolation_scalar) {
+        spdlog::error("FzEstimator: Q_gain or R_gain or interpolation_scalar parameter not found");
+        throw std::runtime_error("FzEstimator: Q_gain or R_gain or interpolation_scalar parameter not found");
     }
 
     _Q = fz_state_covariance::Identity() * Q_gain.value();
     _R = fz_measurement_covariance::Identity() * R_gain.value();
+    _interpolation_scalar = (double) interpolation_scalar.value();
 
     _B <<
         -0.5 * (FZ_M_B * FZ_CG_Z) / FZ_WHEELBASE, -0.5 * (FZ_M_B * FZ_CG_Z) / FZ_TRACK_WIDTH,
@@ -41,6 +44,11 @@ void FzEstimator::_handle_param_updates(const std::unordered_map<std::string, co
         std::unique_lock lk(_kf_mutex);
         _R = fz_measurement_covariance::Identity() * (*v);
     }
+
+    if (auto v = core::process_param_update<float>(new_param_map, "FzEstimator/interpolation_scalar")) {
+        std::unique_lock lk(_kf_mutex);
+        _interpolation_scalar = (double) *v;
+    }
 }
 
 
@@ -52,10 +60,16 @@ void FzEstimator::predict(const fz_control_input_vector& u) {
 
 void FzEstimator::update(double load_cell_fl, double load_cell_fr, double load_cell_rl, double load_cell_rr) {
     std::unique_lock lock(_kf_mutex);
-    double fz_fl = fl_load_cell_to_fz.interpolate(load_cell_fl);
-    double fz_fr = fr_load_cell_to_fz.interpolate(load_cell_fr);
-    double fz_rl = rl_load_cell_to_fz.interpolate(load_cell_rl);
-    double fz_rr = rr_load_cell_to_fz.interpolate(load_cell_rr);
+    auto [fz_fl, fl_interp_dist] = fl_load_cell_to_fz.interpolate(load_cell_fl);
+    auto [fz_fr, fr_interp_dist] = fr_load_cell_to_fz.interpolate(load_cell_fr);
+    auto [fz_rl, rl_interp_dist] = rl_load_cell_to_fz.interpolate(load_cell_rl);
+    auto [fz_rr, rr_interp_dist] = rr_load_cell_to_fz.interpolate(load_cell_rr);
+    double interp_distances[] = {fl_interp_dist, fr_interp_dist, rl_interp_dist, rr_interp_dist};
+    fz_measurement_covariance covariance_scalar = fz_measurement_covariance::Identity();
+    for (int i = 0; i < 4; i++) {
+        double interp_dist = interp_distances[i];
+        covariance_scalar(i, i) = interp_dist > MAX_INTERPOLATION_DISTANCE ? 1000 : (1 + interp_dist * _interpolation_scalar);
+    }
 
     fz_measurement_vector z;
     z << 
@@ -65,7 +79,7 @@ void FzEstimator::update(double load_cell_fl, double load_cell_fr, double load_c
         fz_rr - FZ_RR_STATIC;
 
     fz_measurement_vector y = z - _H * _state;
-    fz_measurement_covariance S = _H * _P * _H.transpose() + _R;
+    fz_measurement_covariance S = _H * _P * _H.transpose() + _R.cwiseProduct(covariance_scalar);
     fz_state_covariance K = _P * _H.transpose() * S.inverse();
     _state = _state + K * y;
     _P = (fz_state_covariance::Identity() - K * _H) * _P;

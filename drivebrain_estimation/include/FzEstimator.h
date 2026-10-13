@@ -26,6 +26,7 @@ constexpr double FZ_FL_STATIC = 707.1;
 constexpr double FZ_FR_STATIC = 707.1;
 constexpr double FZ_RL_STATIC = 650.1;
 constexpr double FZ_RR_STATIC = 650.1;
+constexpr double MAX_INTERPOLATION_DISTANCE = 400;
 
 using namespace core;
 
@@ -65,6 +66,7 @@ class FzEstimator {
         fz_measurement_matrix _H; 
         fz_state_covariance _Q; 
         fz_measurement_covariance _R; 
+        double _interpolation_scalar;
 
         fz_estimates _fz_static;
         mutable std::mutex _kf_mutex;
