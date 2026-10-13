@@ -16,7 +16,7 @@
 // left side = blue
 // right side = yellow
 
-// make these tunable foxglove parameters
+// make these tunable foxglove parameters - foxgloveserver::instance().get_param
 inline constexpr float MAX_TRACK_WIDTH_SQ = 6.0f * 6.0f;
 inline constexpr float MIN_COS_TURN = -0.3f;      // only reject points that are clearly behind
 inline constexpr float MAX_JUMP_SQ  = 8.0f * 8.0f; 

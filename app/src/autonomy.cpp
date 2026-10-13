@@ -68,7 +68,7 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
   // run control loops
   if (dv.path && !dv.path->empty()) {
     out.desired_steering_deg = _lateral_controller.step_controller(vehicle_state, *dv.path); // pure pursuit
-    out.out = TorqueControlOut{0.5f, 0.5f, 1.0f, 1.0f};
+    out.out = TorqueControlOut{1.0f, 1.0f, 1.0f, 1.0f};
   } else {
     out.out = std::monostate{};
   }

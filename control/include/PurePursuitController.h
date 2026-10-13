@@ -78,6 +78,13 @@ class PurePursuitController {
         float wheelbase_{1.0f};
         float k_p_speed_to_lookahead_{1.0f};
         float curvature_;
+
+        // need dynamic lookahead distance
+        float wheel_radius = 2.302f;
+        float ref_velocity = 5.0f; // tunable value
+        float lookahead_base = 2.0f;
+        float k_d = 1.5f;
+        
         /** 
         Get an arc of constant curvature from current point to target whose tangent is instantaneous heading of vehicle.
         * @param vehicle_pos The current position of the vehicle (map frame)
@@ -94,6 +101,13 @@ class PurePursuitController {
         * @return The steering command.
         */
         float getSteeringCommand(float curvature, float wheelbase);
+
+
+        /**
+        Calculates dynamic lookahead distance using vehicle velocity - needs to be updated to use sensor data 
+        (ideally sensoric) for true vehicle velocity, currently using sim position and delta t
+         */
+        float dynamic_lookahead(float prev_vehicle_x, float prev_vehicle_y, float dt);
         
 };
 
