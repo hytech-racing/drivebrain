@@ -275,26 +275,22 @@ core::MCAPLogger::MCAPLogger(const std::string &base_dir, const mcap::McapWriter
 }
 
 void core::MCAPLogger::_queue_service_log(const std::string &entry) {
-    // JSON output keeps embedded newlines/quotes intact and supplies journal time.
-    const auto record = nlohmann::json::parse(entry, nullptr, false);
-    if (!record.is_object() || !record.contains("MESSAGE") ||
-        !record.contains("__REALTIME_TIMESTAMP")) return;
-
+    RawMessage_s msg;
     try {
+        const auto record = nlohmann::json::parse(entry);
         const auto &text = record.at("MESSAGE");
-        // Binary or repeated journal fields arrive as arrays; retain them as text.
         const std::string message = text.is_string() ? text.get<std::string>() : text.dump();
-        RawMessage_s msg;
         msg.log_time = std::stoull(record.at("__REALTIME_TIMESTAMP").get<std::string>()) * 1000;
         msg.message_name = "drivebrain_service_logs";
         msg.serialized_data = nlohmann::json{{"message", message}}.dump();
-        std::lock_guard lock(_input_buffer_mutex);
-        if (!_logging) return;
-        _input_buffer.push_back(std::move(msg));
-        _input_buffer_cv.notify_one();
     } catch (const std::exception &) {
-        // Skip malformed entries without feeding errors back into the journal.
+        return; // Ignore malformed journal entries.
     }
+
+    std::lock_guard lock(_input_buffer_mutex);
+    if (!_logging) return;
+    _input_buffer.push_back(std::move(msg));
+    _input_buffer_cv.notify_one();
 }
 
 void core::MCAPLogger::_handle_service_logs() {
