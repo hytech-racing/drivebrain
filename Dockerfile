@@ -8,11 +8,13 @@ RUN apt-get update && apt-get install -y \
     g++-aarch64-linux-gnu \
     make \
     cmake \
+    clangd \
     build-essential \
     git \
     wget \
     curl \
     vim \
+    libgl1 \
     pkg-config \
     python3 \
     python3-pip \
@@ -21,6 +23,10 @@ RUN apt-get update && apt-get install -y \
     binutils-aarch64-linux-gnu \
     patchelf \
     && apt-get clean
+
+RUN wget -q "https://github.com/foxglove/mcap/releases/download/releases%2Fmcap-cli%2Fv0.3.0/mcap-linux-amd64" -O /usr/local/bin/mcap \
+    && chmod +x /usr/local/bin/mcap \
+    && mcap --version
 
 # Cross-compilation CUDA setup
 ARG NV_REPO=https://repo.download.nvidia.com/jetson/common/pool/main

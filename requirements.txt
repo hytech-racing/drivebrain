@@ -1,3 +1,8 @@
 conan
-mcap 
+foxglove-schemas-protobuf
+mcap
+mcap-protobuf-support
+numpy
+ouster-sdk
 zmq
+zstandard
