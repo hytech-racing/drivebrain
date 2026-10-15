@@ -6,6 +6,8 @@
 
 #include <StateTracker.hpp>
 #include <GraphSLAM.hpp>
+#include <PurePursuitController.h>
+#include <PIDController.h>
 
 namespace core {
 
@@ -52,6 +54,8 @@ private:
   std::atomic<bool> _running{false};
 
   slam::GraphSlam _slam;
+  control::driverless::PurePursuitController _lateral_controller{};
+  control::driverless::PIDController _longitudinal_controller{core::PIDGains({0.0f, 0.0f, 0.0f}), 0.01f,  -10.0f, 10.0f};
 
   // Rate of OS1 LiDAR
   static constexpr std::chrono::milliseconds _period{100}; 

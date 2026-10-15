@@ -1,0 +1,1 @@
+./build-native/drivebrain -c config/drivebrain_config.json -d build-native/_deps/ht_can-src/dbc/hytech.dbc
