@@ -24,6 +24,11 @@ class VelocityPlanner {
 public:
     explicit VelocityPlanner(float max_car_velocity);
 
+    void setMaxCarVelocity(float velocity_mps);
+    void setMu(float mu);
+    float getMaxCarVelocity() const { return max_car_velocity_; }
+    float getMu() const { return mu_; }
+
     /**
     Main method picking the closest forward point on path, estimating velocity limits from curvature, running solvers and returning torque request.
     @param state The current vehicle state.
@@ -42,7 +47,8 @@ private:
     std::size_t start_point_index_ = SIZE_MAX;
     std::size_t end_point_index_ = SIZE_MAX;
     std::size_t lookahead_distance_ = kPathPointsAhead; // 20 points ahead including start
-    float max_car_velocity_ = 10.0f; // m/s
+    float max_car_velocity_; // m/s, initialized by the constructor
+    float mu_ = 1.0f;
     std::vector<PathPoint> path_points_;
     std::ofstream trace_file_;
     std::size_t trace_iteration_ = 0;
