@@ -16,9 +16,12 @@
 // left side = blue
 // right side = yellow
 
-// make these tunable foxglove parameters - foxgloveserver::instance().get_param
-inline constexpr float MAX_TRACK_WIDTH_SQ = 6.0f * 6.0f;
-inline constexpr float MIN_COS_TURN = -0.3f;      // only reject points that are clearly behind
+//auto MAX_TRACK_WIDTH_SQ = core::FoxgloveServer::instance().get_param<float>("PathPlanning/max_track_width");
+inline constexpr float MAX_TRACK_WIDTH_SQ = 36.0f;
+//auto MIN_COS_TURN = core::FoxgloveServer::instance().get_param<float>("PathPlanning/min_cos_turn");
+inline constexpr float MIN_COS_TURN = -0.3f;      // only reject points that are behind the car
+
+// just to simulate the lidar's max field of view
 inline constexpr float MAX_JUMP_SQ  = 8.0f * 8.0f; 
 inline constexpr std::size_t PATH_POINTS_AHEAD = 20;
 
