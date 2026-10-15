@@ -21,8 +21,6 @@ constexpr float kGravity = 9.80665f;
 constexpr float kMinPathTangent = 1e-6f;
 constexpr char kTracePath[] = "/tmp/velocity-planner.jsonl";
 const float kCarWeightKg = 180.0f;
-const float kMu = 1;
-const float kMaxAccel = kMu * kGravity * 1.01f;
 const float pathStaleLookaheadRatio = 0.3f; // if we haven't gotten an update from path planner and we passed by 0.3 * lookahead distance points, flag it
 
 VelocityPlanner::VelocityPlanner(float max_car_velocity)
@@ -30,6 +28,14 @@ VelocityPlanner::VelocityPlanner(float max_car_velocity)
         path_points_.reserve(lookahead_distance_);
         trace_file_.open(kTracePath, std::ios::out | std::ios::trunc);
         if (!trace_file_) spdlog::error("Cannot open velocity planner trace: {}", kTracePath);
+}
+
+void VelocityPlanner::setMaxCarVelocity(float velocity_mps) {
+    max_car_velocity_ = velocity_mps;
+}
+
+void VelocityPlanner::setMu(float mu) {
+    mu_ = mu;
 }
 
 std::size_t VelocityPlanner::getHorizonPointIndex(const core::VehicleState& state, const core::xy_vec<float>& position, const core::xy_vec<float>& heading) {
@@ -144,6 +150,10 @@ core::TorqueControlOut VelocityPlanner::step_controller(const core::VehicleState
 const std::optional<float> VelocityPlanner::getAccel(const core::VehicleState& state, const float pose_to_path_curvature, size_t start_point_index, const core::xy_vec<float>& car_position, const float longitudinal_velocity, nlohmann::json* trace) {
     size_t end_point_index = std::min(start_point_index + lookahead_distance_ - 1, path_.size() - 1);
     const size_t path_length = end_point_index - start_point_index + 1;
+    if (path_length < 3) {
+        spdlog::error("Need at least 3 path points for the spline");
+        return {};
+    }
 
     // Parameterize the spline by cumulative chord length in double precision.
     std::vector<double> times;
@@ -167,7 +177,10 @@ const std::optional<float> VelocityPlanner::getAccel(const core::VehicleState& s
     }
 
     // fit the spline
-    gte::NaturalCubicSpline<2, double> spline(true, positions, times);
+    const auto startDerivative = (positions[1] - positions[0]) / times[1];
+    const auto endDerivative = (positions[path_length - 1] - positions[path_length - 2]) / (times[path_length - 1] - times[path_length - 2]);
+
+    gte::NaturalCubicSpline<2, double> spline(positions, times, startDerivative, endDerivative);
     if (trace) {
         auto& spline_trace = (*trace)["spline"];
         spline_trace = {
@@ -208,7 +221,7 @@ const std::optional<float> VelocityPlanner::getAccel(const core::VehicleState& s
 
         // sqrt(ax+ay) = mu * g where ax == 0 (ay = v*v*k) => v = sqrt(mu * g / k)
         const double v_max = std::min(static_cast<double>(max_car_velocity_),
-                                      std::sqrt(static_cast<double>(kMu) * kGravity / std::abs(curvature)));
+                                      std::sqrt(static_cast<double>(mu_) * kGravity / std::abs(curvature)));
         path_points_[i] = {
             .point = {static_cast<float>(position[0]), static_cast<float>(position[1])},
             .curvature = static_cast<float>(curvature),
@@ -260,6 +273,7 @@ const std::optional<float> VelocityPlanner::getAccel(const core::VehicleState& s
 }
 
 bool VelocityPlanner::solver(const core::VehicleState& state, const float pose_to_path_curvature, const int path_length, const core::xy_vec<float>& car_position, const float longitudinal_velocity, const bool forward, nlohmann::json* trace) {
+    const float max_accel = mu_ * kGravity * 1.01f;
     PathPoint current_point = {
         .point = car_position,
         .curvature = pose_to_path_curvature,
@@ -283,8 +297,8 @@ bool VelocityPlanner::solver(const core::VehicleState& state, const float pose_t
         auto cur_to_next = (next_point.point - start_point.point);
         const float ds = cur_to_next.length();
         const float lateral_accel = std::abs(start_point.curvature) * start_point.velocity * start_point.velocity; // a_y = v^2 * k
-        if (lateral_accel > kMaxAccel) { // always positive no need for abs()
-            spdlog::error("Lateral acceleration exceeds maximum limit, previous point might've been too far. Curvature: {}, Velocity: {}, Lateral Accel: {}, Max Accel: {}", start_point.curvature, start_point.velocity, lateral_accel, kMaxAccel);
+        if (lateral_accel > max_accel) { // always positive no need for abs()
+            spdlog::error("Lateral acceleration exceeds maximum limit, previous point might've been too far. Curvature: {}, Velocity: {}, Lateral Accel: {}, Max Accel: {}", start_point.curvature, start_point.velocity, lateral_accel, max_accel);
             if (trace) {
                 const std::size_t to_index = forward ? i : static_cast<std::size_t>(path_length - 2) - i;
                 (*trace)["failure"] = {
@@ -293,7 +307,7 @@ bool VelocityPlanner::solver(const core::VehicleState& state, const float pose_t
                         : nlohmann::json(forward ? i - 1 : to_index + 1)},
                     {"to_index", to_index}, {"curvature", start_point.curvature},
                     {"velocity", start_point.velocity}, {"lateral_accel", lateral_accel},
-                    {"max_accel", kMaxAccel}
+                    {"max_accel", max_accel}
                 };
             }
             if (!forward) { // restore state 
@@ -302,8 +316,8 @@ bool VelocityPlanner::solver(const core::VehicleState& state, const float pose_t
             }
             return false;
         }
-        const float a_long_avail = lateral_accel > kMaxAccel ?
-         -kMaxAccel : std::sqrt( kMaxAccel * kMaxAccel - lateral_accel * lateral_accel); // set accel to -MAX if we're off limit
+        const float a_long_avail = lateral_accel > max_accel ?
+         -max_accel : std::sqrt(max_accel * max_accel - lateral_accel * lateral_accel); // set accel to -MAX if we're off limit
 
         const float v_long_avail = std::sqrt(start_point.velocity * start_point.velocity + 2 * a_long_avail * ds);
         const float new_velocity = std::min(next_point.velocity, v_long_avail);

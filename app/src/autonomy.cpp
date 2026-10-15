@@ -27,6 +27,21 @@ void Autonomy::start() {
   if (_running.exchange(true)) {
     return;
   }
+
+  // register callback for tuning parameters for controllers
+  auto& foxglove = FoxgloveServer::instance();
+  _parameter_connection = foxglove.register_param_callback(
+      [this](const std::unordered_map<std::string, DBParam>& params) {
+        std::lock_guard lock(_tuning_mutex);
+        auto update = [&params](const char* name, float& value) {
+          if (auto it = params.find(name); it != params.end()) {
+            if (auto param = std::get_if<float>(&it->second); param && *param >= 0.0f) value = *param;
+          }
+        };
+        update("purepursuitcontroller/lookahead_distance", _tuning.lookahead_distance);
+        update("velocityplanner/max_velocity", _tuning.max_velocity);
+        update("velocityplanner/mu", _tuning.mu);
+      }, {"purepursuitcontroller/lookahead_distance", "velocityplanner/max_velocity", "velocityplanner/mu"});
   _slam.start();
   _thread = std::thread(&Autonomy::_run, this);
   spdlog::info("Autonomy stack started");
@@ -36,6 +51,7 @@ void Autonomy::stop() {
   if (!_running.exchange(false)) {
     return;
   }
+  _parameter_connection.disconnect();
   if (_thread.joinable()) {
     _thread.join();
   }
@@ -51,7 +67,14 @@ bool Autonomy::is_valid() {
 
 
 ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
-
+  Tuning tuning;
+  {
+    std::lock_guard lock(_tuning_mutex);
+    tuning = _tuning;
+  }
+  _lateral_controller.setLookaheadDistance(tuning.lookahead_distance);
+  _longitudinal_controller.setMaxCarVelocity(tuning.max_velocity);
+  _longitudinal_controller.setMu(tuning.mu);
 
   static uint8_t prescale_counter = 0;
   auto dv = StateTracker::instance().dv_state();

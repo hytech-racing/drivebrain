@@ -25,6 +25,9 @@ class PurePursuitController {
 
         bool init();
 
+        void setLookaheadDistance(float distance_m);
+        float getLookaheadDistance() const { return lookahead_distance_; }
+
         std::optional<float> step_controller(const core::VehicleState& in, std::vector<core::xy_vec<float>> path, float& curvature_in);
 
         /** 

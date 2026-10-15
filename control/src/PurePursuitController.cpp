@@ -104,9 +104,13 @@ float PurePursuitController::getSteeringCommand(float curvature, float wheelbase
 }
 
 bool PurePursuitController::init() {
-    // stub, needs to fetch and validate k_p, wheelbase and set lookahead
+    // stub, needs to fetch and validate k_p and wheelbase
     return true;
 } 
+
+void PurePursuitController::setLookaheadDistance(float distance_m) {
+    lookahead_distance_ = distance_m;
+}
 
 std::optional<float> PurePursuitController::step_controller(const core::VehicleState& in, std::vector<core::xy_vec<float>> path, float& curvature_in) {
     const core::xy_vec<float> vehicle_pos{in.vehicle_position_map_frame.x, in.vehicle_position_map_frame.y};
