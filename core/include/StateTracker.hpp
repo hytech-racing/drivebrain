@@ -283,6 +283,13 @@ namespace core {
         float pack_voltage;
     };
 
+    struct Orientation {
+        float Qw;
+        float Qx; 
+        float Qy;
+        float Qz;
+    };
+
     /**
      * @struct Contains a wealth of data
      * representing the entire internal 
@@ -312,6 +319,7 @@ namespace core {
         float old_energy_meter_kw;
         DrivetrainData dt_data;
         AccumulatorData acc_data;
+        Orientation vehicle_orientation;
 
         xy_vec<float> vehicle_position_map_frame;
         xy_vec<float> vehicle_heading_map_frame_unit_vector;
