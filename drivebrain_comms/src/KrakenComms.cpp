@@ -400,7 +400,7 @@ namespace comms
             {
                 if (_test_mode)
                 {
-                    const float target_deg = std::clamp(_test_angle_deg.load(), _config.min_angle_deg, _config.max_angle_deg);
+                    const float target_deg = std::clamp(_angle_deg, _config.min_angle_deg, _config.max_angle_deg);
                     _kraken->SetControl(request.WithPosition(_deg_to_turns(target_deg)));
                     last_target_deg = target_deg;
                 }
@@ -416,12 +416,12 @@ namespace comms
             {
                 std::shared_ptr<hytech_msgs::KrakenInfo> msg_out = std::make_shared<hytech_msgs::KrakenInfo>();
 
-                msg_out->set_pos_rotation(0.0);
+                msg_out->set_pos_rotation(static_cast<float>(_kraken->GetPosition().GetValueAsDouble()));
                 msg_out->set_steering_angle_degs(measured_deg);
                 msg_out->set_setpoint_angle_degs(last_target_deg);
-                msg_out->set_stator_current(0.0);
-                msg_out->set_supply_current(0.0);
-                msg_out->set_temp_c(0.0);
+                msg_out->set_stator_current(static_cast<float>(_kraken->GetStatorCurrent().GetValueAsDouble()));
+                msg_out->set_supply_current(static_cast<float>(_kraken->GetSupplyCurrent().GetValueAsDouble()));
+                msg_out->set_temp_c(static_cast<float>(_kraken->GetDeviceTemp().GetValueAsDouble()));
                 msg_out->set_applied_voltage(_kraken->GetMotorVoltage().GetValue().value());
 
                 last_telem = steady_clock::now();
