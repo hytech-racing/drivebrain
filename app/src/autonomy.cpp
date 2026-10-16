@@ -66,6 +66,12 @@ void Autonomy::_run() {
     if (dv.lidar_is_valid && dv.lidar_cloud != last_scan) {
       last_scan = dv.lidar_cloud;
 
+      std::shared_ptr<dv_msgs::Cones> cones = perception::filter_cloud(*last_scan);
+
+      std::cout << "Filtered cones: " << cones->cones_size() << std::endl;
+
+      core::render_cones(cones, "filtered_cones", "lidar");
+
       // TODO: cone classifier needs to be invoked here
       auto path = planning::plan_path(*StateTracker::instance().dv_state().cone_observations);
       render_path(path, "planned_path", "lidar");

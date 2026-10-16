@@ -32,6 +32,4 @@ target_link_libraries(core PUBLIC
     hytech_msgs_cpp_lib
     hytech_can_msgs_cpp_lib
     Eigen3::Eigen
-    matlab_model
-    simulink_automation_msgs_proto_cpp
 )

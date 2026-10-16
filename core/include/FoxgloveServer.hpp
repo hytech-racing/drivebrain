@@ -78,7 +78,7 @@ namespace core {
              *
              * @param msg the message to be sent
              */
-            void send_live_telem_msg(std::shared_ptr<const google::protobuf::Message> msg);
+            void send_live_telem_msg(std::shared_ptr<const google::protobuf::Message> msg, const std::string& topic = { });
 
             /**
              * Registers a callback function to be run whenever a parameter is updated in Foxglove.

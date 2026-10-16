@@ -276,10 +276,34 @@ namespace core {
         ControllerOutput current_controller_output;
     };
 
-    struct LidarPoint { float x, y, z; uint8_t r, g, b, a; };
-    static_assert(sizeof(LidarPoint) == 16);
-    inline const LidarPoint* points(const foxglove::PointCloud& pc) { return reinterpret_cast<const LidarPoint*>(pc.data().data()); }
+    struct LidarPoint { float x, y, z; };
+    static_assert(sizeof(LidarPoint) == 12);
     inline uint64_t num_points(const foxglove::PointCloud& pc) { return pc.data().size() / sizeof(LidarPoint); }
+
+    struct PointView {
+        const LidarPoint* ptr = nullptr;
+        std::size_t n = 0;
+        std::size_t size() const { return n; }
+        const LidarPoint& operator[](std::size_t i) const { return ptr[i]; }
+        const LidarPoint* begin() const { return ptr; }
+        const LidarPoint* end() const { return ptr + n; }
+    };
+
+    inline PointView points(const foxglove::PointCloud& pc) {
+        return {reinterpret_cast<const LidarPoint*>(pc.data().data()), pc.data().size() / sizeof(LidarPoint)};
+    }
+
+    inline std::shared_ptr<const foxglove::PointCloud> to_cloud(const std::vector<LidarPoint>& pts,
+                                                                const foxglove::PointCloud& src) {
+        auto out = std::make_shared<foxglove::PointCloud>();
+        *out->mutable_timestamp() = src.timestamp();
+        out->set_frame_id(src.frame_id());
+        *out->mutable_pose() = src.pose();
+        out->set_point_stride(sizeof(LidarPoint));
+        *out->mutable_fields() = src.fields();
+        out->set_data(reinterpret_cast<const char*>(pts.data()), pts.size() * sizeof(LidarPoint));
+        return out;
+    }
 
 
     /**
@@ -293,7 +317,7 @@ namespace core {
         std::shared_ptr<const std::vector<xyz_vec<float>>> path;
 
         /* Returns the latest LiDAR point cloud in a clean struct */
-        const LidarPoint* points() const { return lidar_cloud ? core::points(*lidar_cloud) : nullptr; }
+        PointView points() const { return lidar_cloud ? core::points(*lidar_cloud) : PointView{}; }
         uint64_t num_points() const { return lidar_cloud ? core::num_points(*lidar_cloud) : 0; }
     };
 

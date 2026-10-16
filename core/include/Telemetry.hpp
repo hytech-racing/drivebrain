@@ -13,12 +13,13 @@ namespace core {
  *
  * @msg The protobuf message to log and stream.
 */
-inline void log(std::shared_ptr<const google::protobuf::Message> msg) {
+inline void log(std::shared_ptr<const google::protobuf::Message> msg, const std::string& topic = {}) {
     if (!msg) {
         return;
     }
+    const std::string& t = topic.empty() ? msg->GetDescriptor()->name() : topic;
     MCAPLogger::instance().log_msg(msg);
-    FoxgloveServer::instance().send_live_telem_msg(msg);
+    FoxgloveServer::instance().send_live_telem_msg(msg, t);
 }
 
 /**
@@ -43,7 +44,7 @@ inline void render_cones(std::shared_ptr<dv_msgs::Cones> cones, std::string id, 
         auto* pos = cyl->mutable_pose()->mutable_position();
         pos->set_x(cone.position().x());
         pos->set_y(cone.position().y());
-        pos->set_z(0.165);
+        pos->set_z(cone.position().z());
         cyl->mutable_pose()->mutable_orientation()->set_w(1.0);
         cyl->mutable_size()->set_x(0.23);
         cyl->mutable_size()->set_y(0.23);

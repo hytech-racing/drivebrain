@@ -5,8 +5,6 @@
 #include <fstream>
 #include <spdlog/spdlog.h>
 
-#include <MatlabModelProtoRegHelper.hpp>
-
 static std::string to_lowercase(std::string s) {
    std::transform(s.begin(), s.end(), s.begin(),
                        [](unsigned char c){ return static_cast<unsigned char>(std::tolower(c)); });
@@ -207,10 +205,6 @@ core::FoxgloveServer::FoxgloveServer(std::string file_name) {
     };
 
     std::vector<std::string> proto_names = {"hytech_msgs.proto", "hytech.proto", "dv_msgs.proto", "foxglove/PointCloud.proto", "foxglove/SceneUpdate.proto", "foxglove/FrameTransform.proto"};
-    proto_names.insert(
-        proto_names.end(),
-        matlab_model_gen::matlab_model_gend_protos.begin(),
-        matlab_model_gen::matlab_model_gend_protos.end());
 
     auto descriptors = get_pb_descriptors(proto_names);
     std::vector<foxglove::ChannelWithoutId> channels;
@@ -232,6 +226,15 @@ core::FoxgloveServer::FoxgloveServer(std::string file_name) {
             running_index++;
         }
     }
+
+    // TODO remove this
+    foxglove::ChannelWithoutId filtered;
+    filtered.topic = "/lidar/non_ground";
+    filtered.encoding = "protobuf";
+    filtered.schemaName = foxglove::PointCloud::descriptor()->full_name();
+    filtered.schema = foxglove::base64Encode(SerializeFdSet(foxglove::PointCloud::descriptor()));
+    _name_to_id_map[filtered.topic] = running_index++;
+    channels.push_back(filtered);
 
     auto res_ids = _server->addChannels(channels);
 
@@ -321,10 +324,11 @@ core::DBParam core::FoxgloveServer::_get_db_param(foxglove::Parameter param) {
     }
 }
 
-void core::FoxgloveServer::send_live_telem_msg(std::shared_ptr<const google::protobuf::Message> msg) {
+void core::FoxgloveServer::send_live_telem_msg(std::shared_ptr<const google::protobuf::Message> msg, const std::string& topic) {
     /* find() is a non-mutating lookup — safe for concurrent callers (main loop, eth,
        sim state/lidar threads). operator[] would insert-on-miss and race a rehash. */
-    auto it = _name_to_id_map.find(msg->GetDescriptor()->name());
+    const std::string& t = topic.empty() ? msg->GetDescriptor()->name() : topic;
+    auto it = _name_to_id_map.find(t);
     if (it == _name_to_id_map.end()) {
         return;
     }
