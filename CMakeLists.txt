@@ -14,16 +14,12 @@ option(HOOTL "Build with HOOTL sim interface" OFF)
 #################################
 # Custom libs
 #################################
-add_subdirectory(core)
-add_subdirectory(comms)
-add_subdirectory(control)
-add_subdirectory(planning)
-add_subdirectory(perception)
-add_subdirectory(slam)
-
-# Aliases so external FetchContent deps (mostly db simulink models) that link against the old target names still resolve
-# TODO fix matlab simulink models to account for new names
-add_library(drivebrain_core ALIAS core)
+add_subdirectory(drivebrain_core)
+add_subdirectory(drivebrain_comms)
+add_subdirectory(drivebrain_control)
+add_subdirectory(drivebrain_planning)
+add_subdirectory(drivebrain_perception)
+add_subdirectory(drivebrain_slam)
 
 #################################
 # Find packages
@@ -68,17 +64,17 @@ FetchContent_MakeAvailable(HT_CAN)
 # Linking to main app
 #################################
 add_executable(drivebrain
-    app/src/main.cpp
-    app/src/app.cpp
-    app/src/autonomy.cpp
+    drivebrain_app/src/main.cpp
+    drivebrain_app/src/drivebrain_app.cpp
+    drivebrain_app/src/autonomy.cpp
 )
 
-target_include_directories(drivebrain PUBLIC app/include)
+target_include_directories(drivebrain PUBLIC drivebrain_app/include)
 
 if(HOOTL)
     target_compile_definitions(drivebrain PRIVATE HOOTL_ENABLED)
-    target_compile_definitions(core PRIVATE HOOTL_ENABLED)
-    target_compile_definitions(comms PRIVATE HOOTL_ENABLED)
+    target_compile_definitions(drivebrain_core PRIVATE HOOTL_ENABLED)
+    target_compile_definitions(drivebrain_comms PRIVATE HOOTL_ENABLED)
     target_link_libraries(drivebrain PRIVATE cppzmq)
 endif()
 
@@ -90,12 +86,12 @@ target_link_libraries(drivebrain PUBLIC
     gtsam
     hytech_msgs_cpp_lib
     hytech_can_msgs_cpp_lib
-    core
-    comms
-    control
-    planning
-    perception
-    slam
+    drivebrain_core
+    drivebrain_comms
+    drivebrain_control
+    drivebrain_planning
+    drivebrain_perception
+    drivebrain_slam
 )
 
 #################################

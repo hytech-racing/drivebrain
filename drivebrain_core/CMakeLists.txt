@@ -10,18 +10,18 @@ find_package(mcap REQUIRED)
 find_package(Eigen3 REQUIRED)
 
 #################################
-# core
+# drivebrain_core
 #################################
-add_library(core
+add_library(drivebrain_core
     src/FoxgloveServer.cpp
     src/MCAPLogger.cpp
     src/StateTracker.cpp
     src/DrivebrainControllerInterface.cpp
 )
 
-target_include_directories(core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_include_directories(drivebrain_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
-target_link_libraries(core PUBLIC
+target_link_libraries(drivebrain_core PUBLIC
     spdlog::spdlog
     boost::boost
     nlohmann_json::nlohmann_json

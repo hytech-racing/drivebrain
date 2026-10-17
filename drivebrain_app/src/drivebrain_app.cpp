@@ -8,7 +8,7 @@
 #include <filesystem>
 #include <stdexcept>
 
-#include "app.hpp"
+#include "drivebrain_app.hpp"
 #include "ETHRecvComms.hpp"
 #include "FoxgloveServer.hpp"
 #include "MCAPLogger.hpp"
