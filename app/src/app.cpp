@@ -213,23 +213,23 @@ void DrivebrainApp::_loop() {
     // spdlog::info("tick: evaluate_estimators");
 
     core::ControllerOutput out_struct;
-    bool can_command;
+    bool command_is_valid;
     if (_driving_mode == DrivingMode::DRIVERLESS) {
       out_struct = _autonomy.command(state_and_validity.first);
-      can_command = _autonomy.is_valid();
+      command_is_valid = _autonomy.is_valid();
     } else if (_driving_mode == DrivingMode::TELEOP) {
       auto teleop_and_validity = core::StateTracker::instance().teleop_command();
       out_struct = _teleop_command(teleop_and_validity.first);
-      can_command = teleop_and_validity.second;
+      command_is_valid = teleop_and_validity.second;
     } else {
       auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, 1>::instance();
       out_struct = controller_manager.step_active_controller(state_and_validity.first);
-      can_command = state_and_validity.second;
+      command_is_valid = state_and_validity.second;
     }
 
     core::StateTracker::instance().set_previous_control_output(out_struct);
 
-    if (can_command) {
+    if (command_is_valid) {
       _actuate(out_struct);
     }
 
