@@ -14,8 +14,7 @@
 /****************************************************************
  * HELPER METHODS
  ****************************************************************/
-static std::string get_logfile_name() {
-  std::string dir_path = RECORDINGS_DIR;
+static std::string get_logfile_name(const std::string& dir_path) {
   int max_file_number = 0;
   std::string largest_file_name; 
 
@@ -83,8 +82,8 @@ static std::string serialize_fd_set(const google::protobuf::Descriptor *toplevel
 std::tuple<std::string, bool> core::MCAPLogger::status() {
     {
         std::lock_guard lock(_input_buffer_mutex);
-        return std::make_tuple(_log_name, _logging);
-    }
+    return std::make_tuple(_log_name, _logging);
+}
 }
 
 static nlohmann::json generate_json_schema(const nlohmann::json& obj) {
@@ -142,13 +141,14 @@ void core::MCAPLogger::destroy() {
 }
 
 int core::MCAPLogger::open_new_mcap() {
-    std::string mcap_name = get_logfile_name();
-    spdlog::info("Attempting to open new MCAP file: {}", mcap_name);
 #if HOOTL_ENABLED
-    _log_name = "sim_data.mcap";
+    /* Sim runs log next to the checkout, in the dir the app passes in */
+    const std::string dir = _base_dir;
 #else
-    _log_name = std::string(RECORDINGS_DIR) + "/" + get_logfile_name(); 
+    const std::string dir = std::string(RECORDINGS_DIR) + "/";
 #endif
+    _log_name = dir + get_logfile_name(dir);
+    spdlog::info("Attempting to open new MCAP file: {}", _log_name);
 
     const auto res = _writer.open(_log_name, _options);
     if (!res.ok()) {
@@ -156,7 +156,9 @@ int core::MCAPLogger::open_new_mcap() {
         return -1;
     }
 
-    std::vector<std::string> proto_names = {"hytech_msgs.proto", "ht_can.proto", "foxglove/PointCloud.proto", "foxglove/CompressedImage.proto", "foxglove/RawImage.proto"};
+    std::vector<std::string> proto_names = {"hytech_msgs.proto", "ht_can.proto", "dv_msgs.proto",
+                                            "foxglove/PointCloud.proto", "foxglove/SceneUpdate.proto", "foxglove/FrameTransform.proto",
+                                            "foxglove/CompressedImage.proto", "foxglove/RawImage.proto"};
 
     auto descriptors = get_pb_descriptors(proto_names);
 
@@ -236,7 +238,7 @@ int core::MCAPLogger::log_msg(core::MsgType message, const std::string &topic) {
 /****************************************************************
  * PRIVATE CLASS METHOD IMPLEMENTATIONS
  ****************************************************************/
-core::MCAPLogger::MCAPLogger(const std::string &base_dir, const mcap::McapWriterOptions &options, const std::string &params_file) : _options(options) {
+core::MCAPLogger::MCAPLogger(const std::string &base_dir, const mcap::McapWriterOptions &options, const std::string &params_file) : _options(options), _base_dir(base_dir) {
     std::fstream raw_param_file(params_file);
     nlohmann::json params_config = nlohmann::json::parse(raw_param_file);
     _initial_params = params_config; // Used in open_new_mcap to log initial params
@@ -264,7 +266,7 @@ void core::MCAPLogger::_handle_log_to_file() {
 
             msg_to_log.logTime = msg.log_time;
             msg_to_log.publishTime = msg.log_time;
-    
+
             auto channel = _name_to_id_map.find(msg.message_name);
             if (channel == _name_to_id_map.end()) {
                 // first message on this topic, add a channel for it with its message type's schema

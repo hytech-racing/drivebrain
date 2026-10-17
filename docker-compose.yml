@@ -1,12 +1,16 @@
 services:
   dev:
-    build: .
+    build:
+      context: .
+      target: dev-sim
     image: kkittur/drivebrain_cross_compile
     volumes:
       - conan-cache:/root/.conan2
       - ./:/app
       - /tmp:/tmp
       # - ../HT_proto:/HT_proto
+    environment:
+      - SIM_HOST=host.docker.internal
     working_dir: /app
     tty: true
     stdin_open: true

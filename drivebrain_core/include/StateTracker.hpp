@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstdint>
+#include <optional>
+#include <foxglove/PointCloud.pb.h>
 #include <foxglove/websocket/base64.hpp>
 #include <foxglove/websocket/websocket_notls.hpp>
 #include <foxglove/websocket/websocket_server.hpp>
@@ -14,16 +17,14 @@
 
 #include "hytech_msgs.pb.h"
 #include "ht_can.pb.h"
+#include "dv_msgs.pb.h"
 #include "FzEstimator.h"
 #include "SteeringEstimator.h"
-#include "Telemetry.hpp"
 
 /**
- * The state tracker acts 
- * as a thread-safe translation unit
- * between our comms interfaces and 
- * the rest of the program. It keeps track 
- * of current internal state. 
+ * The state tracker acts as a thread-safe translation unit
+ * between our comms interfaces and the rest of the program. It keeps track 
+ * of current internal vehicle state, and observed external state.
  */
 namespace core {
 
@@ -110,6 +111,16 @@ namespace core {
     };
 
     /**
+     * @struct A teleop command from the Foxglove teleop panel, as a Twist.
+     * Forward speed and yaw rate get mapped to torque and steering by the app.
+     */
+    struct TeleopCommand {
+        float linear_x;
+        float angular_z;
+        std::chrono::steady_clock::time_point recv_time;
+    };
+
+    /**
      * @struct Contains requested pedals information
      */
     struct DriverInput {
@@ -176,10 +187,12 @@ namespace core {
 
 
     /**
-     * @struct A controller output 
+     * @struct A controller output
      */
     struct ControllerOutput {
         std::variant<SpeedControlOut, TorqueControlOut, std::monostate> out;
+        // To only be set in a driverless context
+        std::optional<float> desired_steering_deg;
     };
 
     /**
@@ -260,6 +273,52 @@ namespace core {
         ControllerOutput current_controller_output;
     };
 
+    struct LidarPoint { float x, y, z; };
+    static_assert(sizeof(LidarPoint) == 12);
+    inline uint64_t num_points(const foxglove::PointCloud& pc) { return pc.data().size() / sizeof(LidarPoint); }
+
+    struct PointView {
+        const LidarPoint* ptr = nullptr;
+        std::size_t n = 0;
+        std::size_t size() const { return n; }
+        const LidarPoint& operator[](std::size_t i) const { return ptr[i]; }
+        const LidarPoint* begin() const { return ptr; }
+        const LidarPoint* end() const { return ptr + n; }
+    };
+
+    inline PointView points(const foxglove::PointCloud& pc) {
+        return {reinterpret_cast<const LidarPoint*>(pc.data().data()), pc.data().size() / sizeof(LidarPoint)};
+    }
+
+    inline std::shared_ptr<const foxglove::PointCloud> to_cloud(const std::vector<LidarPoint>& pts,
+                                                                const foxglove::PointCloud& src) {
+        auto out = std::make_shared<foxglove::PointCloud>();
+        *out->mutable_timestamp() = src.timestamp();
+        out->set_frame_id(src.frame_id());
+        *out->mutable_pose() = src.pose();
+        out->set_point_stride(sizeof(LidarPoint));
+        *out->mutable_fields() = src.fields();
+        out->set_data(reinterpret_cast<const char*>(pts.data()), pts.size() * sizeof(LidarPoint));
+        return out;
+    }
+
+
+    /**
+     * @struct Contains driverless data representing the entire internal
+     * and external state of the vehicle
+     */
+    struct DriverlessState {
+        std::shared_ptr<const foxglove::PointCloud> lidar_cloud;
+        bool lidar_is_valid;
+        std::shared_ptr<const dv_msgs::Cones> cone_observations;
+        std::shared_ptr<const std::vector<xyz_vec<float>>> path;
+
+        /* Returns the latest LiDAR point cloud in a clean struct */
+        PointView points() const { return lidar_cloud ? core::points(*lidar_cloud) : PointView{}; }
+        uint64_t num_points() const { return lidar_cloud ? core::num_points(*lidar_cloud) : 0; }
+    };
+
+
     /**
      * Allows different communications interfaces
      * to update the internal state of drivebrain in a thread-safe manner
@@ -305,11 +364,47 @@ namespace core {
             void set_previous_control_output(ControllerOutput &previous_control_output);
             
             /**
-             * Returns a pair of the current vehicle state and whether or not it's valid
+             * Returns a pair of the current vehicle state and whether or not it's valid given the timestamps
              * 
              * @return the vehicle state and whether or not its valid. 
              */
-            std::pair<core::VehicleState, bool> get_latest_state_and_validity();
+            std::pair<core::VehicleState, bool> vehicle_state();
+
+            /**
+             * Returns the current driverless state. Consumers judge freshness themselves off
+             * the recv times in the struct, since each one wants its own staleness threshold.
+             *
+             * @return the driverless state.
+             */
+            DriverlessState dv_state();
+
+            /**
+             * Sets the latest planned path produced by the autonomy stack.
+             *
+             * @param path the planned path, map frame
+             */
+            void set_dv_path(std::shared_ptr<const std::vector<xyz_vec<float>>> path);
+
+            /**
+             * Sets the latest cone observations produced by perception.
+             *
+             * @param cones the observed cones, vehicle frame
+             */
+            void set_cone_observations(std::shared_ptr<const dv_msgs::Cones> cones);
+
+            /**
+             * Sets the latest teleop command received from the Foxglove teleop panel.
+             *
+             * @param command the teleop command
+             */
+            void set_teleop_command(const TeleopCommand& command);
+
+            /**
+             * Returns the latest teleop command.
+             *
+             * @return the teleop command, and whether it is recent enough to act on
+             */
+            std::pair<TeleopCommand, bool> teleop_command();
 
         private:
 
@@ -333,6 +428,12 @@ namespace core {
             std::mutex _state_mutex;
             std::array<std::chrono::microseconds, 4> _timestamp_array;
 
+            DriverlessState _dv_state = { };
+            std::mutex _dv_state_mutex;
+
+            TeleopCommand _teleop_command = { };
+            std::mutex _teleop_mutex;
+            
             /* Private constructor called by the init method */
             StateTracker() {}; 
             
