@@ -24,7 +24,7 @@ class DrivebrainSoftware(ConanFile):
         self.requires("foxglove-schemas-protobuf/0.25.1", transitive_headers=True)
         self.requires("protobuf/5.29.3", transitive_headers=True)
         self.requires("boost/1.84.0", override=True)
-        self.requires("spdlog/1.15.3")
+        self.requires("spdlog/1.13.0")
         self.requires("mcap/2.0.2")
         self.requires("dbcppp/3.2.6")
         self.requires("gtsam/4.2.1")
