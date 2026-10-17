@@ -19,3 +19,6 @@ build-*
 compile_commands.json
 
 CMakeUserPresets.json
+*.mcap
+
+tests/replay/mcap/*.mcap

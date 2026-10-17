@@ -2,18 +2,19 @@
 #include "CANComms.hpp"
 #if HOOTL_ENABLED
 # include "SimComms.hpp"
+#else
+# include "KrakenComms.hpp"
 #endif
 #include <MCAPLogger.hpp>
 #include <boost/asio.hpp>
 #include <memory>
-
-#include "ETHRecvComms.hpp"
-#include "CANComms.hpp"
-#include "SimComms.hpp"
 #include "LoadCellTorqueController.hpp"
 #include "VNComms.hpp"
+#include "OusterComms.hpp"
 #include "autonomy.hpp"
+
 #include "hytech_msgs.pb.h"
+#include <BlackflyComms.hpp>
 
 enum class DrivingMode { DRIVERED, DRIVERLESS, TELEOP };
 
@@ -75,7 +76,7 @@ private:
 
   /* Ethernet drivers */
   std::unique_ptr<comms::ETHRecvComms<hytech_msgs::ACUAllData>> _acu_eth_driver;
-  std::unique_ptr<comms::ETHRecvComms<hytech_msgs::ACUCoreData>> _acu_core_eth_driver;
+  std::unique_ptr<comms::ETHRecvComms<hytech_msgs::CCUData>> _acu_core_eth_driver;
   std::unique_ptr<comms::ETHRecvComms<hytech_msgs::VCRData_s>> _vcr_eth_driver;
   std::unique_ptr<comms::ETHRecvComms<hytech_msgs::VCFData_s>> _vcf_eth_driver;
 
@@ -84,6 +85,17 @@ private:
 
   /* Vectornav */
   std::unique_ptr<comms::VNDriver> _vn_driver;
+
+#if !HOOTL_ENABLED
+  /* Steering */
+  std::unique_ptr<comms::KrakenComms> _kraken_comms;
+#endif
+
+  /* Cameras */
+  std::vector<std::unique_ptr<comms::BlackflyComms>> _camera_drivers;
+
+  /* Ouster Lidar */
+  std::unique_ptr<comms::OusterComms> _ouster_driver;
 
   /* Driverless autonomy stack */
   core::Autonomy _autonomy;

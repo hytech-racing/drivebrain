@@ -2,13 +2,17 @@
 #include <exception>
 #include <google/protobuf/message.h>
 #include <hytech_msgs.pb.h>
-#include <hytech.pb.h>
+#include <ht_can.pb.h>
 #include <FoxgloveServer.hpp>
 #include <MCAPLogger.hpp>
 #include <mcap/writer.hpp>
 #include <optional>
 #include <filesystem>
 #include <drivebrain_app.hpp>
+#if JETSON_ENABLED
+#include <NvInfer.h>
+#include <cuda_runtime_api.h>
+#endif
 
 
 std::optional<std::string> json_file; 
@@ -58,6 +62,12 @@ int parse_arguments(int &argc, char* argv[]) {
 }
 
 int main(int argc, char* argv[]) {
+#if JETSON_ENABLED
+    int devices = 0; 
+    cudaError_t err = cudaGetDeviceCount(&devices);
+    std::printf("CUDA: %s, %d device(s), TensorRT %d\n",
+                  cudaGetErrorString(err), devices, getInferLibVersion());
+#endif
     // Argument Handling
     int return_code = parse_arguments(argc, argv);
     if (return_code != 0) {

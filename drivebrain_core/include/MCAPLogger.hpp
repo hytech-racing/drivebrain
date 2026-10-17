@@ -18,7 +18,8 @@ namespace core {
 
     struct RawMessage_s {
         std::string serialized_data;
-        std::string message_name;
+        std::string message_name; // topic
+        std::string type_name;
         mcap::Timestamp log_time;
     };
 
@@ -52,8 +53,10 @@ namespace core {
              */
             ~MCAPLogger() {
               spdlog::info("Destructing mcap logger");
+              {
+                std::lock_guard lock(_input_buffer_mutex);
               _logging = false;
-              _running = false;
+              }
 
               _s_instance.store(nullptr, std::memory_order_release);
               spdlog::info("Msg logger singleton instance released");
@@ -104,9 +107,10 @@ namespace core {
              * Logs a protobuf message to the current MCAP file
              * 
              * @param message the message to be logged
+             * @param topic topic to log on, defaults to the message type name. A new topic gets its channel on first use.
              * @return 0 on success, negative err code on failure
              */
-            int log_msg(MsgType message); 
+            int log_msg(MsgType message, const std::string &topic = ""); 
 
             /**
              * Logs the json params to the current MCAP file
@@ -153,11 +157,10 @@ namespace core {
             nlohmann::json _params_schema_json;
             nlohmann::json _initial_params;
             std::unordered_map<std::string, uint32_t> _name_to_id_map;
+            std::unordered_map<std::string, uint16_t> _type_to_schema_id_map;
             std::string _base_dir;
             std::string _log_name = "NONE";
             bool _logging = false;
-            bool _running = true;
-
     };
 
 }

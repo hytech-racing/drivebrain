@@ -5,7 +5,7 @@
 #include <zmq_addon.hpp>
 #include <StateTracker.hpp> 
 #include <spdlog/spdlog.h>
-#include "hytech.pb.h"
+#include "ht_can.pb.h"
 #include "hytech_msgs.pb.h"
 #include "Telemetry.hpp"
 

@@ -3,13 +3,20 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 project(drivebrain)
 
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 include(FetchContent)
 list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/cmake")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cuda_modules")
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 #################################
 # Options
 #################################
 option(HOOTL "Build with HOOTL sim interface" OFF)
+option(JETSON "Build for the Jetson Orin (else Pi)" OFF)
 
 #################################
 # Custom libs
@@ -17,6 +24,7 @@ option(HOOTL "Build with HOOTL sim interface" OFF)
 add_subdirectory(drivebrain_core)
 add_subdirectory(drivebrain_comms)
 add_subdirectory(drivebrain_control)
+add_subdirectory(drivebrain_estimation)
 add_subdirectory(drivebrain_planning)
 add_subdirectory(drivebrain_perception)
 add_subdirectory(drivebrain_slam)
@@ -25,12 +33,17 @@ add_subdirectory(drivebrain_slam)
 # Find packages
 #################################
 find_package(foxglove-websocket REQUIRED)
+find_package(foxglove-schemas-protobuf REQUIRED)
 find_package(Protobuf REQUIRED CONFIG)
 find_package(Boost REQUIRED)
 find_package(spdlog REQUIRED)
 find_package(mcap REQUIRED)
 find_package(dbcppp REQUIRED)
+find_package(aravis REQUIRED)
+find_package(OpenCV REQUIRED CONFIG)
+find_package(Eigen3 REQUIRED)
 find_package(GTSAM REQUIRED)
+
 
 if (HOOTL)
     find_package(cppzmq REQUIRED)
@@ -43,9 +56,10 @@ endif()
 FetchContent_Declare(
     HT_Proto 
     GIT_REPOSITORY https://github.com/hytech-racing/HT_proto.git
-    GIT_TAG 535746d
+    GIT_TAG 2d8c4ca48ddefdb9c041d73baf118ea6a61d9e90
 )
 FetchContent_MakeAvailable(HT_Proto)
+# add_subdirectory(../HT_proto ${CMAKE_BINARY_DIR}/HT_proto)
 
 FetchContent_Declare(
     vn_driver_lib
@@ -56,9 +70,11 @@ FetchContent_MakeAvailable(vn_driver_lib)
 
 FetchContent_Declare(
     HT_CAN
-    URL "https://github.com/hytech-racing/HT_CAN/releases/download/268/drivebrain_can_lib.tar.gz"
+    URL "https://github.com/hytech-racing/HT_CAN/releases/download/main-337/drivebrain_can_lib.tar.gz"
 )
 FetchContent_MakeAvailable(HT_CAN)
+
+find_package(OusterSDK REQUIRED)
 
 #################################
 # Linking to main app
@@ -69,7 +85,16 @@ add_executable(drivebrain
     drivebrain_app/src/autonomy.cpp
 )
 
+#add_executable(drivebrain
+#    tests/hil/scripts/test_ouster.cpp
+#)
+
 target_include_directories(drivebrain PUBLIC drivebrain_app/include)
+
+# add_executable(drivebrain
+#     tests/hil/scripts/test_backfly.cpp
+# )
+
 
 if(HOOTL)
     target_compile_definitions(drivebrain PRIVATE HOOTL_ENABLED)
@@ -78,8 +103,17 @@ if(HOOTL)
     target_link_libraries(drivebrain PRIVATE cppzmq)
 endif()
 
+if(JETSON)
+    target_compile_definitions(drivebrain PRIVATE JETSON_ENABLED)
+    target_compile_definitions(drivebrain_core PRIVATE JETSON_ENABLED)
+    include(TensorRT)
+    set(CMAKE_SKIP_BUILD_RPATH ON)
+    target_link_libraries(drivebrain PRIVATE TensorRT)
+endif()
+
 target_link_libraries(drivebrain PUBLIC 
     foxglove-websocket::foxglove-websocket 
+    foxglove-schemas-protobuf::foxglove-schemas-protobuf
     mcap::mcap
     protobuf::libprotobuf
     boost::boost
@@ -89,10 +123,23 @@ target_link_libraries(drivebrain PUBLIC
     drivebrain_core
     drivebrain_comms
     drivebrain_control
+    # ouster_client
+    # ouster_sensor
+    # ouster_perception
+    aravis::aravis
+    opencv_core
+    opencv_imgproc
+    opencv_imgcodecs
+    drivebrain_estimation
     drivebrain_planning
     drivebrain_perception
     drivebrain_slam
 )
+
+if(JETSON)
+    target_link_libraries(drivebrain PUBLIC TensorRT)
+endif()
+
 
 #################################
 # Unit Testing

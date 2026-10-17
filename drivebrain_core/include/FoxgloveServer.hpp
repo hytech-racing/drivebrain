@@ -24,6 +24,7 @@
 #include <spdlog/spdlog.h>
 
 #include "hytech_msgs.pb.h"
+#include <foxglove/CompressedImage.pb.h>
 
 namespace core {
 
@@ -34,6 +35,30 @@ namespace core {
     };
 
     using DBParam = std::variant<bool, int, float, double, std::string, std::monostate>; 
+
+    /**
+     * Case insensitive method to process parameter updates.
+     * 
+     * @param params the map of parameters to search through
+     * @param key the key of the parameter to search for
+     * @return the parameter value if found and of the correct type, otherwise std::null
+     */
+    template <typename param_type> 
+    std::optional<param_type> process_param_update(const std::unordered_map<std::string, core::DBParam> &params, std::string key) {
+        std::transform(key.begin(), key.end(), key.begin(),
+            [](unsigned char c){ return static_cast<unsigned char>(std::tolower(c)); });
+        auto it = params.find(key);
+        if (it == params.end()) {
+            spdlog::error("Parameter {} not found in the updated parameters", key);
+            return std::nullopt;
+        }
+        if (auto pval = std::get_if<param_type>(&it->second)) {
+            return *pval;
+        } else {
+            spdlog::error("Parameter {} has incorrect type in the updated parameters", key);
+            return std::nullopt;
+        }
+    }
 
     class FoxgloveServer {
         public: 
@@ -77,6 +102,7 @@ namespace core {
              * Queues a protobuf for broadcast to Foxglove
              *
              * @param msg the message to be sent
+             * @param topic topic to send on, defaults to the message type name. A new topic gets its channel on first use.
              */
             void send_live_telem_msg(std::shared_ptr<const google::protobuf::Message> msg, const std::string& topic = { });
 
@@ -152,6 +178,7 @@ namespace core {
             foxglove::ServerOptions _server_options;
 
             std::mutex _parameter_mutex;
+            std::mutex _channel_mutex;
 
             static constexpr uint32_t MAX_SEND_QUEUE = 256;
             std::deque<OutgoingMsg> _send_queue;

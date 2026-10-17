@@ -5,6 +5,12 @@
 
 #include <MCAPLogger.hpp>
 
+#if JETSON_ENABLED
+#define RECORDINGS_DIR "/mnt/ssd/recordings"
+#else
+#define RECORDINGS_DIR "/home/nixos/recordings"
+#endif
+
 /****************************************************************
  * HELPER METHODS
  ****************************************************************/
@@ -74,7 +80,10 @@ static std::string serialize_fd_set(const google::protobuf::Descriptor *toplevel
 }
 
 std::tuple<std::string, bool> core::MCAPLogger::status() {
+    {
+        std::lock_guard lock(_input_buffer_mutex);
     return std::make_tuple(_log_name, _logging);
+}
 }
 
 static nlohmann::json generate_json_schema(const nlohmann::json& obj) {
@@ -132,9 +141,14 @@ void core::MCAPLogger::destroy() {
 }
 
 int core::MCAPLogger::open_new_mcap() {
-    std::string mcap_name = get_logfile_name(_base_dir);
-    spdlog::info("Attempting to open new MCAP file: {}", mcap_name);
-    _log_name = _base_dir + mcap_name;
+#if HOOTL_ENABLED
+    /* Sim runs log next to the checkout, in the dir the app passes in */
+    const std::string dir = _base_dir;
+#else
+    const std::string dir = std::string(RECORDINGS_DIR) + "/";
+#endif
+    _log_name = dir + get_logfile_name(dir);
+    spdlog::info("Attempting to open new MCAP file: {}", _log_name);
 
     const auto res = _writer.open(_log_name, _options);
     if (!res.ok()) {
@@ -142,7 +156,9 @@ int core::MCAPLogger::open_new_mcap() {
         return -1;
     }
 
-    std::vector<std::string> proto_names = {"hytech_msgs.proto", "hytech.proto", "dv_msgs.proto", "foxglove/PointCloud.proto", "foxglove/SceneUpdate.proto", "foxglove/FrameTransform.proto"};
+    std::vector<std::string> proto_names = {"hytech_msgs.proto", "ht_can.proto", "dv_msgs.proto",
+                                            "foxglove/PointCloud.proto", "foxglove/SceneUpdate.proto", "foxglove/FrameTransform.proto",
+                                            "foxglove/CompressedImage.proto", "foxglove/RawImage.proto"};
 
     auto descriptors = get_pb_descriptors(proto_names);
 
@@ -154,6 +170,7 @@ int core::MCAPLogger::open_new_mcap() {
             mcap::Channel channel(message_descriptor->name(), "protobuf", schema.id);
             _writer.addChannel(channel);
             _name_to_id_map[message_descriptor->name()] = channel.id;
+            _type_to_schema_id_map[message_descriptor->name()] = schema.id;
         }
     }
 
@@ -181,15 +198,17 @@ int core::MCAPLogger::close_active_mcap() {
 }
 
 void core::MCAPLogger::init_logging() {
+    {
+        std::lock_guard lock(_input_buffer_mutex);
+        _logging = true;
+    }
     _msg_log_thread = std::thread([this]() { _handle_log_to_file(); });
     spdlog::info("Msg log thread spawned");
-    _logging = true;
 }
 
 void core::MCAPLogger::stop_logging() {
     {
         std::unique_lock lock(_input_buffer_mutex);
-        _running = false;
         _logging = false;
     }
 
@@ -199,15 +218,17 @@ void core::MCAPLogger::stop_logging() {
     }
 }
 
-int core::MCAPLogger::log_msg(core::MsgType message) {
+int core::MCAPLogger::log_msg(core::MsgType message, const std::string &topic) {
     mcap::Timestamp log_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     RawMessage_s new_message; 
     new_message.log_time = log_time;
     new_message.serialized_data = message->SerializeAsString(); 
-    new_message.message_name = message->GetDescriptor()->name();
+    new_message.type_name = message->GetDescriptor()->name();
+    new_message.message_name = topic.empty() ? new_message.type_name : topic;
     {
         std::unique_lock lock(_input_buffer_mutex);
-        _input_buffer.push_back(new_message); 
+        if (!_logging) return -1; // Logging is not active, return an error code
+        _input_buffer.push_back(std::move(new_message)); 
         _input_buffer_cv.notify_one(); 
    }
 
@@ -230,8 +251,8 @@ void core::MCAPLogger::_handle_log_to_file() {
     while (true) {
         {
             std::unique_lock lock(_input_buffer_mutex);
-            _input_buffer_cv.wait(lock, [this](){ return !_input_buffer.empty() || !_running;});
-            if (!_running && _input_buffer.empty()) {
+            _input_buffer_cv.wait(lock, [this](){ return !_input_buffer.empty() || !_logging;});
+            if (!_logging && _input_buffer.empty()) {
                 break;
             }
 
@@ -246,11 +267,14 @@ void core::MCAPLogger::_handle_log_to_file() {
             msg_to_log.logTime = msg.log_time;
             msg_to_log.publishTime = msg.log_time;
 
-            auto id_it = _name_to_id_map.find(msg.message_name);
-            if (id_it == _name_to_id_map.end()) {
-                continue; // no channel registered for this message type, skip
+            auto channel = _name_to_id_map.find(msg.message_name);
+            if (channel == _name_to_id_map.end()) {
+                // first message on this topic, add a channel for it with its message type's schema
+                mcap::Channel new_channel(msg.message_name, "protobuf", _type_to_schema_id_map[msg.type_name]);
+                _writer.addChannel(new_channel);
+                channel = _name_to_id_map.emplace(msg.message_name, new_channel.id).first;
             }
-            msg_to_log.channelId = id_it->second;
+            msg_to_log.channelId = channel->second;
             auto write_res = _writer.write(msg_to_log);
         }
         write_buffer.clear();

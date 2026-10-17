@@ -204,7 +204,9 @@ core::FoxgloveServer::FoxgloveServer(std::string file_name) {
         _server->publishParameterValues(clientHandle, foxglove_params, request_id);
     };
 
-    std::vector<std::string> proto_names = {"hytech_msgs.proto", "hytech.proto", "dv_msgs.proto", "foxglove/PointCloud.proto", "foxglove/SceneUpdate.proto", "foxglove/FrameTransform.proto"};
+    std::vector<std::string> proto_names = {"hytech_msgs.proto", "ht_can.proto", "dv_msgs.proto",
+                                            "foxglove/PointCloud.proto", "foxglove/SceneUpdate.proto", "foxglove/FrameTransform.proto",
+                                            "foxglove/CompressedImage.proto", "foxglove/RawImage.proto"};
 
     auto descriptors = get_pb_descriptors(proto_names);
     std::vector<foxglove::ChannelWithoutId> channels;
@@ -226,15 +228,6 @@ core::FoxgloveServer::FoxgloveServer(std::string file_name) {
             running_index++;
         }
     }
-
-    // TODO remove this
-    foxglove::ChannelWithoutId filtered;
-    filtered.topic = "/lidar/non_ground";
-    filtered.encoding = "protobuf";
-    filtered.schemaName = foxglove::PointCloud::descriptor()->full_name();
-    filtered.schema = foxglove::base64Encode(SerializeFdSet(foxglove::PointCloud::descriptor()));
-    _name_to_id_map[filtered.topic] = running_index++;
-    channels.push_back(filtered);
 
     auto res_ids = _server->addChannels(channels);
 
@@ -325,16 +318,25 @@ core::DBParam core::FoxgloveServer::_get_db_param(foxglove::Parameter param) {
 }
 
 void core::FoxgloveServer::send_live_telem_msg(std::shared_ptr<const google::protobuf::Message> msg, const std::string& topic) {
-    /* find() is a non-mutating lookup — safe for concurrent callers (main loop, eth,
-       sim state/lidar threads). operator[] would insert-on-miss and race a rehash. */
-    const std::string& t = topic.empty() ? msg->GetDescriptor()->name() : topic;
-    auto it = _name_to_id_map.find(t);
-    if (it == _name_to_id_map.end()) {
-        return;
+    const std::string& name = topic.empty() ? msg->GetDescriptor()->name() : topic;
+    foxglove::ChannelId msg_chan_id;
+    {
+        std::unique_lock lock(_channel_mutex);
+        auto channel = _name_to_id_map.find(name);
+        if (channel == _name_to_id_map.end()) {
+            // first message on this topic, advertise a channel for it
+            foxglove::ChannelWithoutId server_channel;
+            server_channel.topic = name;
+            server_channel.encoding = "protobuf";
+            server_channel.schemaName = msg->GetDescriptor()->full_name();
+            server_channel.schema = foxglove::base64Encode(SerializeFdSet(msg->GetDescriptor()));
+            channel = _name_to_id_map.emplace(name, _server->addChannels({server_channel})[0]).first;
+        }
+        msg_chan_id = channel->second;
     }
 
     OutgoingMsg out;
-    out.channel_id = it->second;
+    out.channel_id = msg_chan_id;
     out.timestamp = nanosecondsSinceEpoch();
     out.data = msg->SerializeAsString();
     {

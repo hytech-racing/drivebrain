@@ -167,6 +167,7 @@ void SimComms::_veh_recv_loop() {
 
         std::shared_ptr<google::protobuf::Message> msg(parse_by_name(type_name, body.data(), body.size()));
 
+        // spdlog::info("{}", type_name);
         if (!msg) {
             spdlog::error("SimComms: unknown message type '{}'", type_name);
             continue;

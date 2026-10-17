@@ -16,8 +16,10 @@
 #include <spdlog/spdlog.h>
 
 #include "hytech_msgs.pb.h"
-#include "hytech.pb.h"
+#include "ht_can.pb.h"
 #include "dv_msgs.pb.h"
+#include "FzEstimator.h"
+#include "SteeringEstimator.h"
 
 /**
  * The state tracker acts as a thread-safe translation unit
@@ -31,6 +33,7 @@ namespace core {
      */
     template <typename T>
     struct veh_vec {
+
         T FL;
         T FR;
         T RL;
@@ -167,14 +170,6 @@ namespace core {
     };
 
     /**
-     * @struct Collection of different outputs
-     */
-    struct MatlabMathResult {
-        TireDynamics tire_dynamics;
-        TorqueVectoringStatus torque_vectoring_status;
-    };
-
-    /**
      * @struct Collection of desired speed and torques
      */
     struct SpeedControlOut {
@@ -242,10 +237,12 @@ namespace core {
         bool state_is_valid;
         int prev_MCU_recv_millis;
         float steering_angle_deg;
+        float steering_column_angle_deg;
+        bool received_steering_angle = false;
+        bool updated_steering_estimator = false;
         ControllerOutput prev_controller_output;
         TireDynamics tire_dynamics;
         veh_vec<float> driver_torque;
-        ControllerTorqueOut matlab_math_temp_out;
         veh_vec<float> suspension_potentiometers_mm;
         Position vehicle_position;
         veh_vec<float> loadcells;
@@ -409,7 +406,6 @@ namespace core {
              */
             std::pair<TeleopCommand, bool> teleop_command();
 
-
         private:
 
             template <size_t index, typename inverter_dynamics_message>
@@ -424,6 +420,8 @@ namespace core {
             void _receive_low_level_state(std::shared_ptr<google::protobuf::Message> message);
 
             void _receive_inverter_states(std::shared_ptr<google::protobuf::Message> message);
+
+            void _update_estimators();
 
             VehicleState _vehicle_state = { };
             RawInputData _raw_input_data = { };
@@ -446,5 +444,9 @@ namespace core {
             /* Singleton instance */
             inline static std::atomic<StateTracker*> _s_instance; 
 
+            /* Estimators */
+            estimation::FzEstimator _fz_estimator;
+
+            estimation::SteeringEstimator _steering_estimator;
     };
 }
