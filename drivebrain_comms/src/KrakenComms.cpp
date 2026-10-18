@@ -42,22 +42,22 @@ namespace comms
         auto stator_current_limit_a = foxglove.get_param<float>("kraken_comms/stator_current_limit_a");
         auto supply_current_limit_a = foxglove.get_param<float>("kraken_comms/supply_current_limit_a");
         auto enable_timeout_ms = foxglove.get_param<int>("kraken_comms/enable_timeout_ms");
-        auto max_disagreement_deg = foxglove.get_param<float>("kraken_comms/max_disagreement_deg");
+        auto steering_timeout_ms = foxglove.get_param<int>("kraken_comms/steering_timeout_ms");
 
         auto kraken_P = foxglove.get_param<float>("kraken_comms/kp");
         auto kraken_I = foxglove.get_param<float>("kraken_comms/ki");
         auto kraken_D = foxglove.get_param<float>("kraken_comms/kd");
         auto kraken_S = foxglove.get_param<float>("kraken_comms/ks");
+        auto kraken_S_deadband_deg = foxglove.get_param<float>("kraken_comms/ks_deadband_deg");
         auto kraken_V = foxglove.get_param<float>("kraken_comms/kv");
         auto kraken_A = foxglove.get_param<float>("kraken_comms/ka");
         auto motion_magic_cruise_velocity_deg_s = foxglove.get_param<float>("kraken_comms/mm_cruise_velocity_deg_s");
         auto motion_magic_acceleration_deg_s2 = foxglove.get_param<float>("kraken_comms/mm_acceleration_deg_s2");
-        auto motion_magic_jerk_deg_s3 = foxglove.get_param<float>("kraken_comms/mm_jerk_deg_s3");
 
         if (!(device_id && canbus_name && send_rate_hz && reduction && min_angle_deg && max_angle_deg &&
-              stator_current_limit_a && supply_current_limit_a && enable_timeout_ms && max_disagreement_deg &&
-              kraken_P && kraken_I && kraken_D && kraken_S && kraken_V && kraken_A &&
-              motion_magic_cruise_velocity_deg_s && motion_magic_acceleration_deg_s2 && motion_magic_jerk_deg_s3))
+              stator_current_limit_a && supply_current_limit_a && enable_timeout_ms &&
+              steering_timeout_ms && kraken_P && kraken_I && kraken_D && kraken_S && kraken_S_deadband_deg &&
+              kraken_V && kraken_A && motion_magic_cruise_velocity_deg_s && motion_magic_acceleration_deg_s2))
         {
             spdlog::error("Couldn't load all params for KrakenComms");
             return false;
@@ -73,7 +73,7 @@ namespace comms
             .stator_current_limit_a = stator_current_limit_a.value(),
             .supply_current_limit_a = supply_current_limit_a.value(),
             .enable_timeout_ms = enable_timeout_ms.value(),
-            .max_disagreement_deg = max_disagreement_deg.value(),
+            .steering_timeout_ms = steering_timeout_ms.value(),
         };
 
         _tuning_params = {
@@ -81,11 +81,11 @@ namespace comms
             .kraken_I = kraken_I.value(),
             .kraken_D = kraken_D.value(),
             .kraken_S = kraken_S.value(),
+            .kraken_S_deadband_deg = kraken_S_deadband_deg.value(),
             .kraken_V = kraken_V.value(),
             .kraken_A = kraken_A.value(),
             .motion_magic_cruise_velocity_deg_s = motion_magic_cruise_velocity_deg_s.value(),
             .motion_magic_acceleration_deg_s2 = motion_magic_acceleration_deg_s2.value(),
-            .motion_magic_jerk_deg_s3 = motion_magic_jerk_deg_s3.value(),
         };
 
         if (_config.send_rate_hz <= 0)
@@ -117,13 +117,13 @@ namespace comms
             return false;
         }
 
-        if (_config.max_disagreement_deg <= 0.0f)
+        if (_config.steering_timeout_ms <= 0)
         {
-            spdlog::error("KrakenComms: max_disagreement_deg must be > 0, got {}", _config.max_disagreement_deg);
+            spdlog::error("KrakenComms: steering_timeout_ms must be > 0, got {}", _config.steering_timeout_ms);
             return false;
         }
 
-        if (!_is_motion_magic_valid(_tuning_params))
+        if (!_is_tuning_valid(_tuning_params))
         {
             return false;
         }
@@ -138,9 +138,6 @@ namespace comms
         talon_config.MotorOutput.Inverted = ctre::phoenix6::signals::InvertedValue::Clockwise_Positive;
 
         talon_config.Feedback.SensorToMechanismRatio = units::dimensionless::scalar_t{_config.reduction};
-
-        talon_config.Slot0 = _make_slot0_configs(_tuning_params);
-        talon_config.MotionMagic = _make_motion_magic_configs(_tuning_params);
 
         talon_config.CurrentLimits.StatorCurrentLimit = units::current::ampere_t{_config.stator_current_limit_a};
         talon_config.CurrentLimits.StatorCurrentLimitEnable = true;
@@ -157,6 +154,15 @@ namespace comms
         {
             spdlog::error("KrakenComms: failed to apply TalonFX config: {}", status.GetName());
             return false;
+        }
+
+        // The PID reads velocity every tick, so don't let it lag behind the default status rate
+        status = ctre::phoenix6::BaseStatusSignal::SetUpdateFrequencyForAll(
+            units::frequency::hertz_t{static_cast<double>(_config.send_rate_hz)},
+            _kraken->GetPosition(), _kraken->GetVelocity());
+        if (!status.IsOK())
+        {
+            spdlog::warn("KrakenComms: failed to set position/velocity update rate: {}", status.GetName());
         }
 
         // Sticky faults survive until cleared, so these may be left over from before this run
@@ -284,37 +290,134 @@ namespace comms
         update("kraken_comms/ki", new_tuning.kraken_I);
         update("kraken_comms/kd", new_tuning.kraken_D);
         update("kraken_comms/ks", new_tuning.kraken_S);
+        update("kraken_comms/ks_deadband_deg", new_tuning.kraken_S_deadband_deg);
         update("kraken_comms/kv", new_tuning.kraken_V);
         update("kraken_comms/ka", new_tuning.kraken_A);
         update("kraken_comms/mm_cruise_velocity_deg_s", new_tuning.motion_magic_cruise_velocity_deg_s);
         update("kraken_comms/mm_acceleration_deg_s2", new_tuning.motion_magic_acceleration_deg_s2);
-        update("kraken_comms/mm_jerk_deg_s3", new_tuning.motion_magic_jerk_deg_s3);
 
-        bool changed;
+        std::scoped_lock lock(_tuning_mutex);
+        if (!(new_tuning == _tuning_params) && _is_tuning_valid(new_tuning))
         {
-            std::scoped_lock lock(_tuning_mutex);
-            changed = !(new_tuning == _tuning_params);
-        }
-        if (changed && _is_motion_magic_valid(new_tuning))
-        {
-            _apply_tuning(new_tuning);
+            _tuning_params = new_tuning;
+            spdlog::info("KrakenComms: applied tuning kP={} kI={} kD={} kS={} kS_deadband={}deg kV={} kA={} "
+                         "cruise={}deg/s accel={}deg/s^2",
+                         new_tuning.kraken_P, new_tuning.kraken_I, new_tuning.kraken_D, new_tuning.kraken_S,
+                         new_tuning.kraken_S_deadband_deg, new_tuning.kraken_V, new_tuning.kraken_A,
+                         new_tuning.motion_magic_cruise_velocity_deg_s, new_tuning.motion_magic_acceleration_deg_s2);
         }
     }
 
-    bool KrakenComms::_is_motion_magic_valid(const tuningParams_s &tuning_params)
+    bool KrakenComms::_is_tuning_valid(const tuningParams_s &tuning_params)
     {
         if (tuning_params.motion_magic_cruise_velocity_deg_s <= 0.0f ||
             tuning_params.motion_magic_acceleration_deg_s2 <= 0.0f ||
-            tuning_params.motion_magic_jerk_deg_s3 < 0.0f)
+            tuning_params.kraken_S_deadband_deg < 0.0f)
         {
-            spdlog::error("KrakenComms: rejected Motion Magic limits cruise={}deg/s accel={}deg/s^2 jerk={}deg/s^3 "
-                          "(cruise and accel must be > 0, jerk >= 0)",
+            spdlog::error("KrakenComms: rejected tuning cruise={}deg/s accel={}deg/s^2 kS_deadband={}deg "
+                          "(cruise and accel must be > 0, kS_deadband >= 0)",
                           tuning_params.motion_magic_cruise_velocity_deg_s,
-                          tuning_params.motion_magic_acceleration_deg_s2,
-                          tuning_params.motion_magic_jerk_deg_s3);
+                          tuning_params.motion_magic_acceleration_deg_s2, tuning_params.kraken_S_deadband_deg);
             return false;
         }
         return true;
+    }
+
+    KrakenComms::TrapezoidalProfile::state_s KrakenComms::TrapezoidalProfile::step(float goal_deg, float max_vel_deg_s,
+                                                                                   float max_acc_deg_s2, float dt_s)
+    {
+        // Solve the whole remaining trapezoid from the current state each tick, then sample it dt ahead.
+        // Re-solving keeps it exact when the goal moves mid-move and lands precisely on the goal at the end.
+
+        // Pick the direction to travel: toward the goal from wherever we'd stop if we braked now
+        const float stop_offset_deg = _state.vel_deg_s * std::abs(_state.vel_deg_s) / (2.0f * max_acc_deg_s2);
+        const float dir = (goal_deg - _state.pos_deg - stop_offset_deg) >= 0.0f ? 1.0f : -1.0f;
+
+        // Work in a flipped frame where travel is always positive
+        const float dist_deg = dir * (goal_deg - _state.pos_deg);
+        const float v0 = dir * _state.vel_deg_s;
+        const float a = max_acc_deg_s2;
+
+        // Peak speed: cruise if there's room, otherwise the triangle peak where accel and decel meet
+        const float peak_vel = std::min(max_vel_deg_s, std::sqrt(std::max(0.0f, (2.0f * a * dist_deg + v0 * v0) / 2.0f)));
+
+        // Phase 1 ramps v0 to peak (may be a decel if v0 is above cruise or a speed up through zero if we were
+        // moving away), phase 2 cruises, phase 3 brakes to zero on the goal
+        const float a1 = peak_vel >= v0 ? a : -a;
+        const float t1 = std::abs(peak_vel - v0) / a;
+        const float d1 = (peak_vel * peak_vel - v0 * v0) / (2.0f * a1);
+        const float t3 = peak_vel / a;
+        const float d3 = peak_vel * peak_vel / (2.0f * a);
+        const float d2 = std::max(0.0f, dist_deg - d1 - d3);
+        const float t2 = peak_vel > 1e-6f ? d2 / peak_vel : 0.0f;
+
+        float pos, vel, acc;
+        if (dt_s >= t1 + t2 + t3)
+        {
+            _state = {.pos_deg = goal_deg, .vel_deg_s = 0.0f, .acc_deg_s2 = 0.0f};
+            return _state;
+        }
+        else if (dt_s <= t1)
+        {
+            pos = v0 * dt_s + 0.5f * a1 * dt_s * dt_s;
+            vel = v0 + a1 * dt_s;
+            acc = a1;
+        }
+        else if (dt_s <= t1 + t2)
+        {
+            pos = d1 + peak_vel * (dt_s - t1);
+            vel = peak_vel;
+            acc = 0.0f;
+        }
+        else
+        {
+            const float tau = dt_s - t1 - t2;
+            pos = d1 + d2 + peak_vel * tau - 0.5f * a * tau * tau;
+            vel = peak_vel - a * tau;
+            acc = -a;
+        }
+
+        _state = {.pos_deg = _state.pos_deg + dir * pos, .vel_deg_s = dir * vel, .acc_deg_s2 = dir * acc};
+        return _state;
+    }
+
+    void KrakenComms::TrapezoidalProfile::reset(float pos_deg, float vel_deg_s)
+    {
+        _state = {.pos_deg = pos_deg, .vel_deg_s = vel_deg_s, .acc_deg_s2 = 0.0f};
+    }
+
+    float KrakenComms::ColumnAnglePID::step(const tuningParams_s &tuning, const TrapezoidalProfile::state_s &reference,
+                                            float measured_deg, float measured_velocity_deg_s, float dt_s)
+    {
+        // Gains are in Slot0 units, so do the math in mechanism rotations
+        const float error_deg = reference.pos_deg - measured_deg;
+        const float error_rot = error_deg / 360.0f;
+        const float ref_vel_rps = reference.vel_deg_s / 360.0f;
+        const float ref_acc_rps2 = reference.acc_deg_s2 / 360.0f;
+
+        _integral_v += tuning.kraken_I * error_rot * dt_s;
+
+        const float p_v = tuning.kraken_P * error_rot;
+        // The profile velocity is continuous, so D on velocity error doesn't kick when the target steps
+        const float d_v = tuning.kraken_D * (ref_vel_rps - measured_velocity_deg_s / 360.0f);
+
+        float s_v = 0.0f;
+        if (reference.vel_deg_s != 0.0f)
+        {
+            s_v = std::copysign(tuning.kraken_S, reference.vel_deg_s);
+        }
+        else if (std::abs(error_deg) > tuning.kraken_S_deadband_deg)
+        {
+            s_v = std::copysign(tuning.kraken_S, error_deg);
+        }
+        const float ff_v = s_v + tuning.kraken_V * ref_vel_rps + tuning.kraken_A * ref_acc_rps2;
+
+        return p_v + _integral_v + d_v + ff_v;
+    }
+
+    void KrakenComms::ColumnAnglePID::reset()
+    {
+        _integral_v = 0.0f;
     }
 
     std::string KrakenComms::_describe_faults(bool sticky)
@@ -347,67 +450,9 @@ namespace comms
         return names.empty() ? "none" : fmt::format("{}", fmt::join(names, ", "));
     }
 
-    ctre::phoenix6::configs::Slot0Configs KrakenComms::_make_slot0_configs(const tuningParams_s &tuning_params)
-    {
-        ctre::phoenix6::configs::Slot0Configs slot0{};
-        slot0.kP = units::dimensionless::scalar_t{tuning_params.kraken_P};
-        slot0.kI = units::dimensionless::scalar_t{tuning_params.kraken_I};
-        slot0.kD = units::dimensionless::scalar_t{tuning_params.kraken_D};
-        slot0.kS = units::dimensionless::scalar_t{tuning_params.kraken_S};
-        slot0.kV = units::dimensionless::scalar_t{tuning_params.kraken_V};
-        slot0.kA = units::dimensionless::scalar_t{tuning_params.kraken_A};        return slot0;
-    }
-
-    ctre::phoenix6::configs::MotionMagicConfigs KrakenComms::_make_motion_magic_configs(const tuningParams_s &tuning_params)
-    {
-        ctre::phoenix6::configs::MotionMagicConfigs motion_magic{};
-        motion_magic.MotionMagicCruiseVelocity =
-            units::angular_velocity::turns_per_second_t{tuning_params.motion_magic_cruise_velocity_deg_s / 360.0};
-        motion_magic.MotionMagicAcceleration =
-            units::angular_acceleration::turns_per_second_squared_t{tuning_params.motion_magic_acceleration_deg_s2 / 360.0};
-        motion_magic.MotionMagicJerk =
-            units::angular_jerk::turns_per_second_cubed_t{tuning_params.motion_magic_jerk_deg_s3 / 360.0};
-        return motion_magic;
-    }
-
     units::angle::turn_t KrakenComms::_deg_to_turns(double degree)
     {
         return units::angle::turn_t{degree / 360.0};
-    }
-
-    bool KrakenComms::_apply_tuning(const tuningParams_s &new_tuning_params)
-    {
-        if (!_kraken)
-        {
-            return false;
-        }
-
-        auto &configurator = _kraken->GetConfigurator();
-
-        // Apply both groups before checking, so one failure doesn't skip the other
-        const auto slot0_status = configurator.Apply(_make_slot0_configs(new_tuning_params));
-        const auto motion_magic_status = configurator.Apply(_make_motion_magic_configs(new_tuning_params));
-
-        if (!slot0_status.IsOK() || !motion_magic_status.IsOK())
-        {
-            spdlog::error("KrakenComms: failed to apply tuning (slot0: {}, motion magic: {})",
-                          slot0_status.GetName(), motion_magic_status.GetName());
-            return false;
-        }
-
-        {
-            std::scoped_lock lock(_tuning_mutex);
-            _tuning_params = new_tuning_params;
-        }
-
-        spdlog::info("KrakenComms: applied tuning kP={} kI={} kD={} kS={} kV={} kA={} "
-                     "cruise={}deg/s accel={}deg/s^2 jerk={}deg/s^3",
-                     new_tuning_params.kraken_P, new_tuning_params.kraken_I, new_tuning_params.kraken_D,
-                     new_tuning_params.kraken_S, new_tuning_params.kraken_V, new_tuning_params.kraken_A,
-                     new_tuning_params.motion_magic_cruise_velocity_deg_s,
-                     new_tuning_params.motion_magic_acceleration_deg_s2,
-                     new_tuning_params.motion_magic_jerk_deg_s3);
-        return true;
     }
 
     void KrakenComms::_run()
@@ -417,8 +462,15 @@ namespace comms
         const auto period = microseconds(static_cast<long long>(1'000'000.0 / _config.send_rate_hz));
         auto next_tick = steady_clock::now();
 
-        ctre::phoenix6::controls::MotionMagicVoltage request{units::angle::turn_t{0.0}};
+        ctre::phoenix6::controls::VoltageOut request{units::voltage::volt_t{0.0}};
         request.WithEnableFOC(true);
+
+        TrapezoidalProfile profile{};
+        ColumnAnglePID pid{};
+        bool was_pid_active = false;
+        auto last_pid_tick = steady_clock::time_point{};
+        const auto steering_timeout = milliseconds(_config.steering_timeout_ms);
+        bool was_steering_fresh = false;
         ctre::phoenix6::controls::NeutralOut neutral{};
 
         // SetPosition blocks until the motor ACKs or this times out; keep it well under the enable timeout
@@ -466,29 +518,38 @@ namespace comms
                               "Motor set to neutral until restart.");
             }
 
-            if (!is_motor_seeded)
+            const auto vehicle_state = core::StateTracker::instance().get_latest_state_and_validity().first;
+            const float column_deg = vehicle_state.steering_column_angle_deg;
+            const bool is_steering_fresh = vehicle_state.updated_steering_estimator &&
+                                           steady_clock::now() - vehicle_state.last_steering_recv_time < steering_timeout;
+            if (is_steering_fresh != was_steering_fresh)
             {
-                if (steady_clock::now() - last_seed_attempt >= seed_retry_period)
+                if (is_steering_fresh)
                 {
-                    last_seed_attempt = steady_clock::now();
-                    const auto state_and_validity = core::StateTracker::instance().get_latest_state_and_validity();
-                    const auto bootup_steer_deg = state_and_validity.first.steering_column_angle_deg;
-                    if (state_and_validity.first.updated_steering_estimator)
-                    {
-                        is_motor_seeded = _kraken->SetPosition(_deg_to_turns(bootup_steer_deg), seed_timeout).IsOK();
-                    }
+                    spdlog::info("KrakenComms: steering column angle feedback recovered");
+                }
+                else
+                {
+                    spdlog::error("KrakenComms: FAULT steering column angle older than {} ms, motor set to neutral",
+                                  _config.steering_timeout_ms);
                 }
             }
+            was_steering_fresh = is_steering_fresh;
 
-            if (is_motor_faulted)
+            if (!is_motor_seeded && is_steering_fresh &&
+                steady_clock::now() - last_seed_attempt >= seed_retry_period)
+            {
+                last_seed_attempt = steady_clock::now();
+                is_motor_seeded = _kraken->SetPosition(_deg_to_turns(column_deg), seed_timeout).IsOK();
+            }
+
+            bool is_pid_active = false;
+
+            if (is_motor_faulted || !is_motor_seeded || !is_steering_fresh)
             {
                 _kraken->SetControl(neutral);
             }
-            else if (!is_motor_seeded)
-            {
-                _kraken->SetControl(neutral);
-            }
-            else 
+            else
             {
                 const bool is_sine_running = _test_mode && _use_sine_test;
                 const auto now = steady_clock::now();
@@ -508,8 +569,8 @@ namespace comms
                 const bool is_test_mode = _test_mode;
                 if (is_test_mode && !was_test_mode)
                 {
-                    // Hold where the motor is until something else commands an angle
-                    set_angle(get_measured_angle_deg());
+                    // Hold where the column is until something else commands an angle
+                    set_angle(column_deg);
                 }
                 was_test_mode = is_test_mode;
 
@@ -521,14 +582,39 @@ namespace comms
                         input_deg = sine_amplitude_deg * std::sin(sine_phase_rad);
                     }
                     const float target_deg = std::clamp(input_deg, _config.min_angle_deg, _config.max_angle_deg);
-                    _kraken->SetControl(request.WithPosition(_deg_to_turns(target_deg)));
+
+                    const float column_velocity_deg_s = static_cast<float>(_kraken->GetVelocity().GetValueAsDouble() * 360.0);
+
+                    if (!was_pid_active)
+                    {
+                        // Start the profile from where the column is so engaging doesn't jump the reference
+                        profile.reset(column_deg, column_velocity_deg_s);
+                        pid.reset();
+                    }
+                    const float dt_s = was_pid_active ? duration<float>(now - last_pid_tick).count()
+                                                      : duration<float>(period).count();
+                    last_pid_tick = now;
+
+                    tuningParams_s tuning{};
+                    {
+                        std::scoped_lock lock(_tuning_mutex);
+                        tuning = _tuning_params;
+                    }
+                    const auto reference = profile.step(target_deg, tuning.motion_magic_cruise_velocity_deg_s,
+                                                        tuning.motion_magic_acceleration_deg_s2, dt_s);
+                    const float output_v = pid.step(tuning, reference, column_deg, column_velocity_deg_s, dt_s);
+
+                    _kraken->SetControl(request.WithOutput(units::voltage::volt_t{output_v}));
                     last_target_deg = target_deg;
+                    is_pid_active = true;
                 }
                 else
                 {
                     _kraken->SetControl(neutral);
                 }
             }
+
+            was_pid_active = is_pid_active;
 
             const float measured_deg = get_measured_angle_deg();
 

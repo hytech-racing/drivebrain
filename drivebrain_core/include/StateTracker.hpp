@@ -10,6 +10,7 @@
 #include <string> 
 #include <fstream> 
 #include <thread>
+#include <chrono>
 #include <spdlog/spdlog.h>
 
 #include "hytech_msgs.pb.h"
@@ -227,6 +228,8 @@ namespace core {
         float steering_column_angle_deg;
         bool received_steering_angle = false;
         bool updated_steering_estimator = false;
+        /* steady_clock time the last steering_data message arrived, used to detect stale steering feedback */
+        std::chrono::steady_clock::time_point last_steering_recv_time{};
         ControllerOutput prev_controller_output;
         TireDynamics tire_dynamics;
         veh_vec<float> driver_torque;
