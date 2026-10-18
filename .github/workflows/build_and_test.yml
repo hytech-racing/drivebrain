@@ -40,7 +40,7 @@ jobs:
             -e ARTIFACTORY_TOKEN \
             -e ARTIFACTORY_URL \
             -e ARTIFACTORY_USERNAME \
-            dev ./build_script.sh
+            dev ./scripts/build_script.sh
 
       - name: Extract binary from build
         run: |
