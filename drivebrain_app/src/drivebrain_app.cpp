@@ -180,12 +180,6 @@ void DrivebrainApp::_loop() {
 
     auto state_and_validity = core::StateTracker::instance().get_latest_state_and_validity();
 
-#if !HOOTL_ENABLED
-    if (_kraken_comms && state_and_validity.second) {
-      _kraken_comms->set_angle(state_and_validity.first.steering_angle_deg);
-    }
-#endif
-
     constexpr size_t num_controllers = 2;
     auto& controller_manager = ControllerManager<control::Controller<core::ControllerOutput, core::VehicleState>, num_controllers>::instance();
     auto out_struct = controller_manager.step_active_controller(state_and_validity.first);

@@ -9,7 +9,7 @@
 
 #include <boost/signals2/connection.hpp>
 #include <ctre/phoenix6/TalonFX.hpp>
-#include <ctre/phoenix6/controls/PositionVoltage.hpp>
+#include <ctre/phoenix6/controls/MotionMagicVoltage.hpp>
 #include <ctre/phoenix6/controls/NeutralOut.hpp>
 #include "FoxgloveServer.hpp"
 
@@ -35,6 +35,7 @@ namespace comms
             float min_angle_deg;
             float max_angle_deg;
             float stator_current_limit_a;
+            float supply_current_limit_a;
             int enable_timeout_ms;
             float max_disagreement_deg;
         };
@@ -120,14 +121,26 @@ namespace comms
         */
         static bool _is_motion_magic_valid(const tuningParams_s &tuning_params);
 
+        /**
+         * @param sticky read sticky faults instead of currently active ones
+         * @return comma-separated names of the motor's faults, or "none"
+        */
+        std::string _describe_faults(bool sticky);
+
         config_s _config{};
 
         std::mutex _tuning_mutex;
         tuningParams_s _tuning_params{};
 
-        /* When true, _run() targets _test_angle_deg instead of set_angle() input */
+        /* When false, the motor is held in neutral */
         std::atomic<bool> _test_mode{false};
+        /* When true (and test mode is on), _run() targets _test_angle_deg instead of set_angle() input */
+        std::atomic<bool> _use_test_angle{false};
         std::atomic<float> _test_angle_deg{0.0f};
+        /* When true (and test mode is on), _run() targets a hard coded sinusoid, overriding the other inputs */
+        std::atomic<bool> _use_sine_test{false};
+        /* Multiplier on the sine test frequency, 1.0 is the base 4 s period */
+        std::atomic<float> _sine_speed_scale{1.0f};
         boost::signals2::scoped_connection _param_connection;
 
         std::unique_ptr<ctre::phoenix6::hardware::TalonFX> _kraken;

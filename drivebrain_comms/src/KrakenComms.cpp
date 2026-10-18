@@ -2,6 +2,10 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <vector>
+
+#include <fmt/ranges.h>
 
 #include <ctre/phoenix6/unmanaged/Unmanaged.hpp>
 #include <google/protobuf/wrappers.pb.h>
@@ -36,6 +40,7 @@ namespace comms
         auto min_angle_deg = foxglove.get_param<float>("kraken_comms/min_angle_deg");
         auto max_angle_deg = foxglove.get_param<float>("kraken_comms/max_angle_deg");
         auto stator_current_limit_a = foxglove.get_param<float>("kraken_comms/stator_current_limit_a");
+        auto supply_current_limit_a = foxglove.get_param<float>("kraken_comms/supply_current_limit_a");
         auto enable_timeout_ms = foxglove.get_param<int>("kraken_comms/enable_timeout_ms");
         auto max_disagreement_deg = foxglove.get_param<float>("kraken_comms/max_disagreement_deg");
 
@@ -50,7 +55,7 @@ namespace comms
         auto motion_magic_jerk_deg_s3 = foxglove.get_param<float>("kraken_comms/mm_jerk_deg_s3");
 
         if (!(device_id && canbus_name && send_rate_hz && reduction && min_angle_deg && max_angle_deg &&
-              stator_current_limit_a && enable_timeout_ms && max_disagreement_deg &&
+              stator_current_limit_a && supply_current_limit_a && enable_timeout_ms && max_disagreement_deg &&
               kraken_P && kraken_I && kraken_D && kraken_S && kraken_V && kraken_A &&
               motion_magic_cruise_velocity_deg_s && motion_magic_acceleration_deg_s2 && motion_magic_jerk_deg_s3))
         {
@@ -66,6 +71,7 @@ namespace comms
             .min_angle_deg = min_angle_deg.value(),
             .max_angle_deg = max_angle_deg.value(),
             .stator_current_limit_a = stator_current_limit_a.value(),
+            .supply_current_limit_a = supply_current_limit_a.value(),
             .enable_timeout_ms = enable_timeout_ms.value(),
             .max_disagreement_deg = max_disagreement_deg.value(),
         };
@@ -138,6 +144,8 @@ namespace comms
 
         talon_config.CurrentLimits.StatorCurrentLimit = units::current::ampere_t{_config.stator_current_limit_a};
         talon_config.CurrentLimits.StatorCurrentLimitEnable = true;
+        talon_config.CurrentLimits.SupplyCurrentLimit = units::current::ampere_t{_config.supply_current_limit_a};
+        talon_config.CurrentLimits.SupplyCurrentLimitEnable = true;
 
         talon_config.SoftwareLimitSwitch.ForwardSoftLimitEnable = true;
         talon_config.SoftwareLimitSwitch.ForwardSoftLimitThreshold = _deg_to_turns(_config.max_angle_deg);
@@ -151,11 +159,28 @@ namespace comms
             return false;
         }
 
+        // Sticky faults survive until cleared, so these may be left over from before this run
+        spdlog::info("KrakenComms: sticky faults at startup: {}", _describe_faults(true));
+
         _test_mode = foxglove.get_param<bool>("kraken_comms/test_mode").value_or(false);
+        _use_test_angle = foxglove.get_param<bool>("kraken_comms/use_test_angle").value_or(false);
         _test_angle_deg = foxglove.get_param<float>("kraken_comms/test_angle_deg").value_or(0.0f);
+        _use_sine_test = foxglove.get_param<bool>("kraken_comms/use_sine_test").value_or(false);
+        _sine_speed_scale = foxglove.get_param<float>("kraken_comms/sine_speed_scale").value_or(1.0f);
         if (_test_mode)
         {
-            spdlog::warn("KrakenComms: test_mode enabled, targeting {} deg", _test_angle_deg.load());
+            if (_use_sine_test)
+            {
+                spdlog::warn("KrakenComms: test_mode enabled, targeting sine test at {}x speed", _sine_speed_scale.load());
+            }
+            else if (_use_test_angle)
+            {
+                spdlog::warn("KrakenComms: test_mode enabled, targeting test angle {} deg", _test_angle_deg.load());
+            }
+            else
+            {
+                spdlog::warn("KrakenComms: test_mode enabled, targeting commanded angle");
+            }
         }
 
         _param_connection = foxglove.register_param_callback(
@@ -215,6 +240,29 @@ namespace comms
             _test_mode = *is_test_mode_on;
         }
 
+        if (auto is_test_angle_on = core::process_param_update<bool>(new_param_map, "kraken_comms/use_test_angle"))
+        {
+            if (*is_test_angle_on != _use_test_angle.load())
+            {
+                spdlog::warn("KrakenComms: use_test_angle {}", *is_test_angle_on ? "enabled" : "disabled");
+            }
+            _use_test_angle = *is_test_angle_on;
+        }
+
+        if (auto is_sine_test_on = core::process_param_update<bool>(new_param_map, "kraken_comms/use_sine_test"))
+        {
+            if (*is_sine_test_on != _use_sine_test.load())
+            {
+                spdlog::warn("KrakenComms: use_sine_test {}", *is_sine_test_on ? "enabled" : "disabled");
+            }
+            _use_sine_test = *is_sine_test_on;
+        }
+
+        if (auto new_sine_speed_scale = core::process_param_update<float>(new_param_map, "kraken_comms/sine_speed_scale"))
+        {
+            _sine_speed_scale = *new_sine_speed_scale;
+        }
+
         if (auto new_test_angle = core::process_param_update<float>(new_param_map, "kraken_comms/test_angle_deg"))
         {
             _test_angle_deg = *new_test_angle;
@@ -269,6 +317,36 @@ namespace comms
         return true;
     }
 
+    std::string KrakenComms::_describe_faults(bool sticky)
+    {
+        std::vector<std::string> names;
+
+#define KRAKEN_CHECK_FAULT(name)                                                                      \
+        if ((sticky ? _kraken->GetStickyFault_##name() : _kraken->GetFault_##name()).GetValue()) \
+        {                                                                                            \
+            names.emplace_back(#name);                                                               \
+        }
+
+        KRAKEN_CHECK_FAULT(Hardware)
+        KRAKEN_CHECK_FAULT(ProcTemp)
+        KRAKEN_CHECK_FAULT(DeviceTemp)
+        KRAKEN_CHECK_FAULT(Undervoltage)
+        KRAKEN_CHECK_FAULT(BootDuringEnable)
+        KRAKEN_CHECK_FAULT(UnlicensedFeatureInUse)
+        KRAKEN_CHECK_FAULT(BridgeBrownout)
+        KRAKEN_CHECK_FAULT(OverSupplyV)
+        KRAKEN_CHECK_FAULT(UnstableSupplyV)
+        KRAKEN_CHECK_FAULT(ForwardSoftLimit)
+        KRAKEN_CHECK_FAULT(ReverseSoftLimit)
+        KRAKEN_CHECK_FAULT(StatorCurrLimit)
+        KRAKEN_CHECK_FAULT(SupplyCurrLimit)
+        KRAKEN_CHECK_FAULT(StaticBrakeDisabled)
+
+#undef KRAKEN_CHECK_FAULT
+
+        return names.empty() ? "none" : fmt::format("{}", fmt::join(names, ", "));
+    }
+
     ctre::phoenix6::configs::Slot0Configs KrakenComms::_make_slot0_configs(const tuningParams_s &tuning_params)
     {
         ctre::phoenix6::configs::Slot0Configs slot0{};
@@ -277,8 +355,7 @@ namespace comms
         slot0.kD = units::dimensionless::scalar_t{tuning_params.kraken_D};
         slot0.kS = units::dimensionless::scalar_t{tuning_params.kraken_S};
         slot0.kV = units::dimensionless::scalar_t{tuning_params.kraken_V};
-        slot0.kA = units::dimensionless::scalar_t{tuning_params.kraken_A};
-        return slot0;
+        slot0.kA = units::dimensionless::scalar_t{tuning_params.kraken_A};        return slot0;
     }
 
     ctre::phoenix6::configs::MotionMagicConfigs KrakenComms::_make_motion_magic_configs(const tuningParams_s &tuning_params)
@@ -340,7 +417,7 @@ namespace comms
         const auto period = microseconds(static_cast<long long>(1'000'000.0 / _config.send_rate_hz));
         auto next_tick = steady_clock::now();
 
-        ctre::phoenix6::controls::PositionVoltage request{units::angle::turn_t{0.0}};
+        ctre::phoenix6::controls::MotionMagicVoltage request{units::angle::turn_t{0.0}};
         request.WithEnableFOC(true);
         ctre::phoenix6::controls::NeutralOut neutral{};
 
@@ -358,6 +435,21 @@ namespace comms
         const auto telem_period = milliseconds(20);
         auto last_telem = steady_clock::time_point{};
         float last_target_deg = 0.0f;
+
+        // Fault changes are coalesced so a limit fault toggling every tick doesn't flood the log
+        const auto fault_log_period = milliseconds(500);
+        auto last_fault_log = steady_clock::time_point{};
+        int last_logged_fault_field = 0;
+        bool is_fault_signal_ok = true;
+
+        // Sine test sweeps -80 to 80 deg, restarting from 0 deg each time it is enabled.
+        // Phase is accumulated per tick so changing sine_speed_scale mid-test doesn't jump the target.
+        constexpr float sine_amplitude_deg = 80.0f;
+        constexpr float sine_period_s = 4.0f;
+        bool was_sine_running = false;
+        bool was_test_mode = false;
+        float sine_phase_rad = 0.0f;
+        auto last_sine_tick = steady_clock::time_point{};
 
         while (_running)
         {
@@ -398,9 +490,37 @@ namespace comms
             }
             else 
             {
-                if (_test_mode)
+                const bool is_sine_running = _test_mode && _use_sine_test;
+                const auto now = steady_clock::now();
+                if (is_sine_running && !was_sine_running)
                 {
-                    const float target_deg = std::clamp(_angle_deg, _config.min_angle_deg, _config.max_angle_deg);
+                    sine_phase_rad = 0.0f;
+                }
+                else if (is_sine_running)
+                {
+                    const float dt_s = duration<float>(now - last_sine_tick).count();
+                    sine_phase_rad += 2.0f * static_cast<float>(M_PI) * _sine_speed_scale.load() * dt_s / sine_period_s;
+                    sine_phase_rad = std::fmod(sine_phase_rad, 2.0f * static_cast<float>(M_PI));
+                }
+                last_sine_tick = now;
+                was_sine_running = is_sine_running;
+
+                const bool is_test_mode = _test_mode;
+                if (is_test_mode && !was_test_mode)
+                {
+                    // Hold where the motor is until something else commands an angle
+                    set_angle(get_measured_angle_deg());
+                }
+                was_test_mode = is_test_mode;
+
+                if (is_test_mode)
+                {
+                    float input_deg = _use_test_angle ? _test_angle_deg.load() : get_commanded_angle_deg();
+                    if (is_sine_running)
+                    {
+                        input_deg = sine_amplitude_deg * std::sin(sine_phase_rad);
+                    }
+                    const float target_deg = std::clamp(input_deg, _config.min_angle_deg, _config.max_angle_deg);
                     _kraken->SetControl(request.WithPosition(_deg_to_turns(target_deg)));
                     last_target_deg = target_deg;
                 }
@@ -414,15 +534,53 @@ namespace comms
 
             if (steady_clock::now() - last_telem >= telem_period)
             {
+                auto &fault_signal = _kraken->GetFaultField();
+                if (!fault_signal.GetStatus().IsOK())
+                {
+                    if (is_fault_signal_ok)
+                    {
+                        spdlog::error("KrakenComms: FAULT can't read motor faults ({}), motor may be off the bus",
+                                      fault_signal.GetStatus().GetName());
+                    }
+                    is_fault_signal_ok = false;
+                }
+                else
+                {
+                    if (!is_fault_signal_ok)
+                    {
+                        spdlog::info("KrakenComms: motor fault signal recovered");
+                    }
+                    is_fault_signal_ok = true;
+
+                    const int fault_field = fault_signal.GetValue();
+                    if (fault_field != last_logged_fault_field &&
+                        steady_clock::now() - last_fault_log >= fault_log_period)
+                    {
+                        if (fault_field == 0)
+                        {
+                            spdlog::info("KrakenComms: motor faults cleared");
+                        }
+                        else
+                        {
+                            spdlog::warn("KrakenComms: motor faults active: {}", _describe_faults(false));
+                        }
+                        last_logged_fault_field = fault_field;
+                        last_fault_log = steady_clock::now();
+                    }
+                }
+
                 std::shared_ptr<hytech_msgs::KrakenInfo> msg_out = std::make_shared<hytech_msgs::KrakenInfo>();
 
                 msg_out->set_pos_rotation(static_cast<float>(_kraken->GetPosition().GetValueAsDouble()));
                 msg_out->set_steering_angle_degs(measured_deg);
+                msg_out->set_velocity_deg_per_s(static_cast<float>(_kraken->GetVelocity().GetValueAsDouble() * 360.0));
                 msg_out->set_setpoint_angle_degs(last_target_deg);
                 msg_out->set_stator_current(static_cast<float>(_kraken->GetStatorCurrent().GetValueAsDouble()));
                 msg_out->set_supply_current(static_cast<float>(_kraken->GetSupplyCurrent().GetValueAsDouble()));
                 msg_out->set_temp_c(static_cast<float>(_kraken->GetDeviceTemp().GetValueAsDouble()));
                 msg_out->set_applied_voltage(_kraken->GetMotorVoltage().GetValue().value());
+                msg_out->set_supply_voltage(static_cast<float>(_kraken->GetSupplyVoltage().GetValueAsDouble()));
+                msg_out->set_active_faults(fault_signal.GetValue() == 0 ? "none" : _describe_faults(false));
 
                 last_telem = steady_clock::now();
                 core::log(msg_out);
