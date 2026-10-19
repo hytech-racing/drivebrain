@@ -69,6 +69,17 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(HT_CAN)
 
+# see if tracy can be available through conan
+FetchContent_Declare(
+    tracy 
+    GIT_REPOSITORY https://github.com/wolfpld/tracy.git
+    GIT_TAG master
+    GIT_SHALLOW TRUE
+    GIT_PROGRESS TRUE
+)
+FetchContent_MakeAvailable(tracy)
+
+
 find_package(OusterSDK REQUIRED)
 
 #################################
@@ -124,6 +135,7 @@ target_link_libraries(drivebrain PUBLIC
     opencv_imgproc
     opencv_imgcodecs
     drivebrain_estimation
+    TracyClient
 )
 
 if(JETSON)

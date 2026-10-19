@@ -16,6 +16,8 @@
 #include "hytech_msgs.pb.h"
 #include <BlackflyComms.hpp>
 
+#include <Tracy.hpp>
+
 class DrivebrainApp {
 public:
   /**
