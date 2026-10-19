@@ -3,7 +3,9 @@
 
 Camera <name>/raw messages become ordinary foxglove.RawImage Bayer RGGB8
 messages. Ouster range images become foxglove.PointCloud messages on
-ouster/points. All other messages, plus attachments and metadata, are copied.
+ouster/points. When a recording has no Ouster calibration message, the
+metadata captured in 235.mcap is used. All other messages, plus attachments
+and metadata, are copied.
 
 Install Python dependencies with:
     python3 -m pip install -r requirements.txt
@@ -36,6 +38,7 @@ import zstandard as zstd
 
 CAMERA_ENCODING = "bayer_rggb8"
 CALIBRATION_TOPIC = "ouster/calibration"
+FALLBACK_CALIBRATION = Path(__file__).with_name("ouster_calibration.json")
 RANGE_TOPIC = "ouster/range"
 POINTS_TOPIC = "ouster/points"
 MAX_FRAME_BYTES = 512 * 1024 * 1024
@@ -80,6 +83,13 @@ def decode_proto(factory: DecoderFactory, schema, channel, data: bytes):
     return decoder(data)
 
 
+def calibration_lut(metadata_json: str):
+    """Use the sensor's own metadata to map range pixels into XYZ points."""
+    info = core.SensorInfo(metadata_json)
+    # This matches C++ XYZLut(info, true) and cartesianT<float>.
+    return core.XYZLutFloat(info, use_extrinsics=True)
+
+
 def pointcloud_schema() -> bytes:
     """Build the MCAP protobuf descriptor set from Foxglove's PointCloud class."""
     files = {}
@@ -107,7 +117,18 @@ def convert(input_path: Path, output_path: Path) -> dict[str, int]:
 
             schema_ids: dict[int, int] = {} # 
             channel_ids: dict[int, int] = {} # link topic to a schema
-            lut = None
+            embedded_calibration = next(reader.iter_messages(topics=[CALIBRATION_TOPIC]), None)
+            if embedded_calibration is None:
+                lut = calibration_lut(FALLBACK_CALIBRATION.read_text(encoding="utf-8"))
+                print(f"No {CALIBRATION_TOPIC} message; using {FALLBACK_CALIBRATION}")
+            else:
+                calibration_schema, calibration_channel, calibration_message = embedded_calibration
+                calibration = decode_proto(
+                    decoder_factory, calibration_schema, calibration_channel, calibration_message.data
+                )
+                if calibration.encoding != "ouster_sensor_metadata_json":
+                    raise ValueError("unexpected Ouster calibration encoding")
+                lut = calibration_lut(calibration.data.decode("utf-8"))
 
             with output_path.open("xb") as destination:
                 created_output = True
@@ -145,9 +166,7 @@ def convert(input_path: Path, output_path: Path) -> dict[str, int]:
                             calibration = decode_proto(decoder_factory, schema, channel, payload)
                             if calibration.encoding != "ouster_sensor_metadata_json":
                                 raise ValueError("unexpected Ouster calibration encoding")
-                            info = core.SensorInfo(calibration.data.decode("utf-8"))
-                            # This matches C++ XYZLut(info, true) and cartesianT<float>.
-                            lut = core.XYZLutFloat(info, use_extrinsics=True)
+                            lut = calibration_lut(calibration.data.decode("utf-8"))
 
                         elif topic.startswith("blackfly_") and topic.endswith("/raw"):
                             image = decode_proto(decoder_factory, schema, channel, payload)
@@ -166,8 +185,6 @@ def convert(input_path: Path, output_path: Path) -> dict[str, int]:
                             image = decode_proto(decoder_factory, schema, channel, payload)
                             if image.encoding:
                                 raise ValueError(f"unexpected range encoding {image.encoding!r}")
-                            if lut is None:
-                                raise ValueError("no preceding ouster/calibration message")
                             if (image.width, image.height) != (lut.w, lut.h):
                                 raise ValueError(
                                     f"range size {image.width}x{image.height} differs "
