@@ -168,6 +168,7 @@ namespace comms
         // Sticky faults survive until cleared, so these may be left over from before this run
         spdlog::info("KrakenComms: sticky faults at startup: {}", _describe_faults(true));
 
+        _enable_output = foxglove.get_param<bool>("kraken_comms/enable_output").value_or(true);
         _test_mode = foxglove.get_param<bool>("kraken_comms/test_mode").value_or(false);
         _use_test_angle = foxglove.get_param<bool>("kraken_comms/use_test_angle").value_or(false);
         _test_angle_deg = foxglove.get_param<float>("kraken_comms/test_angle_deg").value_or(0.0f);
@@ -237,6 +238,15 @@ namespace comms
 
     void KrakenComms::_handle_param_updates(const std::unordered_map<std::string, core::DBParam> &new_param_map)
     {
+        if (auto enable_output = core::process_param_update<bool>(new_param_map, "kraken_comms/enable_output"))
+        {
+            if (*enable_output != _enable_output.load())
+            {
+                spdlog::warn("KrakenComms: enable_output {}", *enable_output ? "on" : "off");
+            }
+            _enable_output = *enable_output;
+        }
+
         if (auto is_test_mode_on = core::process_param_update<bool>(new_param_map, "kraken_comms/test_mode"))
         {
             if (*is_test_mode_on != _test_mode.load())
@@ -508,7 +518,10 @@ namespace comms
             next_tick += period;
 
             // Motor disables itself if this stops being fed
-            ctre::phoenix::unmanaged::FeedEnable(_config.enable_timeout_ms);
+            if (_enable_output)
+            {
+                ctre::phoenix::unmanaged::FeedEnable(_config.enable_timeout_ms);
+            }
 
 
             if (is_motor_seeded && !is_motor_faulted && _kraken->HasResetOccurred())

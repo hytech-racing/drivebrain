@@ -186,6 +186,8 @@ namespace comms
         std::mutex _tuning_mutex;
         tuningParams_s _tuning_params{};
 
+        /* When false, the enable is not fed so the Talon stays disabled (required to upload a license from Tuner X) */
+        std::atomic<bool> _enable_output{true};
         /* When false, the motor is held in neutral */
         std::atomic<bool> _test_mode{false};
         /* When true (and test mode is on), _run() targets _test_angle_deg instead of set_angle() input */

@@ -80,6 +80,7 @@
         "stator_current_limit_a": 120.0,
         "supply_current_limit_a": 40.0,
         "enable_timeout_ms": 100,
+        "enable_output": true,
         "steering_timeout_ms": 100,
         "kp": 60.0,
         "ki": 0.0,
