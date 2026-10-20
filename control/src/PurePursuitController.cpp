@@ -1,5 +1,6 @@
 #include <StateTracker.hpp>
 #include <PurePursuitController.h>
+#include <SteeringEstimator.h>
 
 #include <algorithm>
 #include <fstream>
@@ -7,6 +8,8 @@
 #include <stdexcept>
 #include <string>
 #include <variant>
+
+#define WHEELBASE 1.530f
 
 namespace control {
 namespace driverless {
@@ -103,6 +106,11 @@ float PurePursuitController::getSteeringCommand(float curvature, float wheelbase
     return std::atan(curvature * wheelbase);
 }
 
+float PurePursuitController::yaw_to_column_angle(float steering_angle_rads) {
+    static const estimation::SteeringEstimator estimator;
+    return static_cast<float>(estimator.steering_angle_rads_to_column_angle_degs(steering_angle_rads));
+}
+
 bool PurePursuitController::init() {
     // stub, needs to fetch and validate k_p and wheelbase
     return true;
@@ -131,11 +139,13 @@ std::optional<float> PurePursuitController::step_controller(const core::VehicleS
 
     core::xy_vec<float> target = selectGoalPoint(goal_point_candidates, vehicle_pos, vehicle_heading);
     const float curvature = getCurvature(vehicle_pos, vehicle_heading, target);
-    //std::cout << "Curvature: " << curvature << "\n";
+    
+    // Front-wheel steering angle in radians.
     const float steering_command = getSteeringCommand(curvature, wheelbase_);
     
     if (std::isfinite(steering_command)) {        
-        output.emplace( steering_command * 180.0f / static_cast<float>(M_PI)); 
+        const float steering_command_column_angle = yaw_to_column_angle(steering_command);
+        output.emplace(steering_command_column_angle);
     }
 
     LoggingData data {
