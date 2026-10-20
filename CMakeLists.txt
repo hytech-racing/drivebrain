@@ -52,14 +52,6 @@ endif()
 # Upstreams (non-conan)
 #################################
 FetchContent_Declare(
-    HT_Proto
-    GIT_REPOSITORY https://github.com/hytech-racing/HT_proto.git
-    GIT_TAG 47c7026a328c71d4566d0c9eadc5c53f8ddbc94f
-)
-FetchContent_MakeAvailable(HT_Proto)
-# add_subdirectory(../HT_proto ${CMAKE_BINARY_DIR}/HT_proto)
-
-FetchContent_Declare(
     vn_driver_lib
     GIT_REPOSITORY https://github.com/hytech-racing/vn_driver_lib.git
     GIT_TAG 0d40803
