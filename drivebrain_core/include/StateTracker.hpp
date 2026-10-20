@@ -7,6 +7,9 @@
 #include <google/protobuf/descriptor.pb.h>
 #include <google/protobuf/util/time_util.h>
 #include <vector> 
+#include <array>
+#include <chrono>
+#include <mutex>
 #include <string> 
 #include <fstream> 
 #include <thread>
@@ -219,7 +222,8 @@ namespace core {
         xyz_vec<float> current_body_accel_mss;
         xyz_vec<float> current_angular_rate_rads;
         ypr_vec<float> current_ypr_rad;
-        veh_vec<float> current_rpms;
+        veh_vec<float> current_rpms; // Measured motor RPM, inv1/2/3/4 = FL/FR/RL/RR
+        bool wheel_speeds_valid = false;
         veh_vec<float> motor_overload_percentages;
         bool state_is_valid;
         int prev_MCU_recv_millis;
@@ -331,7 +335,9 @@ namespace core {
             VehicleState _vehicle_state = { };
             RawInputData _raw_input_data = { };
             std::mutex _state_mutex;
-            std::array<std::chrono::microseconds, 4> _timestamp_array;
+            std::array<std::chrono::microseconds, 4> _timestamp_array{};
+            std::array<std::chrono::steady_clock::time_point, 4> _wheel_speed_timestamps{};
+            std::chrono::steady_clock::time_point _rtd_timestamp{};
 
             /* Private constructor called by the init method */
             StateTracker() {}; 

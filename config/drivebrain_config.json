@@ -20,6 +20,16 @@
         "dt_rate_hz": 1000.0,
         "apply_vectoring_in_regen": true
     },
+    "LaunchController": {
+        "testing_enabled": false,
+        "brake_requested": false,
+        "acceleration_mps2": 0.5,
+        "accel_distance_m": 5.0,
+        "braking_distance_m": 5.0,
+        "max_speed_mps": 2.0,
+        "max_torque_nm": 2.0,
+        "max_regen_torque_nm": 1.0
+    },
     "vn_driver": {
         "device_name": "/dev/ttyUSB0",
         "baud_rate": 921600, 
@@ -45,7 +55,7 @@
     },
     "DrivebrainControllerInterface": {
         "should_log": true, 
-        "controller_index": 1
+        "controller_index": 0
     },
     "FzEstimator": {
         "Q_gain": 0.1,

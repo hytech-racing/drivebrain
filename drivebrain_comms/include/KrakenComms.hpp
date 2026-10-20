@@ -79,6 +79,9 @@ namespace comms
         */
         void set_angle(float angle_deg);
 
+        // Launch mode takes priority over the Foxglove angle test override.
+        void set_straight_hold(bool enabled) { _straight_hold = enabled; }
+
         /**
          * @return the currently commanded angle in degrees
         */
@@ -126,6 +129,7 @@ namespace comms
         tuningParams_s _tuning_params{};
 
         /* When true, _run() targets _test_angle_deg instead of set_angle() input */
+        std::atomic<bool> _straight_hold{false};
         std::atomic<bool> _test_mode{false};
         std::atomic<float> _test_angle_deg{0.0f};
         boost::signals2::scoped_connection _param_connection;

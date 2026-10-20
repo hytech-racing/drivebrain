@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <mutex>
 #include <memory>
 #include <thread>
 #include <chrono>
@@ -61,6 +62,7 @@ public:
      * Replaces the controllers with new ones
      */
     void update_controllers(std::array<std::shared_ptr<ControllerType>, NumControllers> controllers) {
+        std::scoped_lock lock(_controller_mutex);
         _controllers = controllers;
     }
 
@@ -77,6 +79,7 @@ public:
      * @return The period in seconds for the active controller
      */
     float get_active_controller_timestep() {
+        std::scoped_lock lock(_controller_mutex);
         return _controllers[_current_controller_index]->get_dt_sec();
     }
 
@@ -85,6 +88,7 @@ public:
      * @return The index of the active controller
      */
     int get_active_controller_index() {
+        std::scoped_lock lock(_controller_mutex);
         return _current_controller_index;
     }
 
@@ -94,6 +98,7 @@ public:
      * @return ControllerManagerState types: ControllerManagerStatus, ControllerOutput
      */
     ControllerManagerState get_current_ctr_manager_state() {
+        std::scoped_lock lock(_controller_mutex);
         return _current_ctr_manager_state;
     }
 
@@ -104,6 +109,7 @@ public:
      */
     core::ControllerOutput step_active_controller(const core::VehicleState& input)
     {
+        std::scoped_lock lock(_controller_mutex);
         if(!_controllers[_current_controller_index] || _controllers[_current_controller_index] == nullptr) {
             _current_ctr_manager_state.current_status = core::ControllerManagerStatus::ERROR_NULLPTR_CONTROLLER;
             return {std::monostate()};
@@ -138,6 +144,7 @@ private:
      */
     core::ControllerManagerStatus _can_switch_controller(const core::VehicleState &current_state, const core::ControllerOutput &previous_output, const core::ControllerOutput &next_controller_output);
 
+    std::mutex _controller_mutex;
     size_t _current_controller_index = 0;
     core::ControllerManagerState _current_ctr_manager_state;
     std::array<std::shared_ptr<ControllerType>, NumControllers> _controllers;
@@ -154,4 +161,11 @@ private:
 
 #include "ControllerManager.tpp"
 
+}
+
+// Keep the app and Foxglove interface on the same manager specialization.
+namespace core {
+inline constexpr size_t NUM_CONTROLLERS = 2;
+inline constexpr size_t LAUNCH_CONTROLLER_INDEX = 1;
+using VehicleControllerManager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, NUM_CONTROLLERS>;
 }

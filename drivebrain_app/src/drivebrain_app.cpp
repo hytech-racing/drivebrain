@@ -52,10 +52,6 @@ void DrivebrainApp::run() {
 
   spdlog::info("Constructed logging singletons");
 
-  core::DrivebrainControllerInterface::create();
-
-  spdlog::info("Constructed drivebrain controller interface");
-
   _acu_core_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::CCUData>>(_io_context, 6666);
   _acu_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::ACUAllData>>(_io_context, 7766);
   _vcr_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::VCRData_s>>(_io_context, 9999);
@@ -114,21 +110,26 @@ void DrivebrainApp::run() {
 #endif
 
   // Initialize controllers
-  const size_t num_controllers = 1;
+  const size_t num_controllers = core::NUM_CONTROLLERS;
   _mode1 = std::make_shared<control::LoadCellTorqueController>();
   if (!_mode1->init()) {
     spdlog::error("Failed to initialize mode 1");
   }
 
-  std::array<std::shared_ptr<control::Controller<core::ControllerOutput, core::VehicleState>>, num_controllers> controllers{_mode1};
+  _launch_controller = std::make_shared<control::LaunchController>();
+  if (!_launch_controller->init()) {
+    throw std::runtime_error("Failed to initialize launch controller");
+  }
+  std::array<std::shared_ptr<control::Controller<core::ControllerOutput, core::VehicleState>>, num_controllers> controllers{_mode1, _launch_controller};
 
   // Create controller manager instance
-  ControllerManager<control::Controller<ControllerOutput, VehicleState>, num_controllers>::create(controllers);
-  if(!ControllerManager<control::Controller<ControllerOutput, VehicleState>, num_controllers>::instance().init()) {
+  core::VehicleControllerManager::create(controllers);
+  if(!core::VehicleControllerManager::instance().init()) {
     throw std::runtime_error("Failed to initialize controller manager");
   }
 
   spdlog::info("Constructed controller manager");
+  core::DrivebrainControllerInterface::create();
 
   running = true;
   _io_context_thread = std::thread([this]() {
@@ -175,12 +176,16 @@ void DrivebrainApp::_loop() {
     auto state_and_validity = core::StateTracker::instance().get_latest_state_and_validity();
 
 #if !HOOTL_ENABLED
-    if (_kraken_comms && state_and_validity.second) {
-      _kraken_comms->set_angle(state_and_validity.first.steering_angle_deg);
+    if (_kraken_comms) {
+      _kraken_comms->set_straight_hold(
+          core::VehicleControllerManager::instance().get_active_controller_index() == core::LAUNCH_CONTROLLER_INDEX);
+      if (state_and_validity.second) {
+        _kraken_comms->set_angle(state_and_validity.first.steering_angle_deg);
+      }
     }
 #endif
 
-    auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, 1>::instance();
+    auto& controller_manager = core::VehicleControllerManager::instance();
     auto out_struct = controller_manager.step_active_controller(state_and_validity.first);
 
     std::variant<core::SpeedControlOut, core::TorqueControlOut, std::monostate> cmd_out = out_struct.out;

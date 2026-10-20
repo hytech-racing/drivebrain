@@ -11,6 +11,11 @@ namespace control {
     class Controller {
     public:
         Controller() = default;
+        virtual ~Controller() = default;
+
+        // Preview must not arm or advance controllers with internal run state.
+        virtual ControllerResult preview_controller(const ControllerInput& in) { return step_controller(in); }
+        virtual void reset() {}
         
         /**
          * @brief get the desired time delta / discrete time in seconds of the controller

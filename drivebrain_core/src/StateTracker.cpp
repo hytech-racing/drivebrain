@@ -67,6 +67,7 @@ void StateTracker::handle_receive_protobuf_message(std::shared_ptr<google::proto
         {
             std::unique_lock lk(_state_mutex);
             _vehicle_state.is_ready_to_drive = is_rtd;
+            _rtd_timestamp = std::chrono::steady_clock::now();
         }
     } else if (msg->GetDescriptor() == hytech_msgs::ACUAllData::descriptor()) {
         auto in_msg = std::static_pointer_cast<hytech_msgs::ACUAllData>(msg);
@@ -90,6 +91,13 @@ std::pair<core::VehicleState, bool> StateTracker::get_latest_state_and_validity(
         std::unique_lock lk(_state_mutex);
         _vehicle_state.state_is_valid = state_is_valid;
         current_state = _vehicle_state;
+        const auto now = std::chrono::steady_clock::now();
+        current_state.wheel_speeds_valid = std::all_of(
+            _wheel_speed_timestamps.begin(), _wheel_speed_timestamps.end(),
+            [now](auto stamp) { return stamp.time_since_epoch().count() != 0 &&
+                now - stamp <= std::chrono::milliseconds(200); });
+        current_state.is_ready_to_drive = current_state.is_ready_to_drive &&
+            now - _rtd_timestamp <= std::chrono::milliseconds(500);
     }
 
     return {current_state, state_is_valid};
@@ -106,6 +114,7 @@ void StateTracker::_handle_set_inverter_dynamics(std::shared_ptr<google::protobu
         _raw_input_data.raw_inverter_torques.set_from_index<ind>(in_msg->actual_torque_nm());
         _raw_input_data.raw_inverter_power.set_from_index<ind>(in_msg->actual_power_w());
         _vehicle_state.current_rpms.set_from_index<ind>(in_msg->actual_speed_rpm());
+        _wheel_speed_timestamps[ind] = std::chrono::steady_clock::now();
         _vehicle_state.current_torques_nm = _raw_input_data.raw_inverter_torques;
     }
 }

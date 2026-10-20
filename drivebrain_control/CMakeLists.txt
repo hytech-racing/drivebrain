@@ -9,6 +9,7 @@ find_package(dbcppp REQUIRED)
 
 add_library(drivebrain_control
     src/LoadCellTorqueController.cpp
+    src/LaunchController.cpp
     src/SimplePowerLimiter.cpp
 )
 

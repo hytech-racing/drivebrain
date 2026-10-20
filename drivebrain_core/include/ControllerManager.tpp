@@ -137,6 +137,7 @@ core::ControllerManagerStatus core::ControllerManager<ControllerType, NumControl
 template <typename ControllerType, size_t NumControllers>
 bool core::ControllerManager<ControllerType, NumControllers>::swap_active_controller(size_t new_controller_index, const core::VehicleState& input)
 {
+    std::scoped_lock lock(_controller_mutex);
     using status_type = core::ControllerManagerStatus;
     static const size_t num_controllers = _controllers.size(); // size_t is unsigned, new_controller_index being less than 0 is always false. 
     
@@ -158,15 +159,17 @@ bool core::ControllerManager<ControllerType, NumControllers>::swap_active_contro
         return false;
     }
 
-    core::ControllerOutput next_output = _controllers[new_controller_index]->step_controller(input); 
+    core::ControllerOutput next_output = _controllers[new_controller_index]->preview_controller(input);
     
     status_type can_switch_controller = _can_switch_controller(
         input, 
-        _controllers[_current_controller_index]->step_controller(input), 
+        _controllers[_current_controller_index]->preview_controller(input),
         next_output
     );
     
     if (can_switch_controller == status_type::NO_ERROR) {
+        _controllers[_current_controller_index]->reset();
+        _controllers[new_controller_index]->reset();
         _current_controller_index = new_controller_index;
         _current_ctr_manager_state.current_controller_output = next_output; 
         spdlog::info("Switched mode: {}", std::to_string(new_controller_index));

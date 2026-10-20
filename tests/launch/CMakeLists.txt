@@ -1,0 +1,15 @@
+cmake_minimum_required(VERSION 3.13)
+project(launch_profile_tests LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+enable_testing()
+add_executable(launch_profile_tests test_launch_profile.cpp)
+target_include_directories(launch_profile_tests PRIVATE ../../drivebrain_control/include)
+add_test(NAME launch_profile COMMAND launch_profile_tests)
+
+if(TARGET drivebrain_control)
+    add_executable(launch_wheel_feedback_tests test_wheel_feedback.cpp)
+    target_compile_features(launch_wheel_feedback_tests PRIVATE cxx_std_20)
+    target_link_libraries(launch_wheel_feedback_tests PRIVATE drivebrain_control)
+    add_test(NAME launch_wheel_feedback COMMAND launch_wheel_feedback_tests
+        ${CMAKE_SOURCE_DIR}/config/drivebrain_config.json)
+endif()

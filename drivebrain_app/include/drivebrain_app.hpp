@@ -10,6 +10,7 @@
 #include <memory>
 #include <foxglove/websocket/base64.hpp>
 #include "LoadCellTorqueController.hpp"
+#include "LaunchController.hpp"
 #include "VNComms.hpp"
 #include "OusterComms.hpp"
 
@@ -64,6 +65,7 @@ private:
   
   /* Controllers */
   std::shared_ptr<control::LoadCellTorqueController> _mode1;
+  std::shared_ptr<control::LaunchController> _launch_controller;
 
   /* Vectornav */
   std::unique_ptr<comms::VNDriver> _vn_driver; 

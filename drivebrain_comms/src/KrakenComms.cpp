@@ -398,7 +398,11 @@ namespace comms
             }
             else 
             {
-                if (_test_mode)
+                if (_straight_hold) {
+                    _kraken->SetControl(request.WithPosition(_deg_to_turns(0.0f)));
+                    last_target_deg = 0.0f;
+                }
+                else if (_test_mode)
                 {
                     const float target_deg = std::clamp(_test_angle_deg.load(), _config.min_angle_deg, _config.max_angle_deg);
                     _kraken->SetControl(request.WithPosition(_deg_to_turns(target_deg)));
