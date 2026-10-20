@@ -1,4 +1,5 @@
 #include "ETHRecvComms.hpp"
+#include "OMSComms.hpp"
 #include "CANComms.hpp"
 #if HOOTL_ENABLED
 # include "SimComms.hpp"
@@ -61,8 +62,11 @@ private:
   std::unique_ptr<comms::ETHRecvComms<hytech_msgs::ACUAllData>> _acu_eth_driver;
   std::unique_ptr<comms::ETHRecvComms<hytech_msgs::CCUData>> _acu_core_eth_driver;
   std::unique_ptr<comms::ETHRecvComms<hytech_msgs::VCRData_s>> _vcr_eth_driver;
-  std::unique_ptr<comms::ETHRecvComms<hytech_msgs::VCFData_s>> _vcf_eth_driver; 
-  
+  std::unique_ptr<comms::ETHRecvComms<hytech_msgs::VCFData_s>> _vcf_eth_driver;
+
+  /* Sensoric OMS optical speed sensor */
+  std::unique_ptr<comms::OMSComms> _oms_comms;
+
   /* Controllers */
   std::shared_ptr<control::LoadCellTorqueController> _mode1;
   std::shared_ptr<control::LaunchController> _launch_controller;
