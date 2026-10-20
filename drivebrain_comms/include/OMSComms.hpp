@@ -3,7 +3,6 @@
 #include <boost/asio.hpp>
 
 #include <array>
-#include <chrono>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -11,11 +10,7 @@
 namespace comms {
 
   /**
-  * @brief TCP client for the Sensoric OMS Race optical speed sensor.
-  *
-  * The sensor streams packets of 36-word frames at 1 kHz as soon as a client connects.
-  * Each frame is logged as a hytech_msgs::OMSData with the identified words decoded and
-  * all raw words kept bit-exact. Reconnects on its own if the sensor drops the link.
+  * @brief TCP client for the Sensoric OMS Race ground speed sensor
   */
   class OMSComms {
   public:
@@ -30,22 +25,55 @@ namespace comms {
     OMSComms(boost::asio::io_context& io_context, const std::string& host, uint16_t port);
 
   private:
+    /* Little-endian wire layout of one packet header */
+    struct PacketHeader {
+      uint8_t magic[4];
+      uint32_t seq;
+      uint32_t len;          // bytes after this field
+      uint16_t type;
+      uint16_t frame_size;
+    };
+
+    struct MotionFrame {
+      float vel_x_kmh;
+      float vel_y_kmh;
+      float vel_a_kmh;
+      float ang_s_deg;
+      int32_t dist_a_mm;
+      float radius_m;
+      float acc_c_m_ss;
+    };
+
+    /* Little-endian wire layout of one 1 kHz sample */
+    struct OMSFrame {
+      float sample_time_s;
+      MotionFrame motion_poi;
+      float roll_deg;
+      float pitch_deg;
+      float acc_hor_m_ss[3];
+      float rate_hor_deg_s[3];
+      MotionFrame motion;
+      float acc_m_ss[3];
+      float rate_deg_s[3];
+      float sp_vel_a_kmh;
+      float sp_vel_y_kmh;
+      float sp_vel_x_kmh;
+      float sp_ang_s_deg;
+      float sp_dist_a_mm;
+      float temp_sensor_c;
+      uint32_t status;
+    };
+
     void _connect();
     void _reconnect_later();
     void _start_receive();
     void _handle_receive(const boost::system::error_code& error, std::size_t size);
 
-    /* Splits the buffered stream into packets, logs the complete frames and keeps any partial tail */
-    void _parse_packets();
-    void _log_frame(const uint8_t* frame, uint32_t packet_seq);
+    /* Logs every complete packet in the stream and keeps any partial tail. Returns false on a malformed header */
+    bool _parse_packets();
+    void _log_frame(const OMSFrame& frame);
 
   private:
-    static constexpr std::array<uint8_t, 4> kMagic = {'e', 'S', 0x01, 0x00};
-    static constexpr std::size_t kHeaderBytes = 16;
-    static constexpr std::size_t kWordsPerFrame = 36;
-    static constexpr std::size_t kFrameBytes = kWordsPerFrame * 4;
-    static constexpr uint32_t kFoxgloveDecimation = 10;
-
     boost::asio::ip::tcp::socket _socket;
     boost::asio::steady_timer _reconnect_timer;
     boost::asio::ip::tcp::endpoint _endpoint;
@@ -53,9 +81,5 @@ namespace comms {
     std::vector<uint8_t> _stream;
     bool _running = false;
     uint32_t _connect_failures = 0;
-    uint64_t _frame_count = 0;
-    uint64_t _dropped_frames = 0;
-    float _last_sample_time_s = -1.0f;
-    std::chrono::steady_clock::time_point _last_drop_warning;
   };
 }

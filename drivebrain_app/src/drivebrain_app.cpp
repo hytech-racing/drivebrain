@@ -56,7 +56,7 @@ void DrivebrainApp::run() {
 
   spdlog::info("Constructed drivebrain controller interface");
 
-  _acu_core_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::CCUData>>(_io_context, 6666);
+  _acu_core_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::ACUCoreData>>(_io_context, 7777);
   _acu_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::ACUAllData>>(_io_context, 7766);
   _vcr_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::VCRData_s>>(_io_context, 9999);
   _vcf_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::VCFData_s>>(_io_context, 4444);

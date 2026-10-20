@@ -1,7 +1,6 @@
 #include "OMSComms.hpp"
 
-#include <algorithm>
-#include <cmath>
+#include <cstddef>
 #include <cstring>
 #include <memory>
 
@@ -12,6 +11,10 @@
 
 using boost::asio::ip::tcp;
 using namespace comms;
+
+namespace {
+  constexpr uint8_t packet_magic[4] = {'e', 'S', 0x01, 0x00};
+}
 
 OMSComms::OMSComms(boost::asio::io_context& io_context, const std::string& host, uint16_t port)
   : _socket(io_context),
@@ -35,7 +38,6 @@ void OMSComms::_connect() {
   _socket.async_connect(_endpoint, [this](const boost::system::error_code& error) {
     if (!_running) return;
     if (error) {
-      // the sensor is off whenever the car is; only nag about it now and then
       if (++_connect_failures % 30 == 1) {
         spdlog::warn("OMS connect to {}:{} failed: {}", _endpoint.address().to_string(), _endpoint.port(), error.message());
       }
@@ -47,7 +49,6 @@ void OMSComms::_connect() {
     _socket.set_option(boost::asio::socket_base::receive_buffer_size(4 << 20), ec);
     _connect_failures = 0;
     _stream.clear();
-    _last_sample_time_s = -1.0f;
     spdlog::info("OMS connected to {}:{}", _endpoint.address().to_string(), _endpoint.port());
     _start_receive();
   });
@@ -77,95 +78,92 @@ void OMSComms::_handle_receive(const boost::system::error_code& error, std::size
     return;
   }
   _stream.insert(_stream.end(), _recv_buffer.begin(), _recv_buffer.begin() + size);
-  _parse_packets();
+  if (!_parse_packets()) {
+    spdlog::error("OMS received a malformed packet header (reconnecting)");
+    _reconnect_later();
+    return;
+  }
   _start_receive();
 }
 
-/*
- * Packet layout (little-endian):
- *   u8[4] magic "eS\x01\x00" | u32 packet seq | u32 len (bytes after this field)
- *   | u16 type | u16 frame size | frames[(len - 4) / frame size]
- * Frames per packet depend on the sensor's "Direct Send" setting, so it is taken from len.
- */
-void OMSComms::_parse_packets() {
+/* Packet: header | frames[(len - 4) / frame_size] */
+bool OMSComms::_parse_packets() {
+  static_assert(sizeof(PacketHeader) == 16);
+  static_assert(sizeof(OMSFrame) == 36 * 4);
+
   std::size_t pos = 0;
-  while (_stream.size() - pos >= kHeaderBytes) {
-    auto it = std::search(_stream.begin() + pos, _stream.end(), kMagic.begin(), kMagic.end());
-    if (it == _stream.end()) {
-      pos = _stream.size() - (kMagic.size() - 1);  // the tail may hold the start of a magic
-      break;
+  while (_stream.size() - pos >= sizeof(PacketHeader)) {
+    PacketHeader header;
+    std::memcpy(&header, &_stream[pos], sizeof(header));
+    if (std::memcmp(header.magic, packet_magic, sizeof(packet_magic)) != 0 ||
+        header.frame_size != sizeof(OMSFrame) ||
+        header.len < 4 + sizeof(OMSFrame) ||
+        header.len > _recv_buffer.size()) {
+      return false;
     }
-    pos = static_cast<std::size_t>(it - _stream.begin());
-    if (_stream.size() - pos < kHeaderBytes) break;
+    const std::size_t packet_size = offsetof(PacketHeader, type) + header.len;
+    if (_stream.size() - pos < packet_size) break;
 
-    uint32_t seq, len;
-    uint16_t frame_size;
-    std::memcpy(&seq, &_stream[pos + 4], sizeof(seq));
-    std::memcpy(&len, &_stream[pos + 8], sizeof(len));
-    std::memcpy(&frame_size, &_stream[pos + 14], sizeof(frame_size));
-    if (frame_size != kFrameBytes || len < 4 + kFrameBytes || len > _recv_buffer.size()) {
-      pos += kMagic.size();  // not a real header, keep searching
-      continue;
-    }
-    const std::size_t total = 12 + len;
-    if (_stream.size() - pos < total) break;
-
-    const std::size_t n_frames = (len - 4) / frame_size;
+    const std::size_t n_frames = (header.len - 4) / sizeof(OMSFrame);
     for (std::size_t i = 0; i < n_frames; i++) {
-      _log_frame(&_stream[pos + kHeaderBytes + i * frame_size], seq);
+      OMSFrame frame;
+      std::memcpy(&frame, &_stream[pos + sizeof(PacketHeader) + i * sizeof(OMSFrame)], sizeof(frame));
+      _log_frame(frame);
     }
-    pos += total;
+    pos += packet_size;
   }
   _stream.erase(_stream.begin(), _stream.begin() + pos);
+  return true;
 }
 
-void OMSComms::_log_frame(const uint8_t* frame, uint32_t packet_seq) {
-  std::array<uint32_t, kWordsPerFrame> words;
-  std::memcpy(words.data(), frame, kFrameBytes);
-  auto as_float = [&words](std::size_t i) {
-    float v;
-    std::memcpy(&v, &words[i], sizeof(v));
-    return v;
+void OMSComms::_log_frame(const OMSFrame& frame) {
+  auto set_xyz = [](hytech_msgs::xyz_vector* v, const float (&xyz)[3]) {
+    v->set_x(xyz[0]);
+    v->set_y(xyz[1]);
+    v->set_z(xyz[2]);
   };
-  auto set_xyz = [&as_float](hytech_msgs::xyz_vector* v, std::size_t i) {
-    v->set_x(as_float(i));
-    v->set_y(as_float(i + 1));
-    v->set_z(as_float(i + 2));
+  auto set_motion = [](hytech_msgs::OMSMotion* m, const MotionFrame& motion) {
+    m->set_vel_x_kmh(motion.vel_x_kmh);
+    m->set_vel_y_kmh(motion.vel_y_kmh);
+    m->set_vel_a_kmh(motion.vel_a_kmh);
+    m->set_ang_s_deg(motion.ang_s_deg);
+    m->set_dist_a_mm(motion.dist_a_mm);
+    m->set_radius_m(motion.radius_m);
+    m->set_acc_c_m_ss(motion.acc_c_m_ss);
   };
 
   auto msg = std::make_shared<hytech_msgs::OMSData>();
-  msg->set_sample_time_s(as_float(0));
-  msg->set_roll_deg(as_float(8));
-  msg->set_pitch_deg(as_float(9));
-  set_xyz(msg->mutable_acc_hor_m_ss(), 10);
-  set_xyz(msg->mutable_rate_hor_deg_s(), 13);
-  set_xyz(msg->mutable_acc_m_ss(), 23);
-  set_xyz(msg->mutable_rate_deg_s(), 26);
-  msg->set_temp_sensor_c(as_float(34));
-  msg->set_status_word(words[35]);
-  msg->set_packet_seq(packet_seq);
-  msg->mutable_raw_words()->Reserve(kWordsPerFrame);
-  for (uint32_t w : words) {
-    msg->add_raw_words(w);
-  }
+  msg->set_sample_time_s(frame.sample_time_s);
+  set_motion(msg->mutable_motion_poi(), frame.motion_poi);
+  msg->set_roll_deg(frame.roll_deg);
+  msg->set_pitch_deg(frame.pitch_deg);
+  set_xyz(msg->mutable_acc_hor_m_ss(), frame.acc_hor_m_ss);
+  set_xyz(msg->mutable_rate_hor_deg_s(), frame.rate_hor_deg_s);
+  set_motion(msg->mutable_motion(), frame.motion);
+  set_xyz(msg->mutable_acc_m_ss(), frame.acc_m_ss);
+  set_xyz(msg->mutable_rate_deg_s(), frame.rate_deg_s);
+  auto* sp = msg->mutable_motion_sp();
+  sp->set_vel_a_kmh(frame.sp_vel_a_kmh);
+  sp->set_vel_y_kmh(frame.sp_vel_y_kmh);
+  sp->set_vel_x_kmh(frame.sp_vel_x_kmh);
+  sp->set_ang_s_deg(frame.sp_ang_s_deg);
+  sp->set_dist_a_mm(frame.sp_dist_a_mm);
+  msg->set_temp_sensor_c(frame.temp_sensor_c);
 
-  // SampleTime steps 1 ms per frame; a bigger step means the sensor skipped samples
-  const float t = as_float(0);
-  if (_last_sample_time_s >= 0.0f) {
-    const long gap = std::lround((t - _last_sample_time_s) * 1000.0f) - 1;
-    if (gap > 0) {
-      _dropped_frames += gap;
-      const auto now = std::chrono::steady_clock::now();
-      if (now - _last_drop_warning > std::chrono::seconds(5)) {
-        spdlog::warn("OMS skipped {} frames ({} total)", gap, _dropped_frames);
-        _last_drop_warning = now;
-      }
-    }
-  }
-  _last_sample_time_s = t;
+  auto bit = [&frame](unsigned b) { return ((frame.status >> b) & 1u) != 0; };
+  auto* st = msg->mutable_status();
+  st->set_standstill(bit(0));
+  st->set_direction_neg(bit(1));
+  st->set_rate_adjust_active(bit(2));
+  st->set_trigger(bit(4));
+  st->set_brake_acc_status((frame.status >> 5) & 0x7u);
+  st->set_illu_on(bit(8));
+  st->set_illu_ok(bit(9));
+  st->set_sensor_connected(bit(10));
+  st->set_adjustment_active(bit(12));
+  st->set_can_ang_adj_failed(bit(13));
+  st->set_status_ok(bit(15));
+  st->set_info_bits(frame.status >> 16);
 
-  core::log_mcap_only(msg);
-  if (++_frame_count % kFoxgloveDecimation == 0) {
-    core::log_foxglove_only(msg);
-  }
+  core::log(msg);
 }
