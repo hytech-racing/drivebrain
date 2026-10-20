@@ -25,6 +25,7 @@ class DrivebrainSoftware(ConanFile):
         self.requires("boost/1.80.0")
         self.requires("spdlog/1.13.0")
         self.requires("mcap/2.0.2")
+        self.requires("zstd/1.5.5")
         self.requires("dbcppp/3.2.6")
         self.requires("cppzmq/4.11.0")
         self.requires("libzip/1.11.4")
@@ -32,6 +33,8 @@ class DrivebrainSoftware(ConanFile):
         self.requires("openssl/3.6.2")
         self.requires("ouster_sdk/1.0.1")
         self.requires("eigen/3.4.0", transitive_headers=True)
+        self.requires("ht_proto/master-2026-10-11t23_37_28")
+        self.requires("ht_can/main-337")
         
         self.requires("aravis/0.8.33")
         self.requires("opencv/4.14.0", options={

@@ -18,6 +18,9 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(HOOTL "Build with HOOTL sim interface" OFF)
 option(JETSON "Build for the Jetson Orin (else Pi)" OFF)
 
+find_package(ht_proto CONFIG REQUIRED)
+find_package(ht_can CONFIG REQUIRED)
+
 #################################
 # Custom libs
 #################################
@@ -63,12 +66,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(vn_driver_lib)
 
-FetchContent_Declare(
-    HT_CAN
-    URL "https://github.com/hytech-racing/HT_CAN/releases/download/main-337/drivebrain_can_lib.tar.gz"
-)
-FetchContent_MakeAvailable(HT_CAN)
-
 find_package(OusterSDK REQUIRED)
 
 #################################
@@ -111,8 +108,8 @@ target_link_libraries(drivebrain PUBLIC
     mcap::mcap
     protobuf::libprotobuf
     boost::boost
-    hytech_msgs_cpp_lib
-    hytech_can_msgs_cpp_lib
+    ht_proto::hytech_msgs_cpp_lib
+    ht_can::hytech_can_msgs_cpp_lib
     drivebrain_core
     drivebrain_comms
     drivebrain_control

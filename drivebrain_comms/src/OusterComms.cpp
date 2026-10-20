@@ -1,11 +1,16 @@
 #include "OusterComms.hpp"
 #include "Telemetry.hpp"
+#include "RangeCompression.hpp"
 #include "dv_msgs.pb.h"
+#include <chrono>
+#include <exception>
 #include <memory>
 #include <cstring>
+#include <string>
 
 #include <foxglove/PointCloud.pb.h>
 #include <foxglove/PackedElementField.pb.h>
+#include <foxglove/RawImage.pb.h>
 #include <ouster/core/frame_set.h>
 #include <ouster/sensor/sensor_packet_source.h>
 
@@ -19,7 +24,7 @@ comms::OusterComms::OusterComms() {
               spdlog::warn("Retrying Ouster initialization");
               std::this_thread::sleep_for(std::chrono::seconds(2));
           }
-          _loop();
+          if (_running) _loop();
     });
 }
 
@@ -29,6 +34,7 @@ comms::OusterComms::OusterComms() {
 int comms::OusterComms::_init() {
 
     _sensors.clear();
+    _lut.clear();
 
     // Establish communications with the Ouster
     ouster::sdk::core::SensorConfig config; 
@@ -52,7 +58,26 @@ int comms::OusterComms::_init() {
         return -1;
     }
 
-    _lut.emplace_back(*_source->sensor_info()[0], true);
+    try {
+        const std::string metadata_json = _source->sensor_info()[0]->to_json_string();
+        if (metadata_json.empty()) {
+            spdlog::error("Ouster sensor metadata is empty");
+            return -1;
+        }
+        _lut.emplace_back(*_source->sensor_info()[0], true);
+        auto calibration = std::make_shared<foxglove::RawImage>();
+        const auto now = std::chrono::system_clock::now().time_since_epoch();
+        const auto secs = std::chrono::duration_cast<std::chrono::seconds>(now).count();
+        const auto nanos = std::chrono::duration_cast<std::chrono::nanoseconds>(now).count() % 1000000000;
+        calibration->mutable_timestamp()->set_seconds(secs);
+        calibration->mutable_timestamp()->set_nanos(nanos);
+        calibration->set_encoding("ouster_sensor_metadata_json");
+        calibration->set_data(metadata_json.data(), metadata_json.size());
+        core::log_mcap_only(calibration, "ouster/calibration");
+    } catch (const std::exception& error) {
+        spdlog::error("Failed to prepare Ouster calibration: {}", error.what());
+        return -1;
+    }
     spdlog::info("initialized Ouster LUT");
 
     return 0;
@@ -119,10 +144,31 @@ void comms::OusterComms::_loop() {
         data->resize(n * 3 * sizeof(float));
         Eigen::Map<ouster::sdk::core::PointCloudXYZf> points(reinterpret_cast<float*>(data->data()), n, 3);
         const auto range = frame.field<uint32_t>(ouster::sdk::core::ChanField::RANGE);
-        ouster::sdk::core::impl::cartesianT<float>(points, range, lut.direction, lut.offset);
 
-        // full resolution to mcap
-        core::MCAPLogger::instance().log_msg(pc); // TODO fix timestamp
+        std::size_t compressed_size = 0;
+        auto compressed_ranges = compressRangeImage(
+            range.data(), static_cast<std::size_t>(range.cols()),
+            static_cast<std::size_t>(range.rows()), compressed_size);
+
+        if (compressed_ranges) {
+            auto recorded_range = std::make_shared<foxglove::RawImage>();
+            const auto now = std::chrono::system_clock::now().time_since_epoch();
+            const auto secs = std::chrono::duration_cast<std::chrono::seconds>(now).count();
+            const auto nanos = std::chrono::duration_cast<std::chrono::nanoseconds>(now).count() % 1000000000;
+
+            recorded_range->mutable_timestamp()->set_seconds(secs);
+            recorded_range->mutable_timestamp()->set_nanos(nanos);
+            recorded_range->set_frame_id("os_sensor");
+            recorded_range->set_width(static_cast<uint32_t>(range.cols()));
+            recorded_range->set_height(static_cast<uint32_t>(range.rows()));
+
+            recorded_range->set_data(compressed_ranges.get(), compressed_size);
+            core::log_mcap_only(recorded_range, "ouster/range");
+        } else {
+            spdlog::error("Failed to compress Ouster range frame");
+        }
+
+        ouster::sdk::core::impl::cartesianT<float>(points, range, lut.direction, lut.offset);
 
         // stream just every Nth point that has a return (range 0 = no return)
         constexpr int stream_stride = 16;

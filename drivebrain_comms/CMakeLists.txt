@@ -11,6 +11,7 @@ find_package(OusterSDK REQUIRED)
 find_package(aravis REQUIRED)
 find_package(foxglove-schemas-protobuf REQUIRED)
 find_package(OpenCV REQUIRED CONFIG)
+find_package(zstd REQUIRED CONFIG)
 
 
 set(DRIVEBRAIN_COMMS_SRCS
@@ -19,6 +20,8 @@ set(DRIVEBRAIN_COMMS_SRCS
     src/ETHSendComms.cpp
     src/OusterComms.cpp
     src/BlackflyComms.cpp
+    src/ImageCompression.cpp
+    src/RangeCompression.cpp
 )
 
 if(HOOTL)
@@ -51,7 +54,7 @@ target_link_libraries(drivebrain_comms PUBLIC
     foxglove-websocket::foxglove-websocket 
     foxglove-schemas-protobuf::foxglove-schemas-protobuf
     protobuf::libprotobuf
-    hytech_msgs_cpp_lib
+    ht_proto::hytech_msgs_cpp_lib
     libvncxx
     dbcppp::dbcppp
     OusterSDK::ouster_sensor
@@ -60,6 +63,7 @@ target_link_libraries(drivebrain_comms PUBLIC
     opencv_core
     opencv_imgproc
     opencv_imgcodecs
+    zstd::libzstd_static
 )
 
 if(JETSON)
