@@ -2,6 +2,26 @@
 
 using namespace core; 
 
+namespace {
+estimation::OMSGroundEstimator::Config load_oms_config() {
+    auto& foxglove = core::FoxgloveServer::instance();
+    estimation::OMSGroundEstimator::Config config;
+    config.raw_velocity_to_mps = foxglove.get_param<float>("oms/raw_velocity_to_mps").value_or(1.0f / 3.6f);
+    config.mounting_yaw_deg = foxglove.get_param<float>("oms/mounting_yaw_deg").value_or(0.0f);
+    config.yaw_rate_sign = foxglove.get_param<float>("oms/yaw_rate_sign").value_or(1.0f);
+    config.yaw_rate_bias_deg_s = foxglove.get_param<float>("oms/yaw_rate_bias_deg_s").value_or(0.0f);
+    if (!std::isfinite(config.raw_velocity_to_mps) || config.raw_velocity_to_mps <= 0 ||
+        !std::isfinite(config.mounting_yaw_deg) || std::abs(config.yaw_rate_sign) != 1.0f ||
+        !std::isfinite(config.yaw_rate_bias_deg_s)) {
+        throw std::invalid_argument("Invalid OMS units or mounting configuration");
+    }
+    return config;
+}
+}
+
+StateTracker::StateTracker() : _oms_estimator(load_oms_config()) {}
+
+
 /****************************************************************
  * Public class methods
  ****************************************************************/
@@ -33,6 +53,17 @@ void StateTracker::set_previous_control_output(core::ControllerOutput &prev_cont
 }
 
 void StateTracker::handle_receive_protobuf_message(std::shared_ptr<google::protobuf::Message> msg) {
+    if (msg->GetDescriptor() == hytech_msgs::OMSData::descriptor()) {
+        const auto in_msg = std::static_pointer_cast<hytech_msgs::OMSData>(msg);
+        if (in_msg->has_motion()) {
+            std::unique_lock lock(_state_mutex);
+            _oms_estimator.update(in_msg->sample_time_s(), in_msg->motion().vel_x_kmh(),
+                in_msg->motion().vel_y_kmh(), in_msg->rate_hor_deg_s().z());
+            _vehicle_state.oms = _oms_estimator.state();
+        }
+        return; // OMS does not provide new load-cell or steering measurements.
+    }
+
     if (msg->GetDescriptor() == hytech_msgs::VNData::descriptor()) {
         auto in_msg = std::static_pointer_cast<hytech_msgs::VNData>(msg);
         xyz_vec<float> body_vel_ms = {(in_msg->vn_vel_m_s().x()), (in_msg->vn_vel_m_s().y()),
@@ -176,6 +207,7 @@ void StateTracker::_receive_low_level_state(std::shared_ptr<google::protobuf::Me
             _raw_input_data.raw_steering_analog = in_msg->steering_analog_raw();
             _raw_input_data.raw_steering_digital = in_msg->steering_digital_raw();
             _vehicle_state.received_steering_angle = true;
+            _vehicle_state.last_steering_recv_time = std::chrono::steady_clock::now();
         }
     } else if (msg->GetDescriptor() == hytech::em_measurement::descriptor()) {
         auto in_msg = std::static_pointer_cast<hytech::em_measurement>(msg);

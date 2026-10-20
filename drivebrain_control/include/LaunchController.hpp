@@ -4,6 +4,7 @@
 #include <FoxgloveServer.hpp>
 #include <StateTracker.hpp>
 #include <LaunchProfile.hpp>
+#include <HeadingHold.hpp>
 #include <chrono>
 #include <mutex>
 
@@ -24,11 +25,20 @@ private:
     std::mutex _mutex;
     LaunchProfile::Config _config{};
     LaunchProfile _profile;
-    core::ControllerOutput _last_output{core::SpeedControlOut{}};
+    struct GroundConfig {
+        bool use_ground_speed = true;
+        bool heading_control_enabled = true;
+        HeadingHold::Config heading{};
+    };
+    GroundConfig _ground_config{};
+    GroundConfig _active_ground_config{};
+    HeadingHold _heading_hold;
+    core::ControllerOutput _last_output{core::SpeedControlOut{}, 0.0f};
     bool _enabled = false;
     bool _brake_requested = false;
     bool _start_requested = false;
     bool _config_valid = false;
+    bool _ground_config_valid = true;
     std::chrono::steady_clock::time_point _last_step{};
     boost::signals2::scoped_connection _param_connection;
 };

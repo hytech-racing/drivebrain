@@ -10,9 +10,12 @@
 #include <array>
 #include <chrono>
 #include <mutex>
+#include <optional>
+#include "OMSGroundEstimator.hpp"
 #include <string> 
 #include <fstream> 
 #include <thread>
+#include <chrono>
 #include <spdlog/spdlog.h>
 
 #include "hytech_msgs.pb.h"
@@ -183,6 +186,7 @@ namespace core {
      */
     struct ControllerOutput {
         std::variant<SpeedControlOut, TorqueControlOut, std::monostate> out;
+        std::optional<float> steering_column_angle_deg{};
     };
 
     /**
@@ -224,6 +228,7 @@ namespace core {
         ypr_vec<float> current_ypr_rad;
         veh_vec<float> current_rpms; // Measured motor RPM, inv1/2/3/4 = FL/FR/RL/RR
         bool wheel_speeds_valid = false;
+        estimation::OMSGroundEstimator::State oms{};
         veh_vec<float> motor_overload_percentages;
         bool state_is_valid;
         int prev_MCU_recv_millis;
@@ -231,6 +236,8 @@ namespace core {
         float steering_column_angle_deg;
         bool received_steering_angle = false;
         bool updated_steering_estimator = false;
+        /* steady_clock time the last steering_data message arrived, used to detect stale steering feedback */
+        std::chrono::steady_clock::time_point last_steering_recv_time{};
         ControllerOutput prev_controller_output;
         TireDynamics tire_dynamics;
         veh_vec<float> driver_torque;
@@ -340,7 +347,7 @@ namespace core {
             std::chrono::steady_clock::time_point _rtd_timestamp{};
 
             /* Private constructor called by the init method */
-            StateTracker() {}; 
+            StateTracker();
             
             /* Singleton move semantics */
             StateTracker(const StateTracker&) = delete; 
@@ -353,5 +360,6 @@ namespace core {
             estimation::FzEstimator _fz_estimator;
 
             estimation::SteeringEstimator _steering_estimator;
+            estimation::OMSGroundEstimator _oms_estimator;
     };
 }

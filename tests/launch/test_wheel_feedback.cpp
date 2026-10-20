@@ -2,12 +2,14 @@
 #include <LaunchController.hpp>
 #include <MCAPLogger.hpp>
 #include <ControllerManager.hpp>
+#include <OMSComms.hpp>
 #include <boost/beast/websocket.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/io_context.hpp>
 #include <atomic>
 #include <cstdlib>
 #include <iostream>
+#include <cstring>
 
 void check(bool condition, const char* message) {
     if (!condition) { std::cerr << message << '\n'; std::exit(1); }
@@ -17,6 +19,60 @@ void receive(float rpm) {
     auto message = std::make_shared<Message>();
     message->set_actual_speed_rpm(rpm);
     core::StateTracker::instance().handle_receive_protobuf_message(message);
+}
+void receive_oms(float time, float vx, float vy, float yaw_rate) {
+    auto message = std::make_shared<hytech_msgs::OMSData>();
+    message->set_sample_time_s(time);
+    message->mutable_rate_hor_deg_s()->set_z(yaw_rate);
+    message->mutable_motion()->set_vel_x_kmh(vx);
+    message->mutable_motion()->set_vel_y_kmh(vy);
+    core::StateTracker::instance().handle_receive_protobuf_message(message);
+}
+
+void check_oms_tcp_stream() {
+    using boost::asio::ip::tcp;
+    boost::asio::io_context sensor_io;
+    tcp::acceptor acceptor(sensor_io, {tcp::v4(), 0});
+    std::vector<uint8_t> packet(16 + 3 * 144, 0);
+    packet[0] = 'e'; packet[1] = 'S'; packet[2] = 1;
+    const uint32_t sequence = 123;
+    const uint32_t length = 4 + 3 * 144;
+    const uint16_t frame_size = 144;
+    std::memcpy(packet.data() + 4, &sequence, sizeof(sequence));
+    std::memcpy(packet.data() + 8, &length, sizeof(length));
+    std::memcpy(packet.data() + 14, &frame_size, sizeof(frame_size));
+    for (int frame = 0; frame < 3; ++frame) {
+        auto set_float = [&](int word, float value) {
+            std::memcpy(packet.data() + 16 + frame * 144 + word * 4, &value, sizeof(value));
+        };
+        set_float(0, 1.0f + frame * 0.001f);
+        set_float(15, 20);  // horizontal yaw rate
+        set_float(16, 10.8f); // forward km/h
+        set_float(17, 0);
+    }
+    std::thread sensor([&] {
+        tcp::socket socket(sensor_io);
+        acceptor.accept(socket);
+        boost::asio::write(socket, boost::asio::buffer(packet.data(), 5));
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        boost::asio::write(socket, boost::asio::buffer(packet.data() + 5, packet.size() - 5));
+    });
+    boost::asio::io_context oms_io;
+    comms::OMSComms oms(oms_io, "127.0.0.1", acceptor.local_endpoint().port());
+    std::thread network([&] { oms_io.run(); });
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    estimation::OMSGroundEstimator::State state;
+    do {
+        state = core::StateTracker::instance().get_latest_state_and_validity().first.oms;
+        if (state.sample_time_s >= 1.002f) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    } while (std::chrono::steady_clock::now() < deadline);
+    oms_io.stop();
+    network.join();
+    sensor.join();
+    check(state.sample_time_s >= 1.002f && std::abs(state.speed_mps - 3.0f) < 0.001f &&
+          std::abs(state.heading_deg - 1.04) < 0.001,
+          "Fragmented OMS TCP packets decode all frames and integrate sensor-time heading");
 }
 
 // Exercise the actual Foxglove parameter callback path over a local WebSocket.
@@ -91,14 +147,23 @@ int main(int argc, char** argv) {
         check(!tracker.get_latest_state_and_validity().first.wheel_speeds_valid, "Each wheel expires independently");
         std::this_thread::sleep_for(std::chrono::milliseconds(300));
         check(!tracker.get_latest_state_and_validity().first.is_ready_to_drive, "Stale VCR permission expires");
+        receive_oms(0, 3.6f, 0, 10);
+        receive_oms(0.1f, 3.6f, 0, 10);
+        const auto optical = tracker.get_latest_state_and_validity().first.oms;
+        check(optical.received && std::abs(optical.speed_mps - 1) < 0.001f &&
+              std::abs(optical.heading_deg - 1) < 0.001f,
+              "OMS protobuf provides ground speed and sample-clock heading to vehicle state");
+        check_oms_tcp_stream();
 
         // Synthetic healthy state isolates controller logic from physical hardware.
         state = {};
         state.state_is_valid = state.is_ready_to_drive = state.wheel_speeds_valid = true;
-        core::VehicleControllerManager::create({std::make_shared<IdleController>(), controller});
+        core::VehicleControllerManager::create({std::make_shared<IdleController>(), controller, std::make_shared<IdleController>()});
         auto& manager = core::VehicleControllerManager::instance();
         check(manager.init(), "Controller manager initializes");
         ParameterClient client;
+        client.set("use_ground_speed", false);
+        client.set("heading_control_enabled", false);
         client.set("testing_enabled", true);
         check(manager.swap_active_controller(core::LAUNCH_CONTROLLER_INDEX, state), "Select launch controller");
         auto step = [&] { return std::get<core::SpeedControlOut>(manager.step_active_controller(state).out); };
@@ -134,6 +199,40 @@ int main(int argc, char** argv) {
         client.set("braking_distance_m", 0.0);
         client.set("testing_enabled", true);
         check(step().torque_lim_nm.FL == 0, "Invalid configuration cannot start a run");
+
+        client.set("testing_enabled", false);
+        client.set("braking_distance_m", 5.0);
+        client.set("use_ground_speed", true);
+        client.set("heading_control_enabled", true);
+        state.oms.received = true;
+        state.oms.heading_deg = 30;
+        state.oms.distance_m = 100;
+        client.set("testing_enabled", true);
+        auto ground_step = [&] { return manager.step_active_controller(state); };
+        check(ground_step().steering_column_angle_deg == 0.0f, "Ground run captures initial heading");
+        state.oms.heading_deg = 32;
+        state.oms.yaw_rate_deg_s = 2;
+        auto ground_output = ground_step();
+        check(ground_output.steering_column_angle_deg == -5.0f, "Heading error commands Kraken column correction");
+        const auto equal = std::get<core::SpeedControlOut>(ground_output.out);
+        check(equal.desired_rpms.FL == equal.desired_rpms.FR && equal.desired_rpms.FL == equal.desired_rpms.RL &&
+              equal.desired_rpms.FL == equal.desired_rpms.RR && equal.torque_lim_nm.FL == equal.torque_lim_nm.FR &&
+              equal.torque_lim_nm.FL == equal.torque_lim_nm.RL && equal.torque_lim_nm.FL == equal.torque_lim_nm.RR,
+              "Heading correction never uses torque vectoring");
+        state.oms.speed_mps = 1;
+        state.oms.distance_m = 105;
+        state.current_rpms = {2000, 2000, 2000, 2000}; // spinning faster than the ground
+        ground_output = ground_step();
+        const auto ground_brake = std::get<core::SpeedControlOut>(ground_output.out);
+        check(std::abs(ground_brake.desired_rpms.FL - constants::METERS_PER_SECOND_TO_RPM) < 0.01f &&
+              ground_brake.torque_lim_nm.FL == 1,
+              "Optical distance triggers braking using ground entry speed despite wheel slip");
+        check(ground_output.steering_column_angle_deg == -5.0f, "Heading hold continues while braking");
+        state.oms.speed_mps = 0;
+        state.oms.distance_m = 110;
+        state.current_rpms = {};
+        ground_output = ground_step();
+        check(ground_output.steering_column_angle_deg == 0.0f, "Steering centers when run completes");
         core::VehicleControllerManager::destroy();
     }
     core::StateTracker::destroy();

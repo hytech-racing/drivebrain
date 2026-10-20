@@ -12,6 +12,7 @@
 #include <foxglove/websocket/base64.hpp>
 #include "LoadCellTorqueController.hpp"
 #include "LaunchController.hpp"
+#include "TeleopController.hpp"
 #include "VNComms.hpp"
 #include "OusterComms.hpp"
 
@@ -60,7 +61,7 @@ private:
 
   /* Ethernet drivers */
   std::unique_ptr<comms::ETHRecvComms<hytech_msgs::ACUAllData>> _acu_eth_driver;
-  std::unique_ptr<comms::ETHRecvComms<hytech_msgs::CCUData>> _acu_core_eth_driver;
+  std::unique_ptr<comms::ETHRecvComms<hytech_msgs::ACUCoreData>> _acu_core_eth_driver;
   std::unique_ptr<comms::ETHRecvComms<hytech_msgs::VCRData_s>> _vcr_eth_driver;
   std::unique_ptr<comms::ETHRecvComms<hytech_msgs::VCFData_s>> _vcf_eth_driver;
 
@@ -70,6 +71,7 @@ private:
   /* Controllers */
   std::shared_ptr<control::LoadCellTorqueController> _mode1;
   std::shared_ptr<control::LaunchController> _launch_controller;
+  std::shared_ptr<control::TeleopController> _mode2;
 
   /* Vectornav */
   std::unique_ptr<comms::VNDriver> _vn_driver; 

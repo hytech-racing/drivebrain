@@ -52,7 +52,7 @@ void DrivebrainApp::run() {
 
   spdlog::info("Constructed logging singletons");
 
-  _acu_core_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::CCUData>>(_io_context, 6666);
+  _acu_core_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::ACUCoreData>>(_io_context, 7777);
   _acu_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::ACUAllData>>(_io_context, 7766);
   _vcr_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::VCRData_s>>(_io_context, 9999);
   _vcf_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::VCFData_s>>(_io_context, 4444);
@@ -130,7 +130,11 @@ void DrivebrainApp::run() {
   if (!_launch_controller->init()) {
     throw std::runtime_error("Failed to initialize launch controller");
   }
-  std::array<std::shared_ptr<control::Controller<core::ControllerOutput, core::VehicleState>>, num_controllers> controllers{_mode1, _launch_controller};
+  _mode2 = std::make_shared<control::TeleopController>();
+  if (!_mode2->init()) {
+    throw std::runtime_error("Failed to initialize teleop controller");
+  }
+  std::array<std::shared_ptr<control::Controller<core::ControllerOutput, core::VehicleState>>, num_controllers> controllers{_mode1, _launch_controller, _mode2};
 
   // Create controller manager instance
   core::VehicleControllerManager::create(controllers);
@@ -140,6 +144,8 @@ void DrivebrainApp::run() {
 
   spdlog::info("Constructed controller manager");
   core::DrivebrainControllerInterface::create();
+
+  spdlog::info("Constructed drivebrain controller interface");
 
   running = true;
   _io_context_thread = std::thread([this]() {
@@ -185,18 +191,14 @@ void DrivebrainApp::_loop() {
 
     auto state_and_validity = core::StateTracker::instance().get_latest_state_and_validity();
 
-#if !HOOTL_ENABLED
-    if (_kraken_comms) {
-      _kraken_comms->set_straight_hold(
-          core::VehicleControllerManager::instance().get_active_controller_index() == core::LAUNCH_CONTROLLER_INDEX);
-      if (state_and_validity.second) {
-        _kraken_comms->set_angle(state_and_validity.first.steering_angle_deg);
-      }
-    }
-#endif
-
     auto& controller_manager = core::VehicleControllerManager::instance();
     auto out_struct = controller_manager.step_active_controller(state_and_validity.first);
+
+#if !HOOTL_ENABLED
+    if (_kraken_comms) {
+      _kraken_comms->set_controller_angle(out_struct.steering_column_angle_deg);
+    }
+#endif
 
     std::variant<core::SpeedControlOut, core::TorqueControlOut, std::monostate> cmd_out = out_struct.out;
     core::StateTracker::instance().set_previous_control_output(out_struct);
@@ -218,9 +220,10 @@ void DrivebrainApp::_loop() {
             torque_limit_msg->set_drivebrain_torque_rl(speedControl->torque_lim_nm.RL);
             torque_limit_msg->set_drivebrain_torque_rr(speedControl->torque_lim_nm.RR);
 
-#if !JETSON_ENABLED
+
             _telem_can->send_message(desired_rpm_msg);
             _telem_can->send_message(torque_limit_msg);
+#if !JETSON_ENABLED
             _aux_can->send_message(desired_rpm_msg);
             _aux_can->send_message(torque_limit_msg);
 #endif
@@ -236,8 +239,8 @@ void DrivebrainApp::_loop() {
             desired_torque_msg->set_drivebrain_torque_rl(torqueControl->desired_torques_nm.RL);
             desired_torque_msg->set_drivebrain_torque_rr(torqueControl->desired_torques_nm.RR);
 
-#if !JETSON_ENABLED
             _telem_can->send_message(desired_torque_msg);
+#if !JETSON_ENABLED
             _aux_can->send_message(desired_torque_msg);
 #endif
 

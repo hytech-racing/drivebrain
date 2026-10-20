@@ -9,6 +9,9 @@
 
 #include "hytech_msgs.pb.h"
 #include "Telemetry.hpp"
+#include "StateTracker.hpp"
+#include <google/protobuf/struct.pb.h>
+#include <google/protobuf/wrappers.pb.h>
 
 using boost::asio::ip::tcp;
 using namespace comms;
@@ -103,7 +106,8 @@ void OMSComms::_parse_packets() {
     std::memcpy(&seq, &_stream[pos + 4], sizeof(seq));
     std::memcpy(&len, &_stream[pos + 8], sizeof(len));
     std::memcpy(&frame_size, &_stream[pos + 14], sizeof(frame_size));
-    if (frame_size != kFrameBytes || len < 4 + kFrameBytes || len > _recv_buffer.size()) {
+    if (frame_size != kFrameBytes || len < 4 + kFrameBytes || len > _recv_buffer.size() ||
+        (len - 4) % kFrameBytes != 0) {
       pos += kMagic.size();  // not a real header, keep searching
       continue;
     }
@@ -144,10 +148,44 @@ void OMSComms::_log_frame(const uint8_t* frame, uint32_t packet_seq) {
   msg->set_temp_sensor_c(as_float(34));
   msg->set_status_word(words[35]);
   msg->set_packet_seq(packet_seq);
-  msg->mutable_raw_words()->Reserve(kWordsPerFrame);
-  for (uint32_t w : words) {
-    msg->add_raw_words(w);
-  }
+  auto set_motion = [&](hytech_msgs::OMSMotion* motion, std::size_t i) {
+    motion->set_vel_x_kmh(as_float(i));
+    motion->set_vel_y_kmh(as_float(i + 1));
+    motion->set_vel_a_kmh(as_float(i + 2));
+    motion->set_ang_s_deg(as_float(i + 3));
+    int32_t distance_mm;
+    std::memcpy(&distance_mm, &words[i + 4], sizeof(distance_mm));
+    motion->set_dist_a_mm(distance_mm);
+    motion->set_radius_m(as_float(i + 5));
+    motion->set_acc_c_m_ss(as_float(i + 6));
+  };
+  set_motion(msg->mutable_motion_poi(), 1);
+  set_motion(msg->mutable_motion(), 16);
+  auto* spatial = msg->mutable_motion_sp();
+  spatial->set_vel_a_kmh(as_float(29));
+  spatial->set_ang_s_deg(as_float(30));
+  spatial->set_vel_x_kmh(as_float(31));
+  spatial->set_vel_y_kmh(as_float(32));
+  spatial->set_dist_a_mm(as_float(33));
+  const auto status = words[35];
+  auto* decoded = msg->mutable_status();
+  decoded->set_standstill(status & (1u << 0));
+  decoded->set_direction_neg(status & (1u << 1));
+  decoded->set_rate_adjust_active(status & (1u << 2));
+  decoded->set_trigger(status & (1u << 4));
+  decoded->set_brake_acc_status((status >> 5) & 7u);
+  decoded->set_illu_on(status & (1u << 8));
+  decoded->set_illu_ok(status & (1u << 9));
+  decoded->set_sensor_connected(status & (1u << 10));
+  decoded->set_adjustment_active(status & (1u << 12));
+  decoded->set_can_ang_adj_failed(status & (1u << 13));
+  decoded->set_status_ok(status & (1u << 15));
+
+  // The newer shared schema replaced raw_words with named motion fields.
+  // Keep the complete frame in its own MCAP topic for decoder verification.
+  auto raw = std::make_shared<google::protobuf::BytesValue>();
+  raw->set_value(reinterpret_cast<const char*>(frame), kFrameBytes);
+  core::log_mcap_only(raw, "oms/raw_frame");
 
   // SampleTime steps 1 ms per frame; a bigger step means the sensor skipped samples
   const float t = as_float(0);
@@ -164,8 +202,21 @@ void OMSComms::_log_frame(const uint8_t* frame, uint32_t packet_seq) {
   }
   _last_sample_time_s = t;
 
+  core::StateTracker::instance().handle_receive_protobuf_message(msg);
   core::log_mcap_only(msg);
   if (++_frame_count % kFoxgloveDecimation == 0) {
     core::log_foxglove_only(msg);
+    const auto state = core::StateTracker::instance().get_latest_state_and_validity().first.oms;
+    auto derived = std::make_shared<google::protobuf::Struct>();
+    auto& fields = *derived->mutable_fields();
+    fields["vx_mps"].set_number_value(state.vx_mps);
+    fields["vy_mps"].set_number_value(state.vy_mps);
+    fields["speed_mps"].set_number_value(state.speed_mps);
+    fields["sideslip_deg"].set_number_value(state.sideslip_deg);
+    fields["heading_deg"].set_number_value(state.heading_deg);
+    fields["yaw_rate_deg_s"].set_number_value(state.yaw_rate_deg_s);
+    fields["distance_m"].set_number_value(state.distance_m);
+    core::log_mcap_only(derived, "oms/state");
+    core::log_foxglove_only(derived, "oms/state");
   }
 }

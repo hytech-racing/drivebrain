@@ -15,7 +15,7 @@ namespace comms {
   *
   * The sensor streams packets of 36-word frames at 1 kHz as soon as a client connects.
   * Each frame is logged as a hytech_msgs::OMSData with the identified words decoded and
-  * all raw words kept bit-exact. Reconnects on its own if the sensor drops the link.
+  * each raw frame kept bit-exact in the oms/raw_frame MCAP topic. Reconnects on its own if the sensor drops the link.
   */
   class OMSComms {
   public:
