@@ -227,10 +227,11 @@ namespace comms
         return _angle_deg;
     }
 
-    void KrakenComms::set_controller_angle(std::optional<float> angle_deg)
+    void KrakenComms::set_controller_angle(std::optional<float> angle_deg, bool enabled)
     {
         std::scoped_lock lock(_angle_mutex);
         _controller_angle_deg = angle_deg;
+        _controller_steering_enabled = enabled;
     }
 
     float KrakenComms::get_measured_angle_deg()
@@ -523,8 +524,15 @@ namespace comms
         {
             next_tick += period;
 
-            // Motor disables itself if this stops being fed
-            if (_enable_output)
+            std::optional<float> controller_angle;
+            bool controller_steering_enabled;
+            {
+                std::scoped_lock lock(_angle_mutex);
+                controller_angle = _controller_angle_deg;
+                controller_steering_enabled = _controller_steering_enabled;
+            }
+            // Motor disables itself if this stops being fed.
+            if (_enable_output && controller_steering_enabled)
             {
                 ctre::phoenix::unmanaged::FeedEnable(_config.enable_timeout_ms);
             }
@@ -564,17 +572,12 @@ namespace comms
 
             bool is_pid_active = false;
 
-            if (is_motor_faulted || !is_motor_seeded || !is_steering_fresh)
+            if (!_enable_output || !controller_steering_enabled || is_motor_faulted || !is_motor_seeded || !is_steering_fresh)
             {
                 _kraken->SetControl(neutral);
             }
             else
             {
-                std::optional<float> controller_angle;
-                {
-                    std::scoped_lock lock(_angle_mutex);
-                    controller_angle = _controller_angle_deg;
-                }
                 const bool is_sine_running = !controller_angle && _test_mode && _use_sine_test;
                 const auto now = steady_clock::now();
                 if (is_sine_running && !was_sine_running)

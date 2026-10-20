@@ -11,21 +11,18 @@ bool control::LaunchController::init() {
         if (!value) return false;
         params[key] = *value;
     }
-    for (const auto* name : {"heading_kp", "heading_kd", "max_steering_column_angle_deg", "steering_sign"}) {
+    for (const auto* name : {"heading_kp", "heading_kd", "max_steering_column_angle_deg", "steering_sign", "fake_heading_max_deg"}) {
         const std::string key = std::string("launchcontroller/") + name;
         if (auto value = server.get_param<float>(key)) params[key] = *value;
     }
-    for (const auto* name : {"use_ground_speed", "heading_control_enabled"}) {
-        const std::string key = std::string("launchcontroller/") + name;
-        if (auto value = server.get_param<bool>(key)) params[key] = *value;
-    }
+    params["launchcontroller/test_stage"] = server.get_param<int>("launchcontroller/test_stage").value_or(0);
     _handle_param_updates(params);
     // A true value in a saved config must never initiate a launch at startup.
     _enabled = server.get_param<bool>("launchcontroller/testing_enabled").value_or(false);
     _brake_requested = server.get_param<bool>("launchcontroller/brake_requested").value_or(false);
     _param_connection = server.register_param_callback(
         [this](const auto& updated) { _handle_param_updates(updated); });
-    return _config_valid && _ground_config_valid;
+    return _config_valid && _heading_config_valid;
 }
 
 void control::LaunchController::_handle_param_updates(
@@ -57,15 +54,33 @@ void control::LaunchController::_handle_param_updates(
         return fallback;
     };
     const bool enabled = read_bool("testing_enabled", _enabled);
-    _ground_config.use_ground_speed = read_bool("use_ground_speed", _ground_config.use_ground_speed);
-    _ground_config.heading_control_enabled = read_bool("heading_control_enabled", _ground_config.heading_control_enabled);
-    update("heading_kp", _ground_config.heading.kp);
-    update("heading_kd", _ground_config.heading.kd);
-    update("max_steering_column_angle_deg", _ground_config.heading.max_column_angle_deg);
-    update("steering_sign", _ground_config.heading.steering_sign);
-    _ground_config_valid = HeadingHold::valid(_ground_config.heading);
+    bool stage_changed = false;
+    if (auto it = params.find("launchcontroller/test_stage"); it != params.end()) {
+        const auto* value = std::get_if<int>(&it->second);
+        const auto stage = value && *value >= 0 && *value <= 4 ? static_cast<TestStage>(*value) : TestStage::DISABLED;
+        if (!value || *value < 0 || *value > 4)
+            spdlog::error("LaunchController: test_stage must be an integer from 0 to 4; disabling");
+        stage_changed = stage != _test_stage;
+        _test_stage = stage;
+    }
+    update("heading_kp", _heading_config.heading.kp);
+    update("heading_kd", _heading_config.heading.kd);
+    update("max_steering_column_angle_deg", _heading_config.heading.max_column_angle_deg);
+    update("steering_sign", _heading_config.heading.steering_sign);
+    update("fake_heading_max_deg", _heading_config.fake_heading_max_deg);
+    _heading_config_valid = HeadingHold::valid(_heading_config.heading) &&
+        std::isfinite(_heading_config.fake_heading_max_deg) && _heading_config.fake_heading_max_deg > 0 &&
+        _heading_config.fake_heading_max_deg <= 180;
     _start_requested = _start_requested || (enabled && !_enabled);
-    if (!enabled) _start_requested = false;
+    // Disabling or changing stage cancels the run immediately. Never carry a
+    // pending start across stages; require a new false-to-true enable edge.
+    if (!enabled || stage_changed || _test_stage == TestStage::DISABLED) {
+        _start_requested = false;
+        _steering_only_active = false;
+        _profile = LaunchProfile{};
+        _last_output = {core::SpeedControlOut{}, 0.0f, false};
+        _last_step = {};
+    }
     _enabled = enabled;
     _brake_requested = read_bool("brake_requested", _brake_requested);
 }
@@ -73,13 +88,28 @@ void control::LaunchController::_handle_param_updates(
 void control::LaunchController::reset() {
     std::scoped_lock lock(_mutex);
     _profile = LaunchProfile{};
-    _last_output = {core::SpeedControlOut{}, 0.0f};
+    _last_output = {core::SpeedControlOut{}, 0.0f, false};
     _start_requested = false;
+    _steering_only_active = false;
     _last_step = {};
 }
 
 core::ControllerOutput control::LaunchController::step_controller(const core::VehicleState& in) {
     std::scoped_lock lock(_mutex);
+    if (!_enabled || _test_stage == TestStage::DISABLED) return _last_output;
+    if (_test_stage == TestStage::XBOX_STEERING) {
+        const auto target = _steering_target ? _steering_target() : std::nullopt;
+        const bool connected = target && std::isfinite(*target);
+        if (_start_requested) {
+            _steering_only_active = connected;
+            _start_requested = false;
+        }
+        if (!connected) _steering_only_active = false;
+        // Reuse manual teleop steering without running any drive profile. No
+        // RTD, wheel-speed or OMS data is needed; Kraken validates its feedback.
+        _last_output = {core::SpeedControlOut{}, _steering_only_active ? *target : 0.0f, _steering_only_active};
+        return _last_output;
+    }
     const auto now = std::chrono::steady_clock::now();
     float dt = _last_step.time_since_epoch().count() == 0 ? 0.0f :
         std::chrono::duration<float>(now - _last_step).count();
@@ -95,24 +125,29 @@ core::ControllerOutput control::LaunchController::step_controller(const core::Ve
             return std::isfinite(rpm) && std::abs(rpm) <= 20000.0f;
         });
     const auto previous_phase = _profile.phase();
+    const bool ground_stage = _test_stage == TestStage::GROUND;
+    const bool xbox_stage = _test_stage == TestStage::XBOX_HEADING;
+    const auto stick = xbox_stage && _steering_input ? _steering_input() : std::nullopt;
+    if (xbox_stage) healthy = healthy && stick && std::isfinite(*stick);
     if (_start_requested) {
         if (previous_phase != LaunchProfile::Phase::ACCELERATING && previous_phase != LaunchProfile::Phase::BRAKING) {
-            _active_ground_config = _ground_config;
-            _heading_hold.reset(in.oms.heading_deg);
+            _active_heading_config = _heading_config;
+            // The Xbox simulates an absolute heading error about centered stick.
+            _heading_hold.reset(ground_stage ? in.oms.heading_deg : 0.0);
         }
     }
-    if (_active_ground_config.use_ground_speed || _active_ground_config.heading_control_enabled) {
+    if (ground_stage) {
         healthy = healthy && in.oms.received && std::isfinite(in.oms.heading_deg) && std::isfinite(in.oms.yaw_rate_deg_s);
     }
-    const std::optional<LaunchProfile::GroundMotion> ground = _active_ground_config.use_ground_speed ?
+    const std::optional<LaunchProfile::GroundMotion> ground = ground_stage ?
         std::optional<LaunchProfile::GroundMotion>{{in.oms.speed_mps, in.oms.distance_m}} : std::nullopt;
     if (_start_requested) {
-        _profile.start(_config, healthy && _config_valid && _ground_config_valid && !_brake_requested, speeds, ground);
+        _profile.start(_config, healthy && _config_valid && _heading_config_valid && !_brake_requested, speeds, ground);
         _start_requested = false;
         dt = 0.0f;
     }
     const auto result = _profile.step(dt, speeds, healthy,
-        _brake_requested || !_enabled || in.input.requested_brake > 0.2f, ground);
+        _brake_requested || in.input.requested_brake > 0.2f, ground);
     if (_profile.phase() != previous_phase) {
         spdlog::info("LaunchController: phase={} distance={}m deceleration={}m/s^2",
             static_cast<int>(_profile.phase()), _profile.distance_m(), _profile.deceleration_mps2());
@@ -120,9 +155,13 @@ core::ControllerOutput control::LaunchController::step_controller(const core::Ve
     const float rpm = result.speed_mps * constants::METERS_PER_SECOND_TO_RPM;
     const float torque = result.torque_limit_nm;
     const bool running = _profile.phase() == LaunchProfile::Phase::ACCELERATING || _profile.phase() == LaunchProfile::Phase::BRAKING;
-    const float steering = running && _active_ground_config.heading_control_enabled ?
-        _heading_hold.step(_active_ground_config.heading, in.oms.heading_deg, in.oms.yaw_rate_deg_s) : 0.0f;
+    // Linux joydev reports left negative. HeadingHold uses left-positive heading;
+    // no simulated yaw rate is added, so holding the stick holds a heading error.
+    const double heading = xbox_stage && stick ?
+        -std::clamp(*stick, -1.0f, 1.0f) * _active_heading_config.fake_heading_max_deg : in.oms.heading_deg;
+    const float steering = running && (ground_stage || xbox_stage) ?
+        _heading_hold.step(_active_heading_config.heading, heading, ground_stage ? in.oms.yaw_rate_deg_s : 0.0f) : 0.0f;
     _last_output = {core::SpeedControlOut{in.prev_MCU_recv_millis,
-        {rpm, rpm, rpm, rpm}, {torque, torque, torque, torque}}, steering};
+        {rpm, rpm, rpm, rpm}, {torque, torque, torque, torque}}, steering, running};
     return _last_output;
 }

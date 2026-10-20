@@ -6,11 +6,16 @@
 #include <LaunchProfile.hpp>
 #include <HeadingHold.hpp>
 #include <chrono>
+#include <functional>
 #include <mutex>
 
 namespace control {
 class LaunchController : public Controller<core::ControllerOutput, core::VehicleState> {
 public:
+    // Normalized Xbox steering axis: left=-1, right=+1; no value when disconnected.
+    using SteeringInput = std::function<std::optional<float>()>;
+    explicit LaunchController(SteeringInput steering_input = {}, SteeringInput steering_target = {})
+        : _steering_input(std::move(steering_input)), _steering_target(std::move(steering_target)) {}
     bool init();
     float get_dt_sec() override { return 0.004f; }
     core::ControllerOutput step_controller(const core::VehicleState& in) override;
@@ -25,20 +30,24 @@ private:
     std::mutex _mutex;
     LaunchProfile::Config _config{};
     LaunchProfile _profile;
-    struct GroundConfig {
-        bool use_ground_speed = true;
-        bool heading_control_enabled = true;
+    enum class TestStage { DISABLED = 0, XBOX_STEERING = 1, LINEAR_RAMP = 2, XBOX_HEADING = 3, GROUND = 4 };
+    struct HeadingConfig {
         HeadingHold::Config heading{};
+        float fake_heading_max_deg = 10.0f;
     };
-    GroundConfig _ground_config{};
-    GroundConfig _active_ground_config{};
+    TestStage _test_stage = TestStage::DISABLED;
+    HeadingConfig _heading_config{};
+    HeadingConfig _active_heading_config{};
+    SteeringInput _steering_input;
+    SteeringInput _steering_target;
+    bool _steering_only_active = false;
     HeadingHold _heading_hold;
-    core::ControllerOutput _last_output{core::SpeedControlOut{}, 0.0f};
+    core::ControllerOutput _last_output{core::SpeedControlOut{}, 0.0f, false};
     bool _enabled = false;
     bool _brake_requested = false;
     bool _start_requested = false;
     bool _config_valid = false;
-    bool _ground_config_valid = true;
+    bool _heading_config_valid = true;
     std::chrono::steady_clock::time_point _last_step{};
     boost::signals2::scoped_connection _param_connection;
 };

@@ -7,52 +7,108 @@ teleop from `krish/teleop-fix` (`893a659`). Controller indices are:
 | Index | Controller |
 | --- | --- |
 | 0 | LoadCellTorqueController |
-| 1 | LaunchController |
-| 2 | TeleopController |
+| 1 | TeleopController (original Xbox drive and steering) |
+| 2 | LaunchController (new incremental tests) |
 
-## Ground run
+## Incremental testing in Foxglove
 
-1. Configure the OMS connection at `oms/host` (default `192.168.3.50`) and
-   `oms/port` (51000), with `oms/enabled=true`. These connection settings and
-   the OMS unit/mounting settings below are loaded at startup.
-2. Leave `launchcontroller/testing_enabled=false` and `brake_requested=false`.
-   Use `use_ground_speed=true` and `heading_control_enabled=true` (the defaults).
-3. Configure acceleration, distances and heading gains, then select
-   `drivebraincontrollerinterface/controller_index=1`. Selection commands the
-   steering column to center. The normal VCR Drivebrain/mode-4 drivetrain path
-   still needs to be accepting commands and ready to drive.
-4. With all wheels and ground speed stopped, toggle
-   `launchcontroller/testing_enabled` false → true. This captures the current
-   OMS relative heading as the straight-ahead reference for this run.
-5. Acceleration continues to `accel_distance_m` of **OMS ground travel**;
-   braking then begins automatically. Set `brake_requested=true` or disable
-   testing to brake earlier. Heading correction continues through braking and
-   centers the column when the run finishes.
-6. After stopping, set both booleans false, then toggle testing true for a new
-   run. Selecting another controller discards a pending start.
+The original teleop branch's controller indices and default are preserved:
+`drivebraincontrollerinterface/controller_index` defaults to **0**, and that
+selection is applied at startup. Select **2** for the launch test stages below.
+Index 1 retains the original Xbox drive/steering behavior and teleop settings.
+The launch-controller test stage is a separate selector; it does not renumber
+controllers. `launchcontroller/test_stage` is an integer that defaults to **0**:
+
+| Stage | Test | Heading input | Travel/braking speed input |
+| --- | --- | --- | --- |
+| 0 | Disabled | None | None; drive commands zero, Kraken neutral |
+| 1 | Original Xbox steering only | Left stick; original cubic steering response | None; all drive targets and torque limits always zero |
+| 2 | Linear ramp on jacks (original `cbb7d78` bench test) | Steering held straight | Four measured wheel speeds; OMS ignored |
+| 3 | Xbox fake heading on jacks | Xbox left stick horizontal axis | Four measured wheel speeds; OMS ignored |
+| 4 | Ground run | OMS integrated relative heading/yaw rate | OMS ground speed and travel |
+
+1. Keep `launchcontroller/testing_enabled=false` and `brake_requested=false`.
+   Select controller index 2, then stage 1, 2 or 3 for a test on jacks. Set
+   acceleration, distances and speed limits before starting. The normal VCR Drivebrain/mode-4 drivetrain path
+   must be accepting commands and ready to drive for stages 2–4, with fresh
+   measured speeds from all four inverters and every wheel stopped to start.
+   Stage 1 only steers; it needs no RTD, wheel-speed or OMS data. Kraken still
+   requires its normal fresh steering-position feedback.
+2. For stages 1 and 3, connect the same Xbox controller used for teleop. The
+   existing reader runs even while LaunchController is selected; it shares the device
+   rather than opening a second reader. Defaults are `/dev/input/js0`, axis 0
+   for the left stick horizontal axis, with a 0.05 deadzone. These settings come
+   from `teleopcontroller/joystick_device_path`, `steering_axis`,
+   `invert_steering_axis` and `axis_deadzone`, loaded at startup. In stage 1,
+   the same original teleop cubic response and live
+   `teleopcontroller/max_steering_angle_deg` (default 70°) command steering:
+   left steers left, right steers right. Triggers cannot command drive motors.
+   In stage 3, the same stick instead simulates heading for opposite correction.
+   Other axes and triggers do not command the launch drivetrain or steering.
+3. Toggle `launchcontroller/testing_enabled` false → true to start the selected test.
+   Stage 2 keeps the steering straight. In stage 3, left-stick deflection fakes
+   a leftward heading error and commands a rightward Kraken correction; right
+   commands left, and centered stick commands straight. Stick position sets
+   heading error directly, rather than integrating a yaw rate. Full deflection
+   represents `fake_heading_max_deg` (default 10°). With the default heading
+   gain, 20% stick deflection produces about 4° of opposite column correction,
+   capped at 15°. No OMS messages are needed in any bench stage; incoming
+   OMS speed, travel and heading are ignored completely. Stages 1 and 3 need a
+   connected joystick; losing the device cancels the run without auto-restart.
+4. Braking begins after `accel_distance_m` of integrated mean absolute wheel
+   travel on jacks in stages 2/3. Set `brake_requested=true` for an earlier gradual
+   stop using `braking_distance_m`. Stage 3 continues heading correction during
+   braking. Stage 1 runs no drive profile and ignores braking requests.
+5. **Setting `testing_enabled=false` or `test_stage=0` immediately clears all
+   four speed targets and torque limits and forces the Kraken neutral**, even
+   if an angle/sine override is enabled. This removes commanded drive; spinning
+   wheels may coast. Cleared commands are transmitted even if vehicle-state
+   feedback has expired. Use `brake_requested` for the gradual braking profile.
+   Kraken is also neutral while waiting to start, after a fault or after
+   completion; it does not drive back to center while disabled.
+6. Changing stage cancels the current run. Select the new stage first, stop the
+   wheels, clear `brake_requested`, and toggle testing false → true again.
+   A stage change while testing is true never starts the next stage. A saved
+   true testing value also cannot start at boot. Out-of-range stages disable.
 
 All four desired RPMs and torque limits remain equal. Heading correction is
 exclusively a Kraken steering-column command; there is no torque vectoring in
 LaunchController. Controller steering commands take priority over the Kraken
 angle/sine tests and do not require `kraken_comms/test_mode=true`.
 `kraken_comms/enable_output` still controls whether the motor is enabled.
+The launch enable/stage parameters govern LaunchController; selecting the
+separate TeleopController at index 1 retains its manual control behavior.
+
+## Ground run (stage 4)
+
+The OMS ground infrastructure remains available at stage 4. Configure
+`oms/host` (default `192.168.3.50`), `oms/port` (51000) and `oms/enabled=true`,
+then restart for connection or sensor-unit/mounting setting changes. With
+both wheels and ground speed stopped, select stage 4 and toggle testing
+false → true. This captures the current OMS relative heading as the reference.
+Acceleration and braking distances now use OMS ground travel; braking entry
+speed comes from OMS even if the wheels slip. Heading correction continues
+through braking. Physical sensor calibration, steering polarity/tracking and
+mission-level failsafes remain future ground-test work.
 
 ## Profile and heading parameters
 
-All parameters below are under `launchcontroller/`. Numeric profile settings,
-mode switches and heading gains are captured when a run starts; changing them
-in Foxglove applies to the next run. The testing/braking requests apply immediately.
+All parameters below are under `launchcontroller/`. Numeric profile settings
+and heading gains are captured when a run starts;
+changing them in Foxglove applies to the next run. Stage changes cancel the run;
+testing/braking requests apply immediately. The stage parameter replaces the
+old `use_ground_speed` and `heading_control_enabled` switches.
 
 | Parameter | Default | Meaning |
 | --- | --- | --- |
 | `acceleration_mps2` | 0.5 | Linear speed-target slope, m/s² |
-| `accel_distance_m` | 5.0 | Ground travel before braking |
+| `accel_distance_m` | 5.0 | Wheel travel in stages 2/3, ground travel in stage 4, before braking |
 | `braking_distance_m` | 5.0 | Travel from braking entry to zero target |
 | `max_speed_mps` | 2.0 | Hold this speed cap until acceleration distance |
 | `max_torque_nm` | 2.0 | Per-motor speed-loop torque limit during acceleration |
 | `max_regen_torque_nm` | 1.0 | Per-motor speed-loop torque limit during braking/hold |
-| `use_ground_speed` | true | Use OMS speed/odometer for distance and braking calculations |
-| `heading_control_enabled` | true | Correct launch heading with the Kraken |
+| `test_stage` | 0 | 0 disabled, 1 Xbox steering only, 2 bench ramp, 3 Xbox heading bench, 4 OMS ground |
+| `fake_heading_max_deg` | 10.0 | Stage 3 full-stick heading error; positive, at most 180° |
 | `heading_kp` | 2.0 | Column degrees per degree of heading error |
 | `heading_kd` | 0.5 | Column degrees per degree/s yaw rate |
 | `max_steering_column_angle_deg` | 15.0 | Maximum heading correction in column degrees |
@@ -114,7 +170,7 @@ measured column angles and motor telemetry.
 The velocity target follows `v = acceleration_mps2 * elapsed_time`, starting at
 zero and capped at max speed, following the time ramp in firmware's
 [SimpleLaunchController](https://github.com/hytech-racing/vehicle-firmware/blob/main/VCR/lib/systems/include/controllers/SimpleLaunchController.h).
-Braking captures **OMS ground speed** at entry and calculates
+Braking captures **measured wheel speed in stages 2/3 or OMS ground speed in stage 4** at entry and calculates
 `deceleration = v_entry² / (2 * braking_distance_m)`, then ramps the speed target
 down linearly. It also commands zero at the measured braking distance. Actual
 stopping distance depends on speed tracking and available motor braking torque;
@@ -122,10 +178,9 @@ this does not command hydraulic brakes.
 
 ## Jack mode and existing wheel feedback
 
-For the original jack test, set both `use_ground_speed=false` and
-`heading_control_enabled=false` before starting. The steering column then stays
-centered and distance reverts to integrated mean absolute wheel travel. No OMS
-measurement is needed in this mode.
+Stages 2 and 3 use integrated mean absolute wheel travel. Neither requires an
+OMS connection. OMS can also be disabled at startup with `oms/enabled=false`;
+this is optional for bench testing.
 
 Measured motor RPMs arrive in `hytech.inv1_dynamics` through `hytech.inv4_dynamics`,
 field `actual_speed_rpm`, mapped to FL, FR, RL, RR. These are recorded/streamed
@@ -146,7 +201,10 @@ ctest --test-dir build-launch-profile --output-on-failure
 
 For a native full build with normal dependencies configured, enable
 `-DBUILD_LAUNCH_TESTS=ON` and run CTest. This additionally tests protobuf-to-state
-mapping and actual Foxglove parameter updates through launch, heading correction,
-ground-distance braking, and jack mode. The integration test binds port 5555;
+mapping, startup controller selection, actual Foxglove stage/enable updates,
+Xbox events through the Linux joystick reader, opposite-direction steering,
+centering/deadzone/limits, OMS independence on jacks, zero output when disabled,
+ground-distance braking, joystick disconnect, original teleop index/settings,
+and steering-only operation with trigger inputs and no drive feedback. The integration test binds port 5555;
 stop other local Drivebrain instances first. Hardware speed scaling, mounting,
 steering polarity and tracking still require physical verification.

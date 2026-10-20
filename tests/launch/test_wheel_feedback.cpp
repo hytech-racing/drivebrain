@@ -1,5 +1,6 @@
 #include <StateTracker.hpp>
 #include <LaunchController.hpp>
+#include <TeleopController.hpp>
 #include <MCAPLogger.hpp>
 #include <ControllerManager.hpp>
 #include <OMSComms.hpp>
@@ -10,10 +11,71 @@
 #include <cstdlib>
 #include <iostream>
 #include <cstring>
+#include <fstream>
+#include <limits>
+#include <linux/joystick.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 void check(bool condition, const char* message) {
     if (!condition) { std::cerr << message << '\n'; std::exit(1); }
 }
+void check_zero_drive(const core::ControllerOutput& output, const char* message) {
+    const auto& drive = std::get<core::SpeedControlOut>(output.out);
+    check(drive.desired_rpms.FL == 0 && drive.desired_rpms.FR == 0 &&
+          drive.desired_rpms.RL == 0 && drive.desired_rpms.RR == 0 &&
+          drive.torque_lim_nm.FL == 0 && drive.torque_lim_nm.FR == 0 &&
+          drive.torque_lim_nm.RL == 0 && drive.torque_lim_nm.RR == 0, message);
+}
+
+// Feed real Linux joydev events through the existing Xbox reader, without hardware.
+class BenchJoystick {
+public:
+    explicit BenchJoystick(const char* original_config) {
+        char pattern[] = "/tmp/drivebrain-xbox-XXXXXX";
+        const char* directory = mkdtemp(pattern);
+        check(directory, "Create temporary joystick directory");
+        _directory = directory;
+        _device = _directory + "/js0";
+        config_path = _directory + "/config.json";
+        check(mkfifo(_device.c_str(), 0600) == 0, "Create joystick event pipe");
+        _writer = open(_device.c_str(), O_RDWR | O_NONBLOCK);
+        check(_writer >= 0, "Open joystick event writer");
+        nlohmann::json config;
+        std::ifstream(original_config) >> config;
+        config["TeleopController"]["joystick_device_path"] = _device;
+        std::ofstream(config_path) << config;
+    }
+    ~BenchJoystick() {
+        disconnect();
+        unlink(_device.c_str());
+        unlink(config_path.c_str());
+        rmdir(_directory.c_str());
+    }
+    void axis(uint8_t number, int16_t value) {
+        const js_event event{0, value, JS_EVENT_AXIS, number};
+        check(write(_writer, &event, sizeof(event)) == sizeof(event), "Write joystick axis event");
+    }
+    void wait_axis(const control::TeleopController& controller, float expected) {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+        while (std::chrono::steady_clock::now() < deadline) {
+            const auto input = controller.get_steering_input();
+            if (input && std::abs(*input - expected) < 0.001f) return;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        check(false, "Xbox axis event reaches shared reader");
+    }
+    void disconnect() {
+        // A disconnected joydev device also disappears until it is plugged in again.
+        unlink(_device.c_str());
+        if (_writer >= 0) { close(_writer); _writer = -1; }
+    }
+    std::string config_path;
+private:
+    std::string _directory, _device;
+    int _writer = -1;
+};
 template<class Message>
 void receive(float rpm) {
     auto message = std::make_shared<Message>();
@@ -116,8 +178,9 @@ public:
 };
 int main(int argc, char** argv) {
     check(argc == 2, "Config path required");
-    core::MCAPLogger::create("/tmp/", mcap::McapWriterOptions(""), argv[1]);
-    core::FoxgloveServer::create(argv[1]);
+    BenchJoystick joystick(argv[1]);
+    core::MCAPLogger::create("/tmp/", mcap::McapWriterOptions(""), joystick.config_path);
+    core::FoxgloveServer::create(joystick.config_path);
     core::StateTracker::create();
     {
         auto& tracker = core::StateTracker::instance();
@@ -136,7 +199,12 @@ int main(int argc, char** argv) {
               "Inverter 1/2/3/4 must map to FL/FR/RL/RR");
         check(state.wheel_speeds_valid, "All fresh measurements valid");
         check(state.is_ready_to_drive, "Fresh VCR ready-to-drive state accepted");
-        auto controller = std::make_shared<control::LaunchController>();
+        auto teleop = std::make_shared<control::TeleopController>();
+        check(teleop->init(), "Xbox reader initializes");
+        joystick.wait_axis(*teleop, 0);
+        auto controller = std::make_shared<control::LaunchController>(
+            [teleop] { return teleop->get_steering_input(); },
+            [teleop] { return teleop->get_steering_column_target(); });
         check(controller->init(), "Controller config loads");
         const auto preview = std::get<core::SpeedControlOut>(controller->preview_controller(state).out);
         check(preview.desired_rpms.FL == 0 && preview.torque_lim_nm.RR == 0, "Preview must not arm");
@@ -158,19 +226,68 @@ int main(int argc, char** argv) {
         // Synthetic healthy state isolates controller logic from physical hardware.
         state = {};
         state.state_is_valid = state.is_ready_to_drive = state.wheel_speeds_valid = true;
-        core::VehicleControllerManager::create({std::make_shared<IdleController>(), controller, std::make_shared<IdleController>()});
+        core::VehicleControllerManager::create({std::make_shared<IdleController>(), teleop, controller});
         auto& manager = core::VehicleControllerManager::instance();
         check(manager.init(), "Controller manager initializes");
+        check(manager.get_active_controller_index() == 0, "Original default controller zero is preserved");
+        check(core::TELEOP_CONTROLLER_INDEX == 1 && core::LAUNCH_CONTROLLER_INDEX == 2,
+              "Preserve old teleop index and append launch at a higher index");
+        check(manager.swap_active_controller(core::LAUNCH_CONTROLLER_INDEX, state), "Select new launch controller");
         ParameterClient client;
-        client.set("use_ground_speed", false);
-        client.set("heading_control_enabled", false);
+        auto step = [&] { return std::get<core::SpeedControlOut>(manager.step_active_controller(state).out); };
+        client.set("testing_enabled", true);
+        check(step().torque_lim_nm.FL == 0 && !manager.step_active_controller(state).steering_enabled,
+              "Default stage zero disables drivetrain and steering even when testing enabled");
+        client.set("testing_enabled", false);
+        client.set("test_stage", 1);
+        state = {}; // Direct steering needs neither RTD/wheel feedback nor OMS.
+        joystick.axis(0, -32767);
+        joystick.wait_axis(*teleop, -1);
+        client.set("testing_enabled", true);
+        auto steering_only = manager.step_active_controller(state);
+        check(steering_only.steering_enabled && steering_only.steering_column_angle_deg == 70,
+              "Stage one restores original Xbox left steering and its 70 degree limit");
+        check_zero_drive(steering_only, "Steering-only stage never commands any drive motor");
+        joystick.axis(5, -32767); // arm then squeeze accelerator
+        joystick.axis(5, 32767);
+        joystick.axis(2, -32767); // arm then squeeze brake
+        joystick.axis(2, 32767);
+        joystick.axis(0, 32767); // also serves as a barrier after trigger events
+        joystick.wait_axis(*teleop, 1);
+        steering_only = manager.step_active_controller(state);
+        check(steering_only.steering_column_angle_deg == -70, "Direct Xbox right steering remains rightward");
+        check_zero_drive(steering_only, "Xbox triggers cannot spin drive motors in steering-only stage");
+        joystick.axis(0, 6553);
+        joystick.wait_axis(*teleop, 0.2f);
+        steering_only = manager.step_active_controller(state);
+        check(std::abs(*steering_only.steering_column_angle_deg + 0.56f) < 0.001f &&
+              steering_only.steering_column_angle_deg == teleop->step_controller(state).steering_column_angle_deg,
+              "Stage one shares the exact original cubic teleop steering response");
+        client.set("testing_enabled", false);
+        check(!manager.step_active_controller(state).steering_enabled, "Testing false disables direct Xbox steering");
+        state.state_is_valid = state.is_ready_to_drive = state.wheel_speeds_valid = true;
+        check(manager.swap_active_controller(core::TELEOP_CONTROLLER_INDEX, state), "Original teleop remains at index one");
+        joystick.axis(2, -32767); // release brake, keep accel fully squeezed
+        joystick.axis(0, -32767);
+        joystick.wait_axis(*teleop, -1);
+        auto manual = manager.step_active_controller(state);
+        check(std::get<core::SpeedControlOut>(manual.out).desired_rpms.FL == 500 &&
+              std::get<core::SpeedControlOut>(manual.out).torque_lim_nm.FL == 4 &&
+              manual.steering_column_angle_deg == 70,
+              "Original index-one teleop retains both drive and steering behavior");
+        joystick.axis(5, -32767);
+        joystick.axis(0, 0);
+        joystick.wait_axis(*teleop, 0);
+        client.set("test_stage", 2);
+        check(manager.swap_active_controller(0, state), "Select idle controller to test pending start");
         client.set("testing_enabled", true);
         check(manager.swap_active_controller(core::LAUNCH_CONTROLLER_INDEX, state), "Select launch controller");
-        auto step = [&] { return std::get<core::SpeedControlOut>(manager.step_active_controller(state).out); };
         check(step().torque_lim_nm.FL == 0, "Selecting controller discards pending launch");
         client.set("testing_enabled", false);
         client.set("testing_enabled", true);
         check(step().torque_lim_nm.FL == 2, "False-to-true edge starts launch");
+        check(manager.step_active_controller(state).steering_column_angle_deg == 0.0f,
+              "Stage two holds straight with no OMS data");
         std::this_thread::sleep_for(std::chrono::milliseconds(8));
         auto accelerating = step();
         check(accelerating.desired_rpms.FL > 0 && accelerating.desired_rpms.FL == accelerating.desired_rpms.FR &&
@@ -194,16 +311,91 @@ int main(int argc, char** argv) {
         client.set("testing_enabled", false);
         client.set("testing_enabled", true);
         check(step().torque_lim_nm.FL == 2, "A fresh edge can restart after recovery");
+        state.current_rpms = {1000, 1000, 1000, 1000};
         client.set("testing_enabled", false);
-        check(step().desired_rpms.FL == 0, "Disabling test requests braking");
+        auto disabled = manager.step_active_controller(state);
+        check(std::get<core::SpeedControlOut>(disabled.out).desired_rpms.FL == 0 &&
+              std::get<core::SpeedControlOut>(disabled.out).torque_lim_nm.FL == 0 && !disabled.steering_enabled,
+              "Disabling immediately clears speed, torque and Kraken enable while wheels are moving");
+        state.current_rpms = {};
         client.set("braking_distance_m", 0.0);
         client.set("testing_enabled", true);
         check(step().torque_lim_nm.FL == 0, "Invalid configuration cannot start a run");
 
         client.set("testing_enabled", false);
         client.set("braking_distance_m", 5.0);
-        client.set("use_ground_speed", true);
-        client.set("heading_control_enabled", true);
+        client.set("test_stage", 3);
+        state.oms = {};
+        state.oms.heading_deg = std::numeric_limits<double>::quiet_NaN();
+        state.oms.speed_mps = std::numeric_limits<float>::quiet_NaN();
+        state.oms.distance_m = std::numeric_limits<double>::quiet_NaN();
+        client.set("testing_enabled", true);
+        check(step().torque_lim_nm.FL == 2, "Xbox stage starts without any OMS data");
+        joystick.axis(0, -6553);
+        joystick.wait_axis(*teleop, -0.2f);
+        auto xbox_output = manager.step_active_controller(state);
+        check(xbox_output.steering_enabled && std::abs(*xbox_output.steering_column_angle_deg + 4) < 0.01f,
+              "Moving Xbox left stick slightly left commands right correction");
+        state.oms.received = true;
+        state.oms.heading_deg = 180;
+        state.oms.distance_m = 1000000;
+        state.oms.speed_mps = 50;
+        joystick.axis(0, 6553);
+        joystick.wait_axis(*teleop, 0.2f);
+        xbox_output = manager.step_active_controller(state);
+        check(std::abs(*xbox_output.steering_column_angle_deg - 4) < 0.01f &&
+              std::get<core::SpeedControlOut>(xbox_output.out).torque_lim_nm.FL == 2,
+              "Right stick deflection corrects left and stage three ignores live OMS heading/travel");
+        const auto xbox_drive = std::get<core::SpeedControlOut>(xbox_output.out);
+        check(xbox_drive.desired_rpms.FL == xbox_drive.desired_rpms.FR &&
+              xbox_drive.desired_rpms.FL == xbox_drive.desired_rpms.RL &&
+              xbox_drive.desired_rpms.FL == xbox_drive.desired_rpms.RR &&
+              xbox_drive.torque_lim_nm.FL == xbox_drive.torque_lim_nm.FR &&
+              xbox_drive.torque_lim_nm.FL == xbox_drive.torque_lim_nm.RL &&
+              xbox_drive.torque_lim_nm.FL == xbox_drive.torque_lim_nm.RR,
+              "Fake heading correction never changes individual wheel drive commands");
+        joystick.axis(0, -32767);
+        joystick.wait_axis(*teleop, -1);
+        check(manager.step_active_controller(state).steering_column_angle_deg == -15,
+              "Simulated heading respects steering correction limit");
+        joystick.axis(0, 1000);
+        joystick.wait_axis(*teleop, 0);
+        check(manager.step_active_controller(state).steering_column_angle_deg == 0,
+              "Xbox deadzone and centered stick return correction to straight");
+        joystick.axis(0, -6553);
+        joystick.wait_axis(*teleop, -0.2f);
+        client.set("testing_enabled", false);
+        disabled = manager.step_active_controller(state);
+        check(!disabled.steering_enabled && std::get<core::SpeedControlOut>(disabled.out).torque_lim_nm.FL == 0 &&
+              !controller->preview_controller(state).steering_enabled,
+              "Testing false clears fake-heading steering and drivetrain, including previews");
+        client.set("testing_enabled", true);
+        check(step().torque_lim_nm.FL == 2, "Xbox stage restarts on a fresh enable edge");
+        state.current_rpms = {1000, 1000, 1000, 1000};
+        client.set("brake_requested", true);
+        xbox_output = manager.step_active_controller(state);
+        check(std::get<core::SpeedControlOut>(xbox_output.out).torque_lim_nm.FL == 1 &&
+              std::abs(std::get<core::SpeedControlOut>(xbox_output.out).desired_rpms.FL - 1000) < 0.01f &&
+              *xbox_output.steering_column_angle_deg < 0,
+              "Xbox stage brakes from measured wheel speed and continues heading correction");
+        client.set("test_stage", 0);
+        disabled = manager.step_active_controller(state);
+        check(std::get<core::SpeedControlOut>(disabled.out).torque_lim_nm.FL == 0 && !disabled.steering_enabled,
+              "Stage zero immediately cancels an active run");
+        client.set("test_stage", 3);
+        state.current_rpms = {};
+        client.set("brake_requested", false);
+        check(step().torque_lim_nm.FL == 0, "Changing stage while enabled never starts a run");
+        client.set("testing_enabled", false);
+        client.set("test_stage", 99);
+        client.set("testing_enabled", true);
+        check(step().torque_lim_nm.FL == 0, "Invalid stage cannot start motors");
+        client.set("testing_enabled", false);
+        client.set("test_stage", 4);
+        state.oms = {};
+        client.set("testing_enabled", true);
+        check(step().torque_lim_nm.FL == 0, "Ground stage still requires OMS data");
+        client.set("testing_enabled", false);
         state.oms.received = true;
         state.oms.heading_deg = 30;
         state.oms.distance_m = 100;
@@ -232,7 +424,18 @@ int main(int argc, char** argv) {
         state.oms.distance_m = 110;
         state.current_rpms = {};
         ground_output = ground_step();
-        check(ground_output.steering_column_angle_deg == 0.0f, "Steering centers when run completes");
+        check(ground_output.steering_column_angle_deg == 0.0f && !ground_output.steering_enabled,
+              "Kraken is neutral when run completes");
+        client.set("testing_enabled", false);
+        client.set("test_stage", 3);
+        joystick.disconnect();
+        const auto disconnect_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+        while (teleop->get_steering_input() && std::chrono::steady_clock::now() < disconnect_deadline)
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        check(!teleop->get_steering_input(), "Xbox disconnect is visible to launch controller");
+        client.set("testing_enabled", true);
+        check(step().torque_lim_nm.FL == 0 && !manager.step_active_controller(state).steering_enabled,
+              "Xbox stage cannot run without a connected controller");
         core::VehicleControllerManager::destroy();
     }
     core::StateTracker::destroy();

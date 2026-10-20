@@ -187,6 +187,8 @@ namespace core {
     struct ControllerOutput {
         std::variant<SpeedControlOut, TorqueControlOut, std::monostate> out;
         std::optional<float> steering_column_angle_deg{};
+        // False forces Kraken neutral, including any angle/sine test overrides.
+        bool steering_enabled = true;
     };
 
     /**

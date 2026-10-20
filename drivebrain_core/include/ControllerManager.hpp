@@ -166,7 +166,7 @@ private:
 // Keep the app and Foxglove interface on the same manager specialization.
 namespace core {
 inline constexpr size_t NUM_CONTROLLERS = 3;
-inline constexpr size_t LAUNCH_CONTROLLER_INDEX = 1;
-inline constexpr size_t TELEOP_CONTROLLER_INDEX = 2;
+inline constexpr size_t TELEOP_CONTROLLER_INDEX = 1;
+inline constexpr size_t LAUNCH_CONTROLLER_INDEX = 2;
 using VehicleControllerManager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, NUM_CONTROLLERS>;
 }

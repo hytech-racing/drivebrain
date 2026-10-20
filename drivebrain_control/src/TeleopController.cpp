@@ -203,6 +203,14 @@ void control::TeleopController::_run_joystick()
     }
 }
 
+std::optional<float> control::TeleopController::get_steering_column_target()
+{
+    const auto axis = get_steering_input();
+    if (!axis) return std::nullopt;
+    std::unique_lock lock(_config_mutex);
+    return std::clamp(-(*axis * *axis * *axis), -1.0f, 1.0f) * _config.max_steering_angle_deg;
+}
+
 ControllerOutput control::TeleopController::step_controller(const VehicleState &in)
 {
     config cur_config;
@@ -219,11 +227,9 @@ ControllerOutput control::TeleopController::step_controller(const VehicleState &
     if (safe_to_drive) {
         const float accel_in = _accel.load();
         const float brake_in = _brake.load();
-        const float steering_in = _steering.load();
 
         const float accel = accel_in * accel_in * accel_in;
         const float brake = brake_in * brake_in * brake_in;
-        const float steering = std::clamp(-(steering_in * steering_in * steering_in), -1.0f, 1.0f);
 
         const torque_nm requested_torque = std::clamp((accel * cur_config.max_torque) - (brake * cur_config.max_regen_torque),
                                                       -cur_config.max_regen_torque, cur_config.max_torque);
@@ -243,7 +249,7 @@ ControllerOutput control::TeleopController::step_controller(const VehicleState &
         speed_out.torque_lim_nm.RL = requested_torque;
         speed_out.torque_lim_nm.RR = requested_torque;
 
-        steering_command_deg = steering * cur_config.max_steering_angle_deg;
+        steering_command_deg = get_steering_column_target().value_or(0.0f);
     } else {
         speed_out.desired_rpms = {0.0f, 0.0f, 0.0f, 0.0f};
         speed_out.torque_lim_nm = {0.0f, 0.0f, 0.0f, 0.0f};

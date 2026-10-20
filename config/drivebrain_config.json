@@ -31,8 +31,8 @@
     },
     "LaunchController": {
         "testing_enabled": false,
-        "use_ground_speed": true,
-        "heading_control_enabled": true,
+        "test_stage": 0,
+        "fake_heading_max_deg": 10.0,
         "heading_kp": 2.0,
         "heading_kd": 0.5,
         "max_steering_column_angle_deg": 15.0,

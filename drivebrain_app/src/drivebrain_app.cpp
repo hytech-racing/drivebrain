@@ -126,15 +126,18 @@ void DrivebrainApp::run() {
     spdlog::error("Failed to initialize mode 1");
   }
 
-  _launch_controller = std::make_shared<control::LaunchController>();
-  if (!_launch_controller->init()) {
-    throw std::runtime_error("Failed to initialize launch controller");
-  }
   _mode2 = std::make_shared<control::TeleopController>();
   if (!_mode2->init()) {
     throw std::runtime_error("Failed to initialize teleop controller");
   }
-  std::array<std::shared_ptr<control::Controller<core::ControllerOutput, core::VehicleState>>, num_controllers> controllers{_mode1, _launch_controller, _mode2};
+  _launch_controller = std::make_shared<control::LaunchController>(
+      [joystick = _mode2] { return joystick->get_steering_input(); },
+      [joystick = _mode2] { return joystick->get_steering_column_target(); });
+  if (!_launch_controller->init()) {
+    throw std::runtime_error("Failed to initialize launch controller");
+  }
+  // Preserve the teleop branch's indices; append new controllers.
+  std::array<std::shared_ptr<control::Controller<core::ControllerOutput, core::VehicleState>>, num_controllers> controllers{_mode1, _mode2, _launch_controller};
 
   // Create controller manager instance
   core::VehicleControllerManager::create(controllers);
@@ -196,7 +199,7 @@ void DrivebrainApp::_loop() {
 
 #if !HOOTL_ENABLED
     if (_kraken_comms) {
-      _kraken_comms->set_controller_angle(out_struct.steering_column_angle_deg);
+      _kraken_comms->set_controller_angle(out_struct.steering_column_angle_deg, out_struct.steering_enabled);
     }
 #endif
 
@@ -205,7 +208,14 @@ void DrivebrainApp::_loop() {
 
     bool state_is_valid = state_and_validity.second;
 
-    if (state_is_valid) {
+    // Always transmit a cleared command, including when testing is disabled
+    // after feedback expires; otherwise the last nonzero command can remain.
+    const auto* speed_out = std::get_if<core::SpeedControlOut>(&cmd_out);
+    const auto all_zero = [](const core::veh_vec<float>& values) {
+      return values.FL == 0 && values.FR == 0 && values.RL == 0 && values.RR == 0;
+    };
+    const bool cleared_drive = speed_out && all_zero(speed_out->desired_rpms) && all_zero(speed_out->torque_lim_nm);
+    if (state_is_valid || cleared_drive) {
 
         if (const core::SpeedControlOut* speedControl = std::get_if<core::SpeedControlOut>(&cmd_out)) { // speed controller, set RPM
 

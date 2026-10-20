@@ -91,7 +91,7 @@ namespace comms
         void set_angle(float angle_deg);
 
         // Controller output owns the target while present, ahead of all test overrides.
-        void set_controller_angle(std::optional<float> angle_deg);
+        void set_controller_angle(std::optional<float> angle_deg, bool enabled = true);
 
         /**
          * @return the currently commanded angle in degrees
@@ -208,6 +208,7 @@ namespace comms
         mutable std::mutex _angle_mutex;
         float _angle_deg{0.0f};
         std::optional<float> _controller_angle_deg{};
+        bool _controller_steering_enabled = true;
 
         std::atomic<bool> _running{false};
         std::thread _thread;

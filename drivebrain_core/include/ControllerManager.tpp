@@ -43,6 +43,15 @@ bool core::ControllerManager<ControllerType, NumControllers>::init()
         spdlog::error("max accel switch float > 1.0");
         return false;
     }
+    // Apply the configured selection at startup, before the control loop runs.
+    const int initial_index = core::FoxgloveServer::instance().get_param<int>(
+        "drivebraincontrollerinterface/controller_index").value_or(0);
+    if (initial_index < 0 || static_cast<size_t>(initial_index) >= NumControllers || !_controllers[initial_index]) {
+        spdlog::error("Invalid initial controller index: {}", initial_index);
+        return false;
+    }
+    _current_controller_index = static_cast<size_t>(initial_index);
+    _controllers[_current_controller_index]->reset();
     // Initialize state
     _current_ctr_manager_state = ControllerManagerState{
         .current_status = ControllerManagerStatus::NO_ERROR,

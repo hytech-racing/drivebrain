@@ -50,6 +50,14 @@ namespace control
 
         core::ControllerOutput step_controller(const VehicleState &in) override;
 
+        // Available even when TeleopController is not selected; left=-1, right=+1.
+        std::optional<float> get_steering_input() const {
+            if (_fd < 0) return std::nullopt;
+            return _steering.load();
+        }
+        // Original cubic Xbox steering response, in column degrees.
+        std::optional<float> get_steering_column_target();
+
         std::atomic<float> steering_command_deg{0.0f};
 
     private:
