@@ -8,12 +8,11 @@
 #include <cmath>
 #include <cstddef>
 #include <fstream>
-#include <limits>
 #include <optional>
 #include <spdlog/spdlog.h>
 #include <sstream>
-#include <stdexcept>
 #include <utility>
+#include <limits>
 
 namespace planning {
 
@@ -58,7 +57,9 @@ core::TorqueControlOut VelocityPlanner::step_controller(const core::VehicleState
     core::TorqueControlOut out = {};
     const core::xy_vec<float> car_position{state.vehicle_position_map_frame.x, state.vehicle_position_map_frame.y}; // global frame
     const core::xy_vec<float> car_velocity{state.current_body_vel_ms.x, state.current_body_vel_ms.y}; // TODO: currently global frame but VNData is body frame need to add transforms to drivebrain
-    const core::xy_vec<float> car_heading{state.vehicle_heading_map_frame_unit_vector.x, state.vehicle_heading_map_frame_unit_vector.y}; // global frame 
+    const core::xy_vec<float> car_heading{state.vehicle_heading_map_frame_unit_vector.x, state.vehicle_heading_map_frame_unit_vector.y}; // global frame
+
+    // logging infra
     std::optional<nlohmann::json> trace;
     if (trace_file_) {
         const auto now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -82,32 +83,29 @@ core::TorqueControlOut VelocityPlanner::step_controller(const core::VehicleState
         trace_file_ << trace->dump() << '\n';
         trace_file_.flush(); // make completed iterations visible to the live viewer
     };
-    float longitudinal_velocity;
-    // TODO: this assumes path heading is tangent to the path we'll be following 
-    try {
-        longitudinal_velocity = car_velocity.projectOnto(car_heading);
-    } catch (const std::invalid_argument& e) {
-        spdlog::error("Failed to project velocity onto heading: {}", e.what());
+
+
+    // check all variables we need
+    if (car_heading.length() < 1e-6f) {
+        spdlog::error("car heading is zero, can't proceed with velocity planning");
         finish_trace("invalid_heading");
         return out;
     }
-    if (trace) (*trace)["longitudinal_velocity"] = longitudinal_velocity;
-
-    if (longitudinal_velocity < 0.0f) {
-        spdlog::error("Longitudinal velocity is negative, car might be moving backwards: {}", longitudinal_velocity);
-        finish_trace("negative_longitudinal_velocity");
-        return out;
-    }
-
     if (path_.empty()) {
-        spdlog::error("Calling velocity controller on an empty path");
+        spdlog::error("Path is empty, can't proceed with velocity planning");
         finish_trace("empty_path");
         return out;
     }
 
-    if (path_.size() < lookahead_distance_) {
-        spdlog::error("Path is too short, only {} points, need at least {}", path_.size(), lookahead_distance_);
-        finish_trace("short_path");
+
+    // TODO: by taking longitudinal velocity along heading, we assume our heading is along pure-pursuit given path
+    // heading validated above, so projectOnto can't throw
+    const float longitudinal_velocity = car_velocity.projectOnto(car_heading);
+    if (trace) (*trace)["longitudinal_velocity"] = longitudinal_velocity;
+
+    if (longitudinal_velocity < -0.01f) { // avoid VNData/GSS jitter so set threshold to -0.01 m/s
+        spdlog::error("Longitudinal velocity is negative, car might be moving backwards: {}", longitudinal_velocity);
+        finish_trace("negative_longitudinal_velocity");
         return out;
     }
 
@@ -227,18 +225,18 @@ const std::optional<float> VelocityPlanner::getAccel(const core::VehicleState& s
             .curvature = static_cast<float>(curvature),
             .velocity = static_cast<float>(v_max),
         };
-        if (trace) (*trace)["spline"]["samples"].push_back({
-            {"index", i}, {"path_index", start_point_index + i}, {"t", times[i]},
-            {"position", {position[0], position[1]}},
-            {"tangent", {path_tangent[0], path_tangent[1]}},
-            {"second_derivative", {change_in_tangent[0], change_in_tangent[1]}},
-            {"curvature", curvature}, {"velocity_limit", path_points_[i].velocity}
-        });
-        if (trace) (*trace)["changes"].push_back({
+        if (trace) {
+            (*trace)["spline"]["samples"].push_back({
+                {"index", i}, {"path_index", start_point_index + i}, {"t", times[i]},
+                {"position", {position[0], position[1]}},
+                {"tangent", {path_tangent[0], path_tangent[1]}},
+                {"second_derivative", {change_in_tangent[0], change_in_tangent[1]}},
+                {"curvature", curvature}, {"velocity_limit", path_points_[i].velocity}});
+            (*trace)["changes"].push_back({
             {"pass", "initial"}, {"index", i}, {"path_index", start_point_index + i}, {"changed", true},
             {"old_velocity", nullptr}, {"new_velocity", path_points_[i].velocity},
-            {"curvature", path_points_[i].curvature}
-        });
+            {"curvature", path_points_[i].curvature}});
+        }
     }
     
     // run forward and backwards solver
@@ -263,7 +261,9 @@ const std::optional<float> VelocityPlanner::getAccel(const core::VehicleState& s
         if (trace) (*trace)["failure"] = {{"reason", "distance_to_first_point_too_small"}, {"distance", dist.length()}};
         return {};
     }
-    const float accel = (path_points_[0].velocity * path_points_[0].velocity - longitudinal_velocity * longitudinal_velocity) / (2 * dist.length()); 
+    float accel = (path_points_[0].velocity * path_points_[0].velocity - longitudinal_velocity * longitudinal_velocity) / (2 * dist.length());  
+    const float max_accel = mu_ * kGravity * 1.01f;
+    accel = std::max(-max_accel, accel); // you can't control current car's speed so car-to-first-segment braking isn't enforced by solver
     if (trace) (*trace)["accel_calculation"] = {
         {"target_velocity", path_points_[0].velocity},
         {"current_velocity", longitudinal_velocity},
@@ -293,31 +293,27 @@ bool VelocityPlanner::solver(const core::VehicleState& state, const float pose_t
 
     const int max_index = forward ? path_length : path_length - 1; // if backward, we ignore the last point but dont add fist point
     for (size_t i = 0; i < max_index; ++i) {
-        auto& next_point = path_points_[i];
-        auto cur_to_next = (next_point.point - start_point.point);
-        const float ds = cur_to_next.length();
+        auto& next_point = path_points_[i]; // end of current segment
+        auto cur_to_next = (next_point.point - start_point.point); // vector from start to end of segment
+        const float ds = cur_to_next.length(); 
         const float lateral_accel = std::abs(start_point.curvature) * start_point.velocity * start_point.velocity; // a_y = v^2 * k
-        if (lateral_accel > max_accel) { // always positive no need for abs()
+        float a_long_avail; // longitudinal acceleration throughout segment TBD
+
+        // handle already excessive accel
+        if (lateral_accel > max_accel) { // lateral accel always positive 
             spdlog::error("Lateral acceleration exceeds maximum limit, previous point might've been too far. Curvature: {}, Velocity: {}, Lateral Accel: {}, Max Accel: {}", start_point.curvature, start_point.velocity, lateral_accel, max_accel);
             if (trace) {
                 const std::size_t to_index = forward ? i : static_cast<std::size_t>(path_length - 2) - i;
-                (*trace)["failure"] = {
-                    {"reason", "lateral_accel_limit"}, {"pass", forward ? "forward" : "backward"},
-                    {"from_index", forward && i == 0 ? nlohmann::json(nullptr)
-                        : nlohmann::json(forward ? i - 1 : to_index + 1)},
-                    {"to_index", to_index}, {"curvature", start_point.curvature},
-                    {"velocity", start_point.velocity}, {"lateral_accel", lateral_accel},
-                    {"max_accel", max_accel}
+                (*trace)["ok"] = {
+                    {"reason", "lateral_accel_exceeds_max"}
                 };
             }
-            if (!forward) { // restore state 
-                std::reverse(path_points_.begin(), path_points_.end());
-                path_points_.push_back(saved_point); 
-            }
-            return false;
+            // TODO: 0 vs max negative VS break
+            a_long_avail = 0; // set accel to 0 since our entire limit is consumed by lateral forces and hope we don't crash
+            
+        } else {
+            a_long_avail = std::sqrt(max_accel * max_accel - lateral_accel * lateral_accel); // friction circle model
         }
-        const float a_long_avail = lateral_accel > max_accel ?
-         -max_accel : std::sqrt(max_accel * max_accel - lateral_accel * lateral_accel); // set accel to -MAX if we're off limit
 
         const float v_long_avail = std::sqrt(start_point.velocity * start_point.velocity + 2 * a_long_avail * ds);
         const float new_velocity = std::min(next_point.velocity, v_long_avail);

@@ -38,6 +38,11 @@ public:
     core::TorqueControlOut step_controller(const core::VehicleState& state, const float pose_to_path_curvature);
     
     void setPath(const std::vector<core::xy_vec<float>>& path) {
+        if (path.size() < lookahead_distance_) {
+            spdlog::error("Path is too short, only {} points, need at least {}", path_.size(), lookahead_distance_);
+            path_.clear();
+            return;
+        } 
         path_ = path;
     }
 
