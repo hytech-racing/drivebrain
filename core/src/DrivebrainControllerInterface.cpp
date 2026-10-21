@@ -32,7 +32,9 @@ void core::DrivebrainControllerInterface::destroy() {
 }
 
 core::DrivebrainControllerInterface::DrivebrainControllerInterface() {
-    core::FoxgloveServer::instance().register_param_callback(std::bind(&core::DrivebrainControllerInterface::_handle_parameter_updates, this, std::placeholders::_1));
+    core::FoxgloveServer::instance().register_param_callback(
+        std::bind(&core::DrivebrainControllerInterface::_handle_parameter_updates, this, std::placeholders::_1),
+        {"drivebraincontrollerinterface/should_log", "drivebraincontrollerinterface/controller_index"});
 }
 
 /* Private Methods */
@@ -41,18 +43,20 @@ void core::DrivebrainControllerInterface::_handle_parameter_updates(const std::u
     spdlog::info("Entering drivebrain controller interface parameter updates.");
     
     // TODO update this
-    if (auto pval = std::get_if<bool>(&new_params.at("drivebraincontrollerinterface/should_log"))) {
-        bool should_log = *pval;
-        if (should_log) {
-            _request_start_logging();
-        } else {
-            _request_stop_logging();
+    if (auto it = new_params.find("drivebraincontrollerinterface/should_log"); it != new_params.end()) {
+        if (auto pval = std::get_if<bool>(&it->second)) {
+            if (*pval) {
+                _request_start_logging();
+            } else {
+                _request_stop_logging();
+            }
         }
     }
 
-    if (auto pval = std::get_if<int>(&new_params.at("drivebraincontrollerinterface/controller_index"))) {
-        int controller_index = *pval;
-        _request_controller_change(controller_index);
+    if (auto it = new_params.find("drivebraincontrollerinterface/controller_index"); it != new_params.end()) {
+        if (auto pval = std::get_if<int>(&it->second)) {
+            _request_controller_change(*pval);
+        }
     }
 
     spdlog::info("Exiting drivebrain controller interface parameter updates.");

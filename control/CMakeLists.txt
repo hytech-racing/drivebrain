@@ -20,6 +20,7 @@ target_include_directories(control PUBLIC
 
 target_link_libraries(control PUBLIC 
     core
+    drivebrain_estimation
     spdlog::spdlog
     nlohmann_json::nlohmann_json
     boost::boost

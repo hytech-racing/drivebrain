@@ -34,8 +34,12 @@ FetchContent_MakeAvailable(geometric_tools)
 #################################
 # Custom libs
 #################################
+# found here so Eigen3::Eigen is visible to every subdirectory (imported targets are directory-scoped)
+find_package(Eigen3 REQUIRED)
+
 add_subdirectory(core)
 add_subdirectory(comms)
+add_subdirectory(drivebrain_estimation)
 add_subdirectory(control)
 add_subdirectory(planning)
 add_subdirectory(perception)

@@ -67,39 +67,6 @@ namespace core {
     };
 
     /**
-     * @struct Represents an xy vector (2 elements of any type)
-     */
-    template <typename T>
-    struct xy_vec {
-        T x;
-        T y;
-
-        xy_vec operator+(const xy_vec& other) const {
-            return {x + other.x, y + other.y};
-        }
-
-        xy_vec operator-(const xy_vec& other) const {
-            return {x - other.x, y - other.y};
-        }
-
-        T operator*(const xy_vec& other) const {
-            return x * other.x + y * other.y;
-        }
-
-        xy_vec operator*(const float scalar) const {
-            return {x * scalar, y * scalar};
-        }
-
-        bool operator==(const xy_vec& other) const {
-            return x == other.x && y == other.y;
-        }
-
-        float length() const {
-            return std::sqrt(x * x + y * y);
-        }
-    };
-
-    /**
      * @struct Represents an xyz vector (3 elements of any type)
      */
     template <typename T>
@@ -130,6 +97,46 @@ namespace core {
 
         float length() const {
             return std::sqrt(x * x + y * y);
+        }
+    };
+
+    /**
+     * @struct Represents an xy vector (2 elements of any type)
+     */
+    template <typename T>
+    struct xy_vec {
+        T x;
+        T y;
+
+        xy_vec operator+(const xy_vec& other) const {
+            return {x + other.x, y + other.y};
+        }
+
+        xy_vec operator-(const xy_vec& other) const {
+            return {x - other.x, y - other.y};
+        }
+
+        T operator*(const xy_vec& other) const {
+            return x * other.x + y * other.y;
+        }
+
+        xy_vec operator*(const float scalar) const {
+            return {x * scalar, y * scalar};
+        }
+
+        bool operator==(const xy_vec& other) const {
+            return x == other.x && y == other.y;
+        }
+
+        float length() const {
+            return std::sqrt(x * x + y * y);
+        }
+
+        float projectOnto(const xy_vec& direction) const {
+            if (direction.length() < 1e-6f) {
+                throw std::invalid_argument("Cannot project onto a zero-length vector");
+            }
+            return (*this * direction) / direction.length();
         }
     };
 

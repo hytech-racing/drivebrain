@@ -19,3 +19,5 @@ build-*
 compile_commands.json
 
 CMakeUserPresets.json
+
+.agents/

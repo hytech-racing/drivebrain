@@ -25,7 +25,10 @@ class PurePursuitController {
 
         bool init();
 
-        std::optional<float> step_controller(const core::VehicleState& in, std::vector<core::xy_vec<float>> path);
+        void setLookaheadDistance(float distance_m);
+        float getLookaheadDistance() const { return lookahead_distance_; }
+
+        std::optional<float> step_controller(const core::VehicleState& in, std::vector<core::xy_vec<float>> path, float& curvature_in);
 
         /** 
             * Calculates the intersection points of the circle of radius lookahead_distance centered at vehicle_pos with the polyline path
@@ -75,8 +78,7 @@ class PurePursuitController {
     private:
         LoggingData logging_data_;
         float lookahead_distance_{2.5f};
-        float wheelbase_{1.0f};
-        float k_p_speed_to_lookahead_{1.0f};
+        float wheelbase_{1.53f};
         float curvature_;
 
         // need dynamic lookahead distance
@@ -108,6 +110,12 @@ class PurePursuitController {
         (ideally sensoric) for true vehicle velocity, currently using sim position and delta t
          */
         float dynamic_lookahead(float prev_vehicle_x, float prev_vehicle_y, float dt);
+
+        /**
+        Converts the front-wheel steering angle from getSteeringCommand (radians)
+        to a steering column angle (degrees) for the Kraken.
+         */
+        float yaw_to_column_angle(float steering_angle_rads);
         
 };
 

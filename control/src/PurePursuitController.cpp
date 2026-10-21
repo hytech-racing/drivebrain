@@ -1,5 +1,6 @@
 #include <StateTracker.hpp>
 #include <PurePursuitController.h>
+#include <SteeringEstimator.h>
 
 #include <algorithm>
 #include <fstream>
@@ -7,6 +8,8 @@
 #include <stdexcept>
 #include <string>
 #include <variant>
+
+#define WHEELBASE 1.530f
 
 namespace control {
 namespace driverless {
@@ -39,6 +42,7 @@ std::vector<core::xy_vec<float>> PurePursuitController::getGoalPointCandidates(c
             const float t2 = (-(d*f) - sqrt(discriminant)) / (d*d);
 
             // make sure the intersection points are within the segment and not on the line out of bounds
+            // std::cout << "Found intersection points: ";
             if (t1 >= 0.0f && t1 <= 1.0f && !(goal_point_candidates.size() >= 1 && goal_point_candidates.back() == p1 + d * t1)) {// avoid adding a vertex twice if it's exactly on the circle
                 goal_point_candidates.push_back(p1 + d * t1);
                             // std::cout << "t1: " << t1 << ", point: (" << (p1 + d * t1).x << ", " << (p1 + d * t1).y << "); ";
@@ -102,14 +106,26 @@ float PurePursuitController::getSteeringCommand(float curvature, float wheelbase
     return std::atan(curvature * wheelbase);
 }
 
+float PurePursuitController::yaw_to_column_angle(float steering_angle_rads) {
+    static const estimation::SteeringEstimator estimator;
+    return static_cast<float>(estimator.steering_angle_rads_to_column_angle_degs(steering_angle_rads));
+}
+
 bool PurePursuitController::init() {
-    // stub, needs to fetch and validate k_p, wheelbase and set lookahead
+    // stub, needs to fetch and validate k_p and wheelbase
     return true;
 } 
 
-std::optional<float> PurePursuitController::step_controller(const core::VehicleState& in, std::vector<core::xy_vec<float>> path) {
+void PurePursuitController::setLookaheadDistance(float distance_m) {
+    lookahead_distance_ = distance_m;
+}
+
+std::optional<float> PurePursuitController::step_controller(const core::VehicleState& in, std::vector<core::xy_vec<float>> path, float& curvature_in) {
     const core::xy_vec<float> vehicle_pos{in.vehicle_position_map_frame.x, in.vehicle_position_map_frame.y};
-    const core::xy_vec<float> vehicle_heading{in.vehicle_heading_map_frame_unit_vector};
+    const core::xy_vec<float> vehicle_heading{
+        in.vehicle_heading_map_frame_unit_vector.x,
+        in.vehicle_heading_map_frame_unit_vector.y
+    };
     // std::cout << vehicle_pos.x << ", " << vehicle_pos.y << ", " << vehicle_heading.x << ", " << vehicle_heading.y << "\n";
     // const std::vector<core::xy_vec<float>> path = loadPathFromCsv("path.csv"); // TEMPORARY UNTIL WE GET WORKING PLANNER
     
@@ -123,11 +139,13 @@ std::optional<float> PurePursuitController::step_controller(const core::VehicleS
 
     core::xy_vec<float> target = selectGoalPoint(goal_point_candidates, vehicle_pos, vehicle_heading);
     const float curvature = getCurvature(vehicle_pos, vehicle_heading, target);
-    //std::cout << "Curvature: " << curvature << "\n";
+    
+    // Front-wheel steering angle in radians.
     const float steering_command = getSteeringCommand(curvature, wheelbase_);
     
     if (std::isfinite(steering_command)) {        
-        output.emplace( steering_command * 180.0f / static_cast<float>(M_PI)); 
+        const float steering_command_column_angle = yaw_to_column_angle(steering_command);
+        output.emplace(steering_command_column_angle);
     }
 
     LoggingData data {
@@ -138,6 +156,7 @@ std::optional<float> PurePursuitController::step_controller(const core::VehicleS
         .steering_command = steering_command,
     };
    //setLoggingData(data);
+    curvature_in = curvature; // store the curvature for velocity planner
     return output;
 }
 

@@ -27,6 +27,21 @@ void Autonomy::start() {
   if (_running.exchange(true)) {
     return;
   }
+
+  // register callback for tuning parameters for controllers
+  auto& foxglove = FoxgloveServer::instance();
+  _parameter_connection = foxglove.register_param_callback(
+      [this](const std::unordered_map<std::string, DBParam>& params) {
+        std::lock_guard lock(_tuning_mutex);
+        auto update = [&params](const char* name, float& value) {
+          if (auto it = params.find(name); it != params.end()) {
+            if (auto param = std::get_if<float>(&it->second); param && *param >= 0.0f) value = *param;
+          }
+        };
+        update("purepursuitcontroller/lookahead_distance", _tuning.lookahead_distance);
+        update("velocityplanner/max_velocity", _tuning.max_velocity);
+        update("velocityplanner/mu", _tuning.mu);
+      }, {"purepursuitcontroller/lookahead_distance", "velocityplanner/max_velocity", "velocityplanner/mu"});
   _slam.start();
   _thread = std::thread(&Autonomy::_run, this);
   spdlog::info("Autonomy stack started");
@@ -36,6 +51,7 @@ void Autonomy::stop() {
   if (!_running.exchange(false)) {
     return;
   }
+  _parameter_connection.disconnect();
   if (_thread.joinable()) {
     _thread.join();
   }
@@ -51,27 +67,47 @@ bool Autonomy::is_valid() {
 
 
 ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
-
+  Tuning tuning;
+  {
+    std::lock_guard lock(_tuning_mutex);
+    tuning = _tuning;
+  }
+  _lateral_controller.setLookaheadDistance(tuning.lookahead_distance);
+  _longitudinal_controller.setMaxCarVelocity(tuning.max_velocity);
+  _longitudinal_controller.setMu(tuning.mu);
 
   static uint8_t prescale_counter = 0;
   auto dv = StateTracker::instance().dv_state();
-  ControllerOutput out;
-
+  ControllerOutput out = {};
+  
   // if (++prescale_counter < PRESCALE_COUNTER) {
   //   return out;
   // }
   // prescale_counter = 0;
 
-  // update PID gains for longitudinal controller
-  _longitudinal_controller.setGains(dv.velocity_controller_pid_gains);
   
   // run control loops
   if (dv.path && !dv.path->empty()) {
-    out.desired_steering_deg = _lateral_controller.step_controller(vehicle_state, *dv.path); // pure pursuit
-    out.out = TorqueControlOut{1.0f, 1.0f, 1.0f, 1.0f};
-  } else {
-    out.out = std::monostate{};
-  }
+    SpeedControlOut speed_out{};
+    speed_out.mcu_recv_millis = vehicle_state.prev_MCU_recv_millis;
+    float curvature;
+
+    // safely break to 0ms if steering fails
+    speed_out.desired_rpms = {0.0f, 0.0f, 0.0f, 0.0f};
+    speed_out.torque_lim_nm = {2.5f, 2.5f, 2.5f, 2.5f}; // 1/4 of max regen torque 
+    out.out = speed_out;
+    out.desired_steering_deg = 0.0f;
+
+
+    std::optional<float> steering_angle = _lateral_controller.step_controller(vehicle_state, *dv.path, curvature); // pure pursuit
+    if (steering_angle.has_value()) {
+      out.desired_steering_deg = steering_angle.value();
+      _longitudinal_controller.setPath(*dv.path);
+      out.out = _longitudinal_controller.step_controller(vehicle_state, curvature); // velocity controller
+    } else {
+      spdlog::error("Pure Pursuit controller failed to compute steering angle");
+    }
+  } 
 
   //out.out = _longitudinal_controller.step_controller(vehicle_state); // velocity controller
 

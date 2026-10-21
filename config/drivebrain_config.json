@@ -35,6 +35,13 @@
         "dt_rate_hz": 1000.0,
         "apply_vectoring_in_regen": true
     },
+    "PurePursuitController": {
+        "lookahead_distance": -1.0
+    },
+    "VelocityPlanner": {
+        "max_velocity": -1.0,
+        "mu": -1.0
+    },
     "vn_driver": {
         "device_name": "/dev/ttyUSB0",
         "baud_rate": 921600, 
