@@ -4,6 +4,7 @@
 #include <MCAPLogger.hpp>
 #include <ControllerManager.hpp>
 #include <OMSComms.hpp>
+#include <RemoteSafetyTelemetry.hpp>
 #include <boost/beast/websocket.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/io_context.hpp>
@@ -89,6 +90,21 @@ void receive_oms(float time, float vx, float vy, float yaw_rate) {
     message->mutable_motion()->set_vel_x_kmh(vx);
     message->mutable_motion()->set_vel_y_kmh(vy);
     core::StateTracker::instance().handle_receive_protobuf_message(message);
+}
+
+core::RssSnapshot receive_rss(bool go, bool stop_1_ok = true, bool stop_2_ok = true,
+                              bool pre_alarm = false, bool correct_mode = true) {
+    auto message = std::make_shared<hytech::rss_status>();
+    message->set_button_k3_pressed(go);
+    message->set_switch_k2_pressed(true);
+    message->set_emergency_stop_not_pressed_1(stop_1_ok);
+    message->set_emergency_stop_not_pressed_2(stop_2_ok);
+    message->set_pre_alarm_warning(pre_alarm);
+    message->set_correct_mode_selected(correct_mode);
+    message->set_radio_link_quality(99);
+    auto& tracker = core::StateTracker::instance();
+    tracker.handle_receive_protobuf_message(message);
+    return tracker.get_latest_state_and_validity().first.rss;
 }
 
 void check_oms_tcp_stream() {
@@ -202,9 +218,11 @@ int main(int argc, char** argv) {
         auto teleop = std::make_shared<control::TeleopController>();
         check(teleop->init(), "Xbox reader initializes");
         joystick.wait_axis(*teleop, 0);
+        control::RemoteMission::Feedback simulated_counterpart{};
         auto controller = std::make_shared<control::LaunchController>(
             [teleop] { return teleop->get_steering_input(); },
-            [teleop] { return teleop->get_steering_column_target(); });
+            [teleop] { return teleop->get_steering_column_target(); },
+            [&] { return simulated_counterpart; });
         check(controller->init(), "Controller config loads");
         const auto preview = std::get<core::SpeedControlOut>(controller->preview_controller(state).out);
         check(preview.desired_rpms.FL == 0 && preview.torque_lim_nm.RR == 0, "Preview must not arm");
@@ -222,6 +240,35 @@ int main(int argc, char** argv) {
               std::abs(optical.heading_deg - 1) < 0.001f,
               "OMS protobuf provides ground speed and sample-clock heading to vehicle state");
         check_oms_tcp_stream();
+
+        auto rss = receive_rss(true);
+        check(rss.received && rss.fresh(core::SafetyClock::now()) && rss.go && rss.k2 &&
+              rss.stop_not_pressed_1 && rss.stop_not_pressed_2 && !rss.pre_alarm &&
+              rss.correct_mode && rss.radio_link_quality == 99 && rss.go_edges == 1,
+              "Existing RSS protobuf maps GO, K2, stop polarity, mode and timestamp");
+        check(receive_rss(true).go_edges == 1, "Repeated GO frames are not new edges");
+        receive_rss(false, false);
+        rss = receive_rss(false);
+        check(rss.unsafe_events == 1 && rss.safe(), "A recovered STOP pulse remains visible to controller");
+        std::this_thread::sleep_for(core::RssSnapshot::timeout + std::chrono::milliseconds(5));
+        check(!tracker.get_latest_state_and_validity().first.rss.fresh(core::SafetyClock::now()),
+              "Received RSS snapshot expires independently of other vehicle data");
+        rss = receive_rss(false);
+        check(rss.unsafe_events == 2, "RSS recovery retains an outage even before a control tick");
+        const auto ebs_message = std::make_shared<hytech::ebs_data>();
+        ebs_message->set_ebs_air_pressure_1(123);
+        ebs_message->set_ebs_air_pressure_2(234);
+        ebs_message->set_ebs_engaged(true);
+        ebs_message->set_ebs_pressure_ok(true);
+        ebs_message->set_ebs_supervisor_ok(true);
+        ebs_message->set_ebs_solenoid_1_on(true);
+        tracker.handle_receive_protobuf_message(ebs_message);
+        const auto ebs = tracker.get_latest_state_and_validity().first.ebs;
+        check(ebs.received && ebs.received_at.time_since_epoch().count() &&
+              ebs.air_pressure_1 == 123 && ebs.air_pressure_2 == 234 && ebs.engaged &&
+              ebs.pressure_ok && ebs.supervisor_ok && ebs.solenoid_1_on && !ebs.solenoid_2_on,
+              "EBS snapshot preserves reported pressure and all state flags");
+        core::log_remote_safety(rss, ebs, core::SafetyClock::now());
 
         // Synthetic healthy state isolates controller logic from physical hardware.
         state = {};
@@ -392,19 +439,67 @@ int main(int argc, char** argv) {
         check(step().torque_lim_nm.FL == 0, "Invalid stage cannot start motors");
         client.set("testing_enabled", false);
         client.set("test_stage", 4);
+        client.set("brake_requested", false);
         state.oms = {};
+        state.rss = receive_rss(true); // GO was held before arming.
         client.set("testing_enabled", true);
-        check(step().torque_lim_nm.FL == 0, "Ground stage still requires OMS data");
-        client.set("testing_enabled", false);
+        check(step().torque_lim_nm.FL == 0 && controller->remote_mission().start_requests() == 0,
+              "Stage four enable only arms; pre-existing GO never starts");
+        state.rss = receive_rss(false);
+        step();
+        state.rss = receive_rss(true);
+        check(step().torque_lim_nm.FL == 0 && controller->remote_mission().requests().start &&
+              controller->remote_mission().start_requests() == 1,
+              "A fresh RSS GO edge requests start and waits for permission with drive cleared");
+        step();
+        check(controller->remote_mission().start_requests() == 1, "Held GO does not repeat start request");
+        simulated_counterpart.start_permitted = true;
+        check(step().torque_lim_nm.FL == 0 && controller->remote_mission().requests().emergency,
+              "Ground start still requires OMS even with simulated permission");
+        auto reset_remote = [&] {
+            client.set("testing_enabled", false);
+            client.set("abort_requested", false);
+            state.rss = receive_rss(false);
+            client.set("reset_emergency", false);
+            client.set("reset_emergency", true);
+            step();
+            check(controller->remote_mission().state() == control::RemoteMission::State::DISARMED,
+                  "Explicit disabled reset with fresh healthy RSS clears mission latch");
+        };
+        auto arm_and_go = [&] {
+            state.rss = receive_rss(false);
+            client.set("testing_enabled", true);
+            step();
+            state.rss = receive_rss(true);
+            return manager.step_active_controller(state);
+        };
+        reset_remote();
         state.oms.received = true;
         state.oms.heading_deg = 30;
         state.oms.distance_m = 100;
-        client.set("testing_enabled", true);
+        // The production constructor has no integration source. Neither RSS nor
+        // reported EBS flags can grant it launch permission.
+        {
+            control::LaunchController physical;
+            check(physical.init(), "Default production boundary initializes");
+            state.rss = receive_rss(false);
+            client.set("testing_enabled", true);
+            physical.step_controller(state);
+            state.rss = receive_rss(true);
+            const auto denied = physical.step_controller(state);
+            check_zero_drive(denied, "Production boundary never authorizes launch");
+            check(!denied.steering_enabled && physical.remote_mission().requests().start,
+                  "Production boundary waits for permission with Kraken neutral");
+            client.set("testing_enabled", false);
+        }
+        // The test controller did not step while the production boundary was exercised.
         auto ground_step = [&] { return manager.step_active_controller(state); };
-        check(ground_step().steering_column_angle_deg == 0.0f, "Ground run captures initial heading");
+        auto ground_output = arm_and_go();
+        check(ground_output.steering_column_angle_deg == 0.0f && ground_output.steering_enabled,
+              "Simulated permission starts OMS profile and captures initial heading");
         state.oms.heading_deg = 32;
         state.oms.yaw_rate_deg_s = 2;
-        auto ground_output = ground_step();
+        ground_output = ground_step();
         check(ground_output.steering_column_angle_deg == -5.0f, "Heading error commands Kraken column correction");
         const auto equal = std::get<core::SpeedControlOut>(ground_output.out);
         check(equal.desired_rpms.FL == equal.desired_rpms.FR && equal.desired_rpms.FL == equal.desired_rpms.RL &&
@@ -413,7 +508,7 @@ int main(int argc, char** argv) {
               "Heading correction never uses torque vectoring");
         state.oms.speed_mps = 1;
         state.oms.distance_m = 105;
-        state.current_rpms = {2000, 2000, 2000, 2000}; // spinning faster than the ground
+        state.current_rpms = {2000, 2000, 2000, 2000};
         ground_output = ground_step();
         const auto ground_brake = std::get<core::SpeedControlOut>(ground_output.out);
         check(std::abs(ground_brake.desired_rpms.FL - constants::METERS_PER_SECOND_TO_RPM) < 0.01f &&
@@ -424,8 +519,48 @@ int main(int argc, char** argv) {
         state.oms.distance_m = 110;
         state.current_rpms = {};
         ground_output = ground_step();
-        check(ground_output.steering_column_angle_deg == 0.0f && !ground_output.steering_enabled,
-              "Kraken is neutral when run completes");
+        check_zero_drive(ground_output, "Braking completion clears all drivetrain commands");
+        check(!ground_output.steering_enabled && controller->remote_mission().requests().finished,
+              "Completed braking neutralizes Kraken and requests Finished acknowledgment");
+        ground_step();
+        check(controller->remote_mission().requests().finished, "Stopped motion alone cannot acknowledge Finished");
+        simulated_counterpart.finished_ack = true;
+        ground_step();
+        check(controller->remote_mission().state() == control::RemoteMission::State::FINISHED,
+              "Simulated EBS/RDC Finished acknowledgment completes handshake");
+        simulated_counterpart.finished_ack = false;
+
+        for (int fault = 0; fault < 7; ++fault) {
+            reset_remote();
+            ground_output = arm_and_go();
+            check(ground_output.steering_enabled, "Start simulated mission for controller fault injection");
+            if (fault == 0) state.rss = receive_rss(true, false);
+            if (fault == 1) state.rss = receive_rss(true, true, false);
+            if (fault == 2) state.rss = receive_rss(true, true, true, true);
+            if (fault == 3) {
+                receive_rss(true, false);
+                state.rss = receive_rss(true); // STOP recovered between ticks.
+            }
+            if (fault == 4) state.rss.received_at -= core::RssSnapshot::timeout + std::chrono::milliseconds(1);
+            if (fault == 5) client.set("abort_requested", true);
+            if (fault == 6) client.set("testing_enabled", false);
+            ground_output = ground_step();
+            check_zero_drive(ground_output, "STOP, timeout and operator abort clear every speed and torque command");
+            check(!ground_output.steering_enabled && controller->remote_mission().requests().emergency,
+                  "Emergency is latched and Kraken is neutral");
+            state.rss = receive_rss(false);
+            ground_step();
+            state.rss = receive_rss(true);
+            check_zero_drive(ground_step(), "Restored RSS plus fresh GO cannot automatically restart");
+            simulated_counterpart.emergency_ack = true;
+            ground_step();
+            check(controller->remote_mission().requests().emergency, "EBS emergency acknowledgment cannot clear latch");
+            simulated_counterpart.emergency_ack = false;
+            client.set("testing_enabled", false);
+            client.set("testing_enabled", true);
+            check_zero_drive(ground_step(), "Enable toggles cannot clear Emergency or restart the profile");
+            check(controller->remote_mission().requests().emergency, "Emergency survives operator rearming");
+        }
         client.set("testing_enabled", false);
         client.set("test_stage", 3);
         joystick.disconnect();

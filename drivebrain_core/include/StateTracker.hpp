@@ -12,6 +12,7 @@
 #include <mutex>
 #include <optional>
 #include "OMSGroundEstimator.hpp"
+#include "RemoteSafety.hpp"
 #include <string> 
 #include <fstream> 
 #include <thread>
@@ -231,6 +232,8 @@ namespace core {
         veh_vec<float> current_rpms; // Measured motor RPM, inv1/2/3/4 = FL/FR/RL/RR
         bool wheel_speeds_valid = false;
         estimation::OMSGroundEstimator::State oms{};
+        RssSnapshot rss{};
+        EbsSnapshot ebs{};
         veh_vec<float> motor_overload_percentages;
         bool state_is_valid;
         int prev_MCU_recv_millis;

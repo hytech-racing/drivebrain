@@ -5,6 +5,7 @@
 #include <StateTracker.hpp>
 #include <LaunchProfile.hpp>
 #include <HeadingHold.hpp>
+#include <RemoteMission.hpp>
 #include <chrono>
 #include <functional>
 #include <mutex>
@@ -14,8 +15,17 @@ class LaunchController : public Controller<core::ControllerOutput, core::Vehicle
 public:
     // Normalized Xbox steering axis: left=-1, right=+1; no value when disconnected.
     using SteeringInput = std::function<std::optional<float>()>;
-    explicit LaunchController(SteeringInput steering_input = {}, SteeringInput steering_target = {})
-        : _steering_input(std::move(steering_input)), _steering_target(std::move(steering_target)) {}
+    // In-process simulation seam only. The app supplies no counterpart until the
+    // actual RDC/EBS interface is confirmed; default feedback denies launch.
+    using IntegrationFeedback = std::function<RemoteMission::Feedback()>;
+    explicit LaunchController(SteeringInput steering_input = {}, SteeringInput steering_target = {},
+                              IntegrationFeedback integration_feedback = {})
+        : _steering_input(std::move(steering_input)), _steering_target(std::move(steering_target)),
+          _integration_feedback(std::move(integration_feedback)) {}
+    RemoteMission remote_mission() {
+        std::scoped_lock lock(_mutex);
+        return _remote_mission;
+    }
     bool init();
     float get_dt_sec() override { return 0.004f; }
     core::ControllerOutput step_controller(const core::VehicleState& in) override;
@@ -40,11 +50,18 @@ private:
     HeadingConfig _active_heading_config{};
     SteeringInput _steering_input;
     SteeringInput _steering_target;
+    IntegrationFeedback _integration_feedback;
+    RemoteMission _remote_mission;
+    bool _reset_emergency = false;
+    bool _reset_emergency_requested = false;
+    void _log_remote_mission(std::chrono::steady_clock::time_point now);
+    std::chrono::steady_clock::time_point _last_mission_telem{};
     bool _steering_only_active = false;
     HeadingHold _heading_hold;
     core::ControllerOutput _last_output{core::SpeedControlOut{}, 0.0f, false};
     bool _enabled = false;
     bool _brake_requested = false;
+    bool _abort_requested = false;
     bool _start_requested = false;
     bool _config_valid = false;
     bool _heading_config_valid = true;

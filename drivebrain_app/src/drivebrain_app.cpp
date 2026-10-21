@@ -14,6 +14,7 @@
 #include <memory>
 #include <fmt/chrono.h>
 #include <spdlog/spdlog.h>
+#include <RemoteSafetyTelemetry.hpp>
 #include <filesystem>
 #include <stdexcept>
 
@@ -187,12 +188,18 @@ void DrivebrainApp::_loop() {
   auto desired_rpm_msg = std::make_shared<hytech::drivebrain_speed_set_input>();
   auto torque_limit_msg = std::make_shared<hytech::drivebrain_torque_lim_input>();
   auto desired_torque_msg = std::make_shared<hytech::drivebrain_desired_torque_input>();
+  auto last_remote_telem = std::chrono::steady_clock::time_point{};
 
   while(running) {
 
     next_tick += loop_time_ms;
 
     auto state_and_validity = core::StateTracker::instance().get_latest_state_and_validity();
+    const auto safety_now = std::chrono::steady_clock::now();
+    if (safety_now - last_remote_telem >= std::chrono::milliseconds(100)) {
+      core::log_remote_safety(state_and_validity.first.rss, state_and_validity.first.ebs, safety_now);
+      last_remote_telem = safety_now;
+    }
 
     auto& controller_manager = core::VehicleControllerManager::instance();
     auto out_struct = controller_manager.step_active_controller(state_and_validity.first);

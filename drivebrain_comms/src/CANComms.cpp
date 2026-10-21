@@ -170,6 +170,8 @@ std::optional<std::shared_ptr<google::protobuf::Message>> comms::CANComms::_deco
         spdlog::error("DBC message does not exist");
         return std::nullopt; 
     }
+    // Never turn a truncated safety frame into a fresh RSS/EBS snapshot.
+    if (frame.can_dlc != dbc_msg->MessageSize()) return std::nullopt;
 
     std::shared_ptr<google::protobuf::Message> proto_message = get_proto_message_from_name(dbc_msg->Name());
     if (proto_message == nullptr) {
@@ -188,6 +190,9 @@ std::optional<std::shared_ptr<google::protobuf::Message>> comms::CANComms::_deco
             double value = sig.RawToPhys(raw_value);
 
             const google::protobuf::FieldDescriptor *field = descriptor->FindFieldByName(sig.Name());
+            // A deployed DBC/schema mismatch (including 0x22A variants) must not
+            // crash reception or produce a partly decoded safety message.
+            if (!field) return std::nullopt;
             switch (field->type()) {
                 case google::protobuf::FieldDescriptor::TYPE_ENUM: 
                     reflection->SetEnumValue(proto_message.get(), field, (int)value);

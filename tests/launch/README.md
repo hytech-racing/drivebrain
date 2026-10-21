@@ -25,7 +25,7 @@ controllers. `launchcontroller/test_stage` is an integer that defaults to **0**:
 | 1 | Original Xbox steering only | Left stick; original cubic steering response | None; all drive targets and torque limits always zero |
 | 2 | Linear ramp on jacks (original `cbb7d78` bench test) | Steering held straight | Four measured wheel speeds; OMS ignored |
 | 3 | Xbox fake heading on jacks | Xbox left stick horizontal axis | Four measured wheel speeds; OMS ignored |
-| 4 | Ground run | OMS integrated relative heading/yaw rate | OMS ground speed and travel |
+| 4 | Remote ground-run foundation (physical launch blocked) | OMS integrated relative heading/yaw rate | OMS ground speed and travel |
 
 1. Keep `launchcontroller/testing_enabled=false` and `brake_requested=false`.
    Select controller index 2, then stage 1, 2 or 3 for a test on jacks. Set
@@ -45,7 +45,7 @@ controllers. `launchcontroller/test_stage` is an integer that defaults to **0**:
    left steers left, right steers right. Triggers cannot command drive motors.
    In stage 3, the same stick instead simulates heading for opposite correction.
    Other axes and triggers do not command the launch drivetrain or steering.
-3. Toggle `launchcontroller/testing_enabled` false → true to start the selected test.
+3. For stages 1–3, toggle `launchcontroller/testing_enabled` false → true to start the selected test.
    Stage 2 keeps the steering straight. In stage 3, left-stick deflection fakes
    a leftward heading error and commands a rightward Kraken correction; right
    commands left, and centered stick commands straight. Stick position sets
@@ -81,26 +81,88 @@ separate TeleopController at index 1 retains its manual control behavior.
 
 ## Ground run (stage 4)
 
-The OMS ground infrastructure remains available at stage 4. Configure
-`oms/host` (default `192.168.3.50`), `oms/port` (51000) and `oms/enabled=true`,
-then restart for connection or sensor-unit/mounting setting changes. With
-both wheels and ground speed stopped, select stage 4 and toggle testing
-false → true. This captures the current OMS relative heading as the reference.
-Acceleration and braking distances now use OMS ground travel; braking entry
-speed comes from OMS even if the wheels slip. Heading correction continues
-through braking. Physical sensor calibration, steering polarity/tracking and
-mission-level failsafes remain future ground-test work.
+Stage 4 now uses a remote mission state machine. **Physical launch is unavailable**:
+the app has no RDC/EBS permission source. There is no Foxglove parameter to bypass
+this restriction. The in-process feedback seam is exercised only by simulated
+counterparts in tests. No firmware, CAN IDs, layouts or dependencies are changed;
+Drivebrain sends no `driverless_system_status` / RDC-owned solenoid commands.
+The existing DBC supplied at startup still determines receive decoding on both
+configured CAN interfaces. Bus routing must be confirmed on the car.
+
+With fresh safe RSS data, selecting stage 4 and toggling `testing_enabled`
+false → true arms the test on the next controller tick. RSS `button_k3_pressed`
+is observed as GO; a held GO or an edge received before arming is consumed.
+A subsequent fresh GO edge creates one start request and waits for permission.
+Holding GO cannot repeat the request. K2 is telemetry only. There is no RSS
+operating-mode command added by this change.
+
+Only a simulated permission grant starts the unchanged OMS distance/speed,
+acceleration/braking and Kraken heading profile. Wheels and OMS speed must be
+stopped at start; existing RTD, wheel feedback and profile checks still apply.
+Configure `oms/host`, `oms/port`, units and mounting as before. The reference
+heading is captured when permission starts the profile. Permission loss or a
+profile fault enters Emergency. On completed braking, every drive command is
+cleared, Kraken is neutral, and a Finished request remains pending until the
+simulated counterpart acknowledges it. Stopped motion or reported EBS flags do
+not imply this acknowledgment.
+
+While armed, awaiting permission, running, or awaiting Finished acknowledgment,
+either RSS stop channel becoming false, pre-alarm, incorrect mode, or RSS older
+than **500 ms** latches Emergency. The timeout is a provisional Drivebrain-local
+supervision limit, not a protocol change. GO and unsafe-event counters preserve
+transitions between control ticks; recovered RSS outages are retained too.
+`abort_requested=true`, disabling testing, changing stage or resetting/swapping
+an active controller also latches Emergency. These actions clear all four RPM
+and torque-limit commands and neutralize Kraken. Emergency is an **internal
+request only**: this does not command hydraulic braking. RSS STOP's independent
+physical effect remains unverified.
+
+RSS recovery, a fresh GO, a testing-enable toggle and EBS emergency acknowledgment
+cannot clear Emergency. To explicitly reset, keep `testing_enabled=false`, clear
+`abort_requested`, provide fresh safe RSS, then toggle `reset_emergency` false →
+true while LaunchController is selected. Reset is processed at a controller tick.
+After reset, rearm and supply a new GO edge. The same explicit disabled reset
+prepares another mission after Finished. Stages 0–3 and manual teleop retain
+their existing controls and do not depend on RSS/EBS.
+
+`remote_safety/state` (protobuf Struct, Foxglove and MCAP at 10 Hz, including
+manual teleop) exposes receipt flags, steady-clock receive times, message ages,
+RSS freshness, GO/K2, both stop channels, mode, pre-alarm, link quality, event
+counters, both EBS air pressures and every reported EBS state flag. Pressure
+values retain the pinned schema/DBC units. Original decoded RSS/EBS messages
+continue to be logged and streamed by the existing CAN receiver.
+`launchcontroller/remote_mission` exposes internal start/Emergency/Finished
+requests, start count, emergency acknowledgment and counterpart availability
+at 10 Hz while LaunchController is selected. State numbers are 0 Disarmed,
+1 Armed, 2 Awaiting permission, 3 Running, 4 Awaiting Finished acknowledgment,
+5 Finished, 6 Emergency. EBS reports and the unconfirmed `0x22A` layout never
+authorize launch or acknowledge these requests.
+
+Open integration questions for tonight:
+
+- Where is FDC/EBS actuator firmware, and does RSS STOP already engage it independently?
+- Which bus carries RSS/EBS/RDC traffic to Drivebrain?
+- Which `0x22A` layout is deployed?
+- What existing interface lets Drivebrain request emergency braking and normal mission completion?
+
+Physical EBS integration, traction control and the larger safety-check list
+remain unfinished. Sensor calibration, steering polarity and tracking still
+require physical verification.
 
 ## Profile and heading parameters
 
 All parameters below are under `launchcontroller/`. Numeric profile settings
 and heading gains are captured when a run starts;
 changing them in Foxglove applies to the next run. Stage changes cancel the run;
-testing/braking requests apply immediately. The stage parameter replaces the
+testing, braking and abort requests apply immediately; emergency reset is processed on the next controller tick. The stage parameter replaces the
 old `use_ground_speed` and `heading_control_enabled` switches.
 
 | Parameter | Default | Meaning |
 | --- | --- | --- |
+| `testing_enabled` | false | Enable edge starts stages 1–3; arms stage 4 |
+| `brake_requested` | false | Begin the existing gradual drivetrain braking profile |
+| `abort_requested` | false | Stage 4 operator abort; latches Emergency and clears commands |
+| `reset_emergency` | false | Rising edge resets stage 4 only while disabled with fresh safe RSS and abort cleared |
 | `acceleration_mps2` | 0.5 | Linear speed-target slope, m/s² |
 | `accel_distance_m` | 5.0 | Wheel travel in stages 2/3, ground travel in stage 4, before braking |
 | `braking_distance_m` | 5.0 | Travel from braking entry to zero target |
@@ -191,7 +253,7 @@ The prior requirement for fresh RPMs from every inverter remains in place.
 
 ## Tests
 
-Run the dependency-free profile, optical odometry and heading tests:
+Run the dependency-free profile, optical odometry, heading and remote-mission simulation tests:
 
 ```sh
 cmake -S tests/launch -B build-launch-profile
@@ -204,7 +266,7 @@ For a native full build with normal dependencies configured, enable
 mapping, startup controller selection, actual Foxglove stage/enable updates,
 Xbox events through the Linux joystick reader, opposite-direction steering,
 centering/deadzone/limits, OMS independence on jacks, zero output when disabled,
-ground-distance braking, joystick disconnect, original teleop index/settings,
+ground-distance braking, RSS/EBS snapshots, remote permission/Finished handshakes, latched STOP/timeout/abort behavior, blocked physical launch, joystick disconnect, original teleop index/settings,
 and steering-only operation with trigger inputs and no drive feedback. The integration test binds port 5555;
 stop other local Drivebrain instances first. Hardware speed scaling, mounting,
 steering polarity and tracking still require physical verification.

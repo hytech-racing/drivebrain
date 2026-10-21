@@ -1,5 +1,6 @@
 #include <LaunchController.hpp>
 #include <Literals.hpp>
+#include <google/protobuf/struct.pb.h>
 
 bool control::LaunchController::init() {
     auto& server = core::FoxgloveServer::instance();
@@ -20,6 +21,8 @@ bool control::LaunchController::init() {
     // A true value in a saved config must never initiate a launch at startup.
     _enabled = server.get_param<bool>("launchcontroller/testing_enabled").value_or(false);
     _brake_requested = server.get_param<bool>("launchcontroller/brake_requested").value_or(false);
+    _abort_requested = server.get_param<bool>("launchcontroller/abort_requested").value_or(false);
+    _reset_emergency = server.get_param<bool>("launchcontroller/reset_emergency").value_or(false);
     _param_connection = server.register_param_callback(
         [this](const auto& updated) { _handle_param_updates(updated); });
     return _config_valid && _heading_config_valid;
@@ -72,9 +75,15 @@ void control::LaunchController::_handle_param_updates(
         std::isfinite(_heading_config.fake_heading_max_deg) && _heading_config.fake_heading_max_deg > 0 &&
         _heading_config.fake_heading_max_deg <= 180;
     _start_requested = _start_requested || (enabled && !_enabled);
+    const bool reset_emergency = read_bool("reset_emergency", _reset_emergency);
+    _reset_emergency_requested = _reset_emergency_requested || (reset_emergency && !_reset_emergency);
+    _reset_emergency = reset_emergency;
+    _abort_requested = read_bool("abort_requested", _abort_requested);
+    if (!enabled || stage_changed || _abort_requested) _remote_mission.abort();
     // Disabling or changing stage cancels the run immediately. Never carry a
     // pending start across stages; require a new false-to-true enable edge.
-    if (!enabled || stage_changed || _test_stage == TestStage::DISABLED) {
+    if (!enabled || stage_changed || _test_stage == TestStage::DISABLED ||
+        (_test_stage == TestStage::GROUND && _abort_requested)) {
         _start_requested = false;
         _steering_only_active = false;
         _profile = LaunchProfile{};
@@ -87,15 +96,25 @@ void control::LaunchController::_handle_param_updates(
 
 void control::LaunchController::reset() {
     std::scoped_lock lock(_mutex);
+    // Controller swaps cancel a remote mission but cannot clear Emergency.
+    _remote_mission.abort();
     _profile = LaunchProfile{};
     _last_output = {core::SpeedControlOut{}, 0.0f, false};
     _start_requested = false;
+    _reset_emergency_requested = false;
     _steering_only_active = false;
     _last_step = {};
 }
 
 core::ControllerOutput control::LaunchController::step_controller(const core::VehicleState& in) {
     std::scoped_lock lock(_mutex);
+    const auto now = std::chrono::steady_clock::now();
+    if (_reset_emergency_requested) {
+        if (!_abort_requested) _remote_mission.reset(_enabled, in.rss, now);
+        _reset_emergency_requested = false;
+    }
+    // Also expose the latched request while the operator has disabled testing.
+    _log_remote_mission(now);
     if (!_enabled || _test_stage == TestStage::DISABLED) return _last_output;
     if (_test_stage == TestStage::XBOX_STEERING) {
         const auto target = _steering_target ? _steering_target() : std::nullopt;
@@ -110,7 +129,6 @@ core::ControllerOutput control::LaunchController::step_controller(const core::Ve
         _last_output = {core::SpeedControlOut{}, _steering_only_active ? *target : 0.0f, _steering_only_active};
         return _last_output;
     }
-    const auto now = std::chrono::steady_clock::now();
     float dt = _last_step.time_since_epoch().count() == 0 ? 0.0f :
         std::chrono::duration<float>(now - _last_step).count();
     _last_step = now;
@@ -129,6 +147,19 @@ core::ControllerOutput control::LaunchController::step_controller(const core::Ve
     const bool xbox_stage = _test_stage == TestStage::XBOX_HEADING;
     const auto stick = xbox_stage && _steering_input ? _steering_input() : std::nullopt;
     if (xbox_stage) healthy = healthy && stick && std::isfinite(*stick);
+    if (ground_stage) {
+        const bool arm_requested = _start_requested;
+        _start_requested = false;
+        if (arm_requested) _remote_mission.arm(in.rss, now);
+        if (_abort_requested) _remote_mission.abort();
+        const auto feedback = _integration_feedback ? _integration_feedback() : RemoteMission::Feedback{};
+        _start_requested = _remote_mission.update(in.rss, feedback, now);
+        if (_remote_mission.state() != RemoteMission::State::RUNNING) {
+            _profile = LaunchProfile{};
+            _last_output = {core::SpeedControlOut{}, 0.0f, false};
+            return _last_output;
+        }
+    }
     if (_start_requested) {
         if (previous_phase != LaunchProfile::Phase::ACCELERATING && previous_phase != LaunchProfile::Phase::BRAKING) {
             _active_heading_config = _heading_config;
@@ -148,6 +179,13 @@ core::ControllerOutput control::LaunchController::step_controller(const core::Ve
     }
     const auto result = _profile.step(dt, speeds, healthy,
         _brake_requested || in.input.requested_brake > 0.2f, ground);
+    if (ground_stage && (_profile.phase() == LaunchProfile::Phase::FAULT ||
+                         _profile.phase() == LaunchProfile::Phase::COMPLETE)) {
+        if (_profile.phase() == LaunchProfile::Phase::FAULT) _remote_mission.abort();
+        else _remote_mission.braking_complete();
+        _last_output = {core::SpeedControlOut{}, 0.0f, false};
+        return _last_output;
+    }
     if (_profile.phase() != previous_phase) {
         spdlog::info("LaunchController: phase={} distance={}m deceleration={}m/s^2",
             static_cast<int>(_profile.phase()), _profile.distance_m(), _profile.deceleration_mps2());
@@ -164,4 +202,21 @@ core::ControllerOutput control::LaunchController::step_controller(const core::Ve
     _last_output = {core::SpeedControlOut{in.prev_MCU_recv_millis,
         {rpm, rpm, rpm, rpm}, {torque, torque, torque, torque}}, steering, running};
     return _last_output;
+}
+
+void control::LaunchController::_log_remote_mission(std::chrono::steady_clock::time_point now) {
+    if (_last_mission_telem.time_since_epoch().count() && now - _last_mission_telem < std::chrono::milliseconds(100)) return;
+    _last_mission_telem = now;
+    auto msg = std::make_shared<google::protobuf::Struct>();
+    auto& fields = *msg->mutable_fields();
+    const auto requests = _remote_mission.requests();
+    fields["state"].set_number_value(static_cast<int>(_remote_mission.state()));
+    fields["start_requested"].set_bool_value(requests.start);
+    fields["start_request_count"].set_number_value(_remote_mission.start_requests());
+    fields["emergency_requested"].set_bool_value(requests.emergency);
+    fields["finished_requested"].set_bool_value(requests.finished);
+    fields["emergency_ack"].set_bool_value(_remote_mission.emergency_ack());
+    fields["counterpart_connected"].set_bool_value(static_cast<bool>(_integration_feedback));
+    core::log_mcap_only(msg, "launchcontroller/remote_mission");
+    core::log_foxglove_only(msg, "launchcontroller/remote_mission");
 }

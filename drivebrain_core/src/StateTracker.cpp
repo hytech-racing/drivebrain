@@ -53,6 +53,42 @@ void StateTracker::set_previous_control_output(core::ControllerOutput &prev_cont
 }
 
 void StateTracker::handle_receive_protobuf_message(std::shared_ptr<google::protobuf::Message> msg) {
+    if (msg->GetDescriptor() == hytech::rss_status::descriptor()) {
+        const auto in = std::static_pointer_cast<hytech::rss_status>(msg);
+        std::unique_lock lock(_state_mutex);
+        auto& rss = _vehicle_state.rss;
+        const auto now = std::chrono::steady_clock::now();
+        // Remember an outage even if the next healthy frame arrives before the
+        // control loop samples the stale snapshot.
+        if (rss.received && !rss.fresh(now)) ++rss.unsafe_events;
+        if (in->button_k3_pressed() && !rss.go) ++rss.go_edges;
+        rss.received = true;
+        rss.received_at = now;
+        rss.go = in->button_k3_pressed();
+        rss.k2 = in->switch_k2_pressed();
+        rss.stop_not_pressed_1 = in->emergency_stop_not_pressed_1();
+        rss.stop_not_pressed_2 = in->emergency_stop_not_pressed_2();
+        rss.pre_alarm = in->pre_alarm_warning();
+        rss.correct_mode = in->correct_mode_selected();
+        rss.radio_link_quality = in->radio_link_quality();
+        if (!rss.safe()) ++rss.unsafe_events;
+        return;
+    }
+    if (msg->GetDescriptor() == hytech::ebs_data::descriptor()) {
+        const auto in = std::static_pointer_cast<hytech::ebs_data>(msg);
+        std::unique_lock lock(_state_mutex);
+        auto& ebs = _vehicle_state.ebs;
+        ebs.received = true;
+        ebs.received_at = std::chrono::steady_clock::now();
+        ebs.air_pressure_1 = in->ebs_air_pressure_1();
+        ebs.air_pressure_2 = in->ebs_air_pressure_2();
+        ebs.engaged = in->ebs_engaged();
+        ebs.pressure_ok = in->ebs_pressure_ok();
+        ebs.supervisor_ok = in->ebs_supervisor_ok();
+        ebs.solenoid_1_on = in->ebs_solenoid_1_on();
+        ebs.solenoid_2_on = in->ebs_solenoid_2_on();
+        return;
+    }
     if (msg->GetDescriptor() == hytech_msgs::OMSData::descriptor()) {
         const auto in_msg = std::static_pointer_cast<hytech_msgs::OMSData>(msg);
         if (in_msg->has_motion()) {

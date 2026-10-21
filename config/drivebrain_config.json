@@ -38,6 +38,8 @@
         "max_steering_column_angle_deg": 15.0,
         "steering_sign": 1.0,
         "brake_requested": false,
+        "abort_requested": false,
+        "reset_emergency": false,
         "acceleration_mps2": 0.5,
         "accel_distance_m": 5.0,
         "braking_distance_m": 5.0,

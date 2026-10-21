@@ -9,6 +9,10 @@ add_executable(launch_ground_heading_tests test_ground_heading.cpp)
 target_include_directories(launch_ground_heading_tests PRIVATE
     ../../drivebrain_control/include ../../drivebrain_estimation/include)
 add_test(NAME launch_ground_heading COMMAND launch_ground_heading_tests)
+add_executable(launch_remote_mission_tests test_remote_mission.cpp)
+target_include_directories(launch_remote_mission_tests PRIVATE
+    ../../drivebrain_control/include ../../drivebrain_core/include)
+add_test(NAME launch_remote_mission COMMAND launch_remote_mission_tests)
 
 if(TARGET drivebrain_control)
     add_executable(launch_wheel_feedback_tests test_wheel_feedback.cpp)
