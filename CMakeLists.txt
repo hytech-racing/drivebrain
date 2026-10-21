@@ -126,5 +126,8 @@ endif()
 
 if(NOT CMAKE_CROSSCOMPILING)
     enable_testing()
+    add_executable(test_camera_sync tests/sil/test_camera_sync.cpp)
+    target_include_directories(test_camera_sync PRIVATE drivebrain_comms/include)
+    add_test(NAME camera_sync_protocol COMMAND test_camera_sync)
     # add_subdirectory(tests/sil)
 endif()
