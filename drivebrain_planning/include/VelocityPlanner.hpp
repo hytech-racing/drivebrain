@@ -33,9 +33,9 @@ public:
     Main method picking the closest forward point on path, estimating velocity limits from curvature, running solvers and returning torque request.
     @param state The current vehicle state.
     @param pose_to_path_curvature Pure Pursuit arc curvature that will be followed to keep the car on the path.
-    @return The torque control output to send to the vehicle.
+    @return The speed control output to send to the vehicle.
      */
-    core::TorqueControlOut step_controller(const core::VehicleState& state, const float pose_to_path_curvature);
+    core::SpeedControlOut step_controller(const core::VehicleState& state, const float pose_to_path_curvature);
     
     void setPath(const std::vector<core::xy_vec<float>>& path) {
         if (path.size() < lookahead_distance_) {
