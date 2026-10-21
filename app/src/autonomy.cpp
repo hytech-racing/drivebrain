@@ -88,7 +88,17 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
   
   // run control loops
   if (dv.path && !dv.path->empty()) {
+    SpeedControlOut speed_out{};
+    speed_out.mcu_recv_millis = vehicle_state.prev_MCU_recv_millis;
     float curvature;
+
+    // safely break to 0ms if steering fails
+    speed_out.desired_rpms = {0.0f, 0.0f, 0.0f, 0.0f};
+    speed_out.torque_lim_nm = {2.5f, 2.5f, 2.5f, 2.5f}; // 1/4 of max regen torque 
+    out.out = speed_out;
+    out.desired_steering_deg = 0.0f;
+
+
     std::optional<float> steering_angle = _lateral_controller.step_controller(vehicle_state, *dv.path, curvature); // pure pursuit
     if (steering_angle.has_value()) {
       out.desired_steering_deg = steering_angle.value();
@@ -96,11 +106,8 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
       out.out = _longitudinal_controller.step_controller(vehicle_state, curvature); // velocity controller
     } else {
       spdlog::error("Pure Pursuit controller failed to compute steering angle");
-      out.out = std::monostate{};
     }
-  } else {
-    out.out = std::monostate{};
-  }
+  } 
 
   //out.out = _longitudinal_controller.step_controller(vehicle_state); // velocity controller
 

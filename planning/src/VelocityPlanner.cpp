@@ -52,9 +52,13 @@ std::size_t VelocityPlanner::getHorizonPointIndex(const core::VehicleState& stat
     return std::numeric_limits<size_t>::max();
 }
 
-core::TorqueControlOut VelocityPlanner::step_controller(const core::VehicleState& state,
+core::SpeedControlOut VelocityPlanner::step_controller(const core::VehicleState& state,
                                                         const float pose_to_path_curvature) {
-    core::TorqueControlOut out = {};
+    // slow down completely with 1/4 of max torque
+    core::SpeedControlOut out = {};
+    out.desired_rpms = {0.0f, 0.0f, 0.0f, 0.0f}; 
+    out.torque_lim_nm = {2.5f, 2.5f, 2.5f, 2.5f}; // 1/4 of max regen torque
+
     const core::xy_vec<float> car_position{state.vehicle_position_map_frame.x, state.vehicle_position_map_frame.y}; // global frame
     const core::xy_vec<float> car_velocity{state.current_body_vel_ms.x, state.current_body_vel_ms.y}; // TODO: currently global frame but VNData is body frame need to add transforms to drivebrain
     const core::xy_vec<float> car_heading{state.vehicle_heading_map_frame_unit_vector.x, state.vehicle_heading_map_frame_unit_vector.y}; // global frame
@@ -133,10 +137,11 @@ core::TorqueControlOut VelocityPlanner::step_controller(const core::VehicleState
     }
 
     const float torque = accel.value() * kCarWeightKg * (constants::WHEEL_DIAMETER / 2.0f) / (4.0f * constants::GEARBOX_RATIO);
-    out.desired_torques_nm.FL = torque;
-    out.desired_torques_nm.FR = torque;
-    out.desired_torques_nm.RL = torque;
-    out.desired_torques_nm.RR = torque;
+    // TODO: clamp torque to max DTI 
+    const float rpm_target = torque > 0 ? 20000.0f : 0.0f;
+    out.torque_lim_nm = {torque, torque, torque, torque};
+    out.desired_rpms = {rpm_target, rpm_target, rpm_target, rpm_target};
+
     if (trace) {
         (*trace)["accel"] = *accel;
         (*trace)["torque_per_wheel_nm"] = torque;
