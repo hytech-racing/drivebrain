@@ -125,7 +125,7 @@ void BlackflyComms::_aravis_receive_loop() {
                 mcap_image->set_height(height);
                 if (compressed_buffer) {
                     mcap_image->set_data(compressed_buffer.get(), compressed_size);
-                    core::log_mcap_only(mcap_image, _name + "/raw");
+                    // core::log_mcap_only(mcap_image, _name + "/raw");
                 } else {
                     spdlog::error("[{}] Failed to compress camera frame", _name);
                 }
@@ -148,8 +148,20 @@ void BlackflyComms::_aravis_receive_loop() {
                 raw_image->set_data(jpeg_buf.data(), jpeg_buf.size());
                 core::log_foxglove_only(raw_image, _name + "/compressed");
 
+                auto perception_image = std::make_shared<foxglove::RawImage>();
+                perception_image->mutable_timestamp()->set_seconds(secs);
+                perception_image->mutable_timestamp()->set_nanos(nanos);
+                perception_image->set_frame_id(_name);
+                perception_image->set_width(bgr.cols);
+                perception_image->set_height(bgr.rows);
+                perception_image->set_encoding("bgr8");
+                perception_image->set_step(static_cast<uint32_t>(bgr.step[0]));
+                perception_image->set_data(bgr.data, bgr.step[0] * bgr.rows);
+                core::log_mcap_only(perception_image, _name + "/perception");
+                
                 #if JETSON_ENABLED
                 if (_detector) {
+
                     const auto detections = _detector->detect(bgr, 0.5f);
                     auto make_annotations = [&](float scale, bool unrotate) {
                         auto annotations = std::make_shared<foxglove::ImageAnnotations>();
@@ -193,7 +205,7 @@ void BlackflyComms::_aravis_receive_loop() {
                         return annotations;
                     };
 
-                    core::log_mcap_only(make_annotations(1.0f, true), _name + "/detections");                                     // matches <name>/raw
+                    // core::log_mcap_only(make_annotations(1.0f, true), _name + "/detections");                                     // matches <name>/raw
                     core::log_foxglove_only(make_annotations(2.0f, false), _name + "/detections"); // matches <name>/compressed
                 }
 #endif
