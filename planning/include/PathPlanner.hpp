@@ -3,27 +3,40 @@
 #include <cmath>
 #include <foxglove/FrameTransform.pb.h>
 #include <limits>
-#include <random>
 #include <vector>
 #include <algorithm>
-#include <numbers>
 
 #include <StateTracker.hpp>
 #include "base_msgs.pb.h"
 #include "dv_msgs.pb.h"
-#include "hytech_msgs.pb.h"
 #include <delaunator.hpp>
+#include "FoxgloveServer.hpp"
+
 
 // left side = blue
 // right side = yellow
 
-inline constexpr float MAX_TRACK_WIDTH_SQ = 6.0f * 6.0f;
-inline constexpr float MIN_COS_TURN = -0.3f;      // only reject points that are clearly behind
+//auto MAX_TRACK_WIDTH_SQ = core::FoxgloveServer::instance().get_param<float>("PathPlanning/max_track_width");
+//auto MIN_COS_TURN = core::FoxgloveServer::instance().get_param<float>("PathPlanning/min_cos_turn");
+inline constexpr float MAX_TRACK_WIDTH_SQ = 36.0f;
+inline constexpr float MIN_COS_TURN = -0.3f;      // only reject points that are behind the car
+
+// just to simulate the lidar's max field of view
 inline constexpr float MAX_JUMP_SQ  = 8.0f * 8.0f; 
 inline constexpr std::size_t PATH_POINTS_AHEAD = 20;
 
 
 namespace planning {
+
+
+  struct VehicleData {
+    float vehicle_x;
+    float vehicle_y;
+    float w;
+    float x; 
+    float y; 
+    float z;
+  };
 
   /**
     Plans a drivable path through a known set of cones
@@ -37,22 +50,36 @@ namespace planning {
       /* Initializations */
       std::vector<core::xy_vec<float>> midpoints; // Set of points to follow
       std::vector<double> coords; // Cone coordinates used to make the delaunay triangulation
+      VehicleData vehicle_data;
 
-      auto vehicle_data = core::StateTracker::instance().vehicle_sim_pos();
+      bool in_sim = true; // toggle to false when testing in real life
 
-      // Position and orientation updating only uses sim zmq message - need to update to work with sensor data for real life validation!!
-      float vehicle_x = vehicle_data.vehicle_x;
-      float vehicle_y = vehicle_data.vehicle_y;
+      auto vehicle_sim_data = core::StateTracker::instance().vehicle_sim_pos();
+      auto vehicle_sensor_data = core::StateTracker::instance().vehicle_state();
 
-      float w = vehicle_data.orientation_w;
-      float x = vehicle_data.orientation_x;
-      float y = vehicle_data.orientation_y;
-      float z = vehicle_data.orientation_z;
+      if (in_sim) {
+        vehicle_data.vehicle_x = vehicle_sim_data.vehicle_x;
+        vehicle_data.vehicle_y = vehicle_sim_data.vehicle_y;
+
+        vehicle_data.w = vehicle_sim_data.orientation_w;
+        vehicle_data.x = vehicle_sim_data.orientation_x;
+        vehicle_data.y = vehicle_sim_data.orientation_y;
+        vehicle_data.z = vehicle_sim_data.orientation_z;
+        
+      } else {
+        vehicle_data.vehicle_x = vehicle_sensor_data.first.vehicle_position_map_frame.x;
+        vehicle_data.vehicle_y = vehicle_sensor_data.first.vehicle_position_map_frame.y;
+
+        vehicle_data.w = vehicle_sensor_data.first.vehicle_orientation.Qw;
+        vehicle_data.x = vehicle_sensor_data.first.vehicle_orientation.Qx;
+        vehicle_data.y = vehicle_sensor_data.first.vehicle_orientation.Qy;
+      }
+
 
 
       // Finding yaw from quaternion orientation
-      float sin_yaw = 2.0 * (w * z + x * y);
-      float cos_yaw = 1.0 - 2.0 * (y * y + z * z);
+      float sin_yaw = 2.0 * (vehicle_data.w * vehicle_data.z + vehicle_data.x * vehicle_data.y);
+      float cos_yaw = 1.0 - 2.0 * (vehicle_data.y * vehicle_data.y + vehicle_data.z * vehicle_data.z);
       float vehicle_yaw = std::atan2(sin_yaw, cos_yaw);
       float heading_x = std::cos(vehicle_yaw);
       float heading_y = std::sin(vehicle_yaw);
@@ -116,8 +143,8 @@ namespace planning {
       std::size_t start = midpoints.size();
 
       for (std::size_t i = 0; i < midpoints.size(); i++) {
-        float dx = midpoints[i].x - vehicle_x;
-        float dy = midpoints[i].y - vehicle_y;
+        float dx = midpoints[i].x - vehicle_data.vehicle_x;
+        float dy = midpoints[i].y - vehicle_data.vehicle_y;
         float d = dx * dx + dy * dy;
         
         // using the dot product to determine whether a point is in front of or behind the car
@@ -131,12 +158,14 @@ namespace planning {
 
       std::swap(midpoints[0], midpoints[start]); // make the index of the closest cone the start of the midpoints
 
-      // sort the rest of the midpoints based on proximity to the first one
+      // sort the rest of the midpoints based on proximity to the one closest to the car
+      // midpoints[count - 1] = the last point you added to the path so far
+      // midpoints [count] = the slot that you are looking to fill
       std::size_t count = 1;
       float hx = heading_x;
       float hy = heading_y;
       while (count < midpoints.size() && count < PATH_POINTS_AHEAD) {
-        const auto current = midpoints[count - 1];
+        const auto current = midpoints[count - 1]; 
         std::size_t best_next = midpoints.size();
         float best_cost = std::numeric_limits<float>::max(); // using a cost variable to evaluate vector distance from the first midpoint
   
@@ -144,7 +173,7 @@ namespace planning {
           float dx = midpoints[j].x - current.x;
           float dy = midpoints[j].y - current.y;
           float d_square = dx * dx + dy * dy;
-  
+
           if (d_square < 1e-6f || d_square > MAX_JUMP_SQ) continue;                       
   
           float dist = std::sqrt(d_square);
@@ -161,6 +190,7 @@ namespace planning {
   
         std::swap(midpoints[count], midpoints[best_next]);
   
+        // update the heading based on the point just added so that the points follow the shape of the path, not just a straight line from the first midpoint
         float dx = midpoints[count].x - current.x;
         float dy = midpoints[count].y - current.y;
         float dist = std::sqrt(dx * dx + dy * dy);

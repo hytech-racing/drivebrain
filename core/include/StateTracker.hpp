@@ -67,6 +67,39 @@ namespace core {
     };
 
     /**
+     * @struct Represents an xy vector (2 elements of any type)
+     */
+    template <typename T>
+    struct xy_vec {
+        T x;
+        T y;
+
+        xy_vec operator+(const xy_vec& other) const {
+            return {x + other.x, y + other.y};
+        }
+
+        xy_vec operator-(const xy_vec& other) const {
+            return {x - other.x, y - other.y};
+        }
+
+        T operator*(const xy_vec& other) const {
+            return x * other.x + y * other.y;
+        }
+
+        xy_vec operator*(const float scalar) const {
+            return {x * scalar, y * scalar};
+        }
+
+        bool operator==(const xy_vec& other) const {
+            return x == other.x && y == other.y;
+        }
+
+        float length() const {
+            return std::sqrt(x * x + y * y);
+        }
+    };
+
+    /**
      * @struct Represents an xyz vector (3 elements of any type)
      */
     template <typename T>
@@ -201,8 +234,8 @@ namespace core {
      * @struct Represents the outputs of the tire model 
      */
     struct TireDynamics {
-        veh_vec<xyz_vec<float>> tire_forces_n;
-        veh_vec<xyz_vec<float>> tire_moments_nm;
+        veh_vec<xy_vec<float>> tire_forces_n;
+        veh_vec<xy_vec<float>> tire_moments_nm;
         veh_vec<float> accel_saturation_nm;
         veh_vec<float> brake_saturation_nm;
         float v_y_lm;
@@ -290,6 +323,13 @@ namespace core {
         float pack_voltage;
     };
 
+    struct Orientation {
+        float Qw;
+        float Qx; 
+        float Qy;
+        float Qz;
+    };
+
     /**
      * @struct Contains a wealth of data
      * representing the entire internal 
@@ -319,9 +359,10 @@ namespace core {
         float old_energy_meter_kw;
         DrivetrainData dt_data;
         AccumulatorData acc_data;
+        Orientation vehicle_orientation;
 
-        xyz_vec<float> vehicle_position_map_frame;
-        xyz_vec<float> vehicle_heading_map_frame_unit_vector;
+        xy_vec<float> vehicle_position_map_frame;
+        xy_vec<float> vehicle_heading_map_frame_unit_vector;
     };
 
     enum class ControllerManagerStatus
@@ -473,6 +514,11 @@ namespace core {
              */
             std::pair<TeleopCommand, bool> teleop_command();
 
+            /**
+             * Sets the latest vehicle pose from the sim 
+             *
+             * @param vehicle_pose the current position and orientation of the vehicle that the sim tracks
+             */
             void set_vehicle_sim_pose(std::shared_ptr<const hytech_msgs::pose> vehicle_pose);
 
             VehicleSimPosition vehicle_sim_pos();

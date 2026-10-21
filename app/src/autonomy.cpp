@@ -118,7 +118,6 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
 }
 
 void Autonomy::_run() {
-  spdlog::info("in autonomy run");
   auto next_tick = std::chrono::steady_clock::now();
   std::shared_ptr<const foxglove::PointCloud> last_scan;
 
@@ -136,7 +135,6 @@ void Autonomy::_run() {
       StateTracker::instance().set_dv_path(
           std::make_shared<const std::vector<xy_vec<float>>>(std::move(path)));
     }
-    spdlog::info("rendered path");
 
     std::this_thread::sleep_until(next_tick);
   }

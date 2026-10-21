@@ -95,11 +95,19 @@ void StateTracker::handle_receive_protobuf_message(std::shared_ptr<google::proto
             std::unique_lock lk(_state_mutex);
             _vehicle_state.vehicle_position_map_frame.x = in_msg->position().x();
             _vehicle_state.vehicle_position_map_frame.y = in_msg->position().y();
+
             const auto orientation = in_msg->orientation();
+            
+            _vehicle_state.vehicle_orientation.Qw = orientation.w();
+            _vehicle_state.vehicle_orientation.Qx = orientation.x();
+            _vehicle_state.vehicle_orientation.Qy = orientation.y();
+            _vehicle_state.vehicle_orientation.Qz = orientation.z();
+
             const auto Qx = orientation.x();
             const auto Qy = orientation.y();
             const auto Qz = orientation.z();
             const auto Qw = orientation.w();
+
             const float heading = std::atan2(
                 2.0 * (Qz * Qw + Qx * Qy),
                 -1.0 + 2.0 * (Qw * Qw + Qx * Qx)

@@ -39,7 +39,10 @@ std::vector<core::xy_vec<float>> PurePursuitController::getGoalPointCandidates(c
             const float t2 = (-(d*f) - sqrt(discriminant)) / (d*d);
 
             // make sure the intersection points are within the segment and not on the line out of bounds
+<<<<<<< HEAD
             // std::cout << "Found intersection points: ";
+=======
+>>>>>>> origin/feat/dv_planning
             if (t1 >= 0.0f && t1 <= 1.0f && !(goal_point_candidates.size() >= 1 && goal_point_candidates.back() == p1 + d * t1)) {// avoid adding a vertex twice if it's exactly on the circle
                 goal_point_candidates.push_back(p1 + d * t1);
                             // std::cout << "t1: " << t1 << ", point: (" << (p1 + d * t1).x << ", " << (p1 + d * t1).y << "); ";
@@ -178,6 +181,22 @@ std::shared_ptr<hytech_msgs::PlannerVisualization> PurePursuitController::getLog
     return msg;
 }
 
+
+float PurePursuitController::dynamic_lookahead(float prev_vehicle_x, float prev_vehicle_y, float dt) {
+    core::veh_vec<float> total_torque = core::StateTracker::instance().vehicle_state().first.current_torques_nm;
+    float torque_sum = total_torque.FL + total_torque.FR + total_torque.RL + total_torque.RR;
+    float total_force = torque_sum / wheel_radius;
+
+    auto dv_state = core::StateTracker::instance().vehicle_sim_pos();
+    float dx = dv_state.vehicle_x - prev_vehicle_x;
+    float dy = dv_state.vehicle_y - prev_vehicle_y;
+    float current_velocity = std::sqrt(dx * dx + dy * dy) / dt; // replace with sensor measurements?
+
+    float lookahead_distance = k_d * (current_velocity/ref_velocity) + lookahead_base;
+
+    return lookahead_distance;
+
+}
 
 } // namespace driverless
 } // namespace control

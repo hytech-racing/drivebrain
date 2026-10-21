@@ -128,7 +128,6 @@ inline void render_path(const std::vector<xy_vec<float>>& path, std::string id, 
         auto* p = line->add_points();
         p->set_x(point.x);
         p->set_y(point.y);
-        p->set_z(0.0f);
     }
     auto* color = line->mutable_color();
     color->set_r(0.0);
