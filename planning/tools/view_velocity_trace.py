@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 
 TRACE_PATH = Path("/tmp/velocity-planner.jsonl")
-VIEWER_KEYS = {"left", "right", "up", "down", "home", "end", "f", "g", "G", "shift+g", "s", "r", "+", "=", "-", " ", "space"}
+VIEWER_KEYS = {"left", "right", "up", "down", "home", "end", "f", "g", "G", "shift+g", "s", "r", "+", "=", "-", " ", "space", "b", "[", "]"}
 
 
 def reserve_viewer_keys():
@@ -96,6 +96,8 @@ class TraceViewer:
         self.reader_generation = reader.generation
         self.following = live
         self.paused = False
+        self.direction = 1
+        self.speed = 1.0
         self.play_anchor_trace_ns = None
         self.play_anchor_wall_ns = None
         self.show_spline = True
@@ -144,12 +146,23 @@ class TraceViewer:
                 self.play_anchor_wall_ns = time.monotonic_ns()
                 changed = True
             else:
-                target_trace_ns = self.play_anchor_trace_ns + time.monotonic_ns() - self.play_anchor_wall_ns
-                while (self.record_index + 1 < len(self.reader.records)
-                       and self.reader.records[self.record_index + 1]["timestamp_ns"] <= target_trace_ns):
-                    self.record_index += 1
-                    self.change_index = len(self.record["changes"])
-                    changed = True
+                elapsed_ns = (time.monotonic_ns() - self.play_anchor_wall_ns) * self.speed
+                target_trace_ns = self.play_anchor_trace_ns + self.direction * elapsed_ns
+                if self.direction > 0:
+                    while (self.record_index + 1 < len(self.reader.records)
+                           and self.reader.records[self.record_index + 1]["timestamp_ns"] <= target_trace_ns):
+                        self.record_index += 1
+                        self.change_index = len(self.record["changes"])
+                        changed = True
+                else:
+                    while (self.record_index > 0
+                           and self.reader.records[self.record_index - 1]["timestamp_ns"] >= target_trace_ns):
+                        self.record_index -= 1
+                        self.change_index = len(self.record["changes"])
+                        changed = True
+                    if self.record_index == 0:
+                        self.following = False  # reached the start of the trace
+                        changed = True
         else:
             self.record_index = min(self.record_index, len(self.reader.records) - 1)
         if changed:
@@ -160,7 +173,7 @@ class TraceViewer:
         return self.reader.records[self.record_index]
 
     def on_key(self, event):
-        if not self.reader.records and event.key not in ("f", " ", "space"):
+        if not self.reader.records and event.key not in ("f", "b", " ", "space"):
             return
         if event.key in ("left", "right", "up", "down", "home", "end", "g", "G", "shift+g"):
             self.paused = False
@@ -192,12 +205,21 @@ class TraceViewer:
             self.following = False
             self.record_index = len(self.reader.records) - 1
             self.change_index = len(self.record["changes"])
-        elif event.key in ("f", " ", "space"):
-            if event.key != "f" and self.following:
+        elif event.key in ("[", "]"):
+            self.speed = min(32.0, self.speed * 2) if event.key == "]" else max(0.125, self.speed / 2)
+            if self.following and self.reader.records:
+                self.play_anchor_trace_ns = self.record["timestamp_ns"]
+                self.play_anchor_wall_ns = time.monotonic_ns()
+        elif event.key in ("f", "b", " ", "space"):
+            if event.key in (" ", "space") and self.following:
                 self.following = False
                 self.paused = True
                 self.draw()
                 return
+            if event.key == "f":
+                self.direction = 1
+            elif event.key == "b":
+                self.direction = -1
             self.following = True
             self.paused = False
             self.reader.read_available()
@@ -339,10 +361,20 @@ class TraceViewer:
         self.map_ax.set_title(f"Iteration {record['iteration']}  |  {record['status']}")
 
         velocity = car["velocity_raw"]
+        if self.paused:
+            mode = "PAUSED"
+        elif self.following and self.direction < 0:
+            mode = f"REVERSE {self.speed:g}x"
+        elif self.following and self.record_index < len(self.reader.records) - 1:
+            mode = f"PLAYING {self.speed:g}x"
+        elif self.following:
+            mode = "LIVE (waiting)"
+        else:
+            mode = "MANUAL"
         rows = [
             f"Record {self.record_index + 1}/{len(self.reader.records)}",
             f"Step {self.change_index}/{len(record['changes'])}",
-            f"Mode: {'PAUSED' if self.paused else 'PLAYING 1x' if self.following and self.record_index < len(self.reader.records) - 1 else 'LIVE (waiting)' if self.following else 'MANUAL'}",
+            f"Mode: {mode}",
             f"Spline: {'shown' if self.show_spline else 'hidden'}",
             f"View scale: {self.zoom_scale:.2f}x",
             "Gray path points | Orange spline | Star first point",
@@ -390,7 +422,8 @@ class TraceViewer:
                          f"Torque/wheel: {format_value(record['torque_per_wheel_nm'])} Nm", ""])
         rows.extend(["←/→  previous/next iteration", "↓/↑  previous/next step",
                      "G/Shift+G  first/last iteration", "Home/End  first/final step",
-                     "Space  pause/resume; F  play from here", "S  show/hide spline",
+                     "Space  pause/resume; F/B  play forward/back",
+                     "[/]  halve/double playback speed", "S  show/hide spline",
                      "Scroll or +/-  zoom; left drag  pan; R  reset view"])
         self.info_ax.text(0.02, 0.98, "\n".join(rows), va="top", family="monospace", fontsize=9,
                           transform=self.info_ax.transAxes)

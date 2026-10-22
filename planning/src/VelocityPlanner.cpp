@@ -26,7 +26,50 @@ VelocityPlanner::VelocityPlanner(float max_car_velocity)
     : max_car_velocity_(max_car_velocity) {
         path_points_.reserve(lookahead_distance_);
         trace_file_.open(kTracePath, std::ios::out | std::ios::trunc);
-        if (!trace_file_) spdlog::error("Cannot open velocity planner trace: {}", kTracePath);
+        if (!trace_file_) {
+            spdlog::error("Cannot open velocity planner trace: {}", kTracePath);
+            return;
+        }
+        trace_thread_ = std::thread([this]() { traceWriterLoop(); });
+}
+
+VelocityPlanner::~VelocityPlanner() {
+    {
+        std::unique_lock lock(trace_mutex_);
+        trace_running_ = false;
+    }
+    trace_cv_.notify_all();
+    if (trace_thread_.joinable()) trace_thread_.join();
+}
+
+void VelocityPlanner::enqueueTrace(nlohmann::json&& record) {
+    {
+        std::unique_lock lock(trace_mutex_);
+        if (trace_queue_.size() >= kMaxQueuedTraces) {
+            trace_queue_.pop_front(); // writer fell behind, drop the oldest record rather than stall the control loop
+        }
+        trace_queue_.push_back(std::move(record));
+    }
+    trace_cv_.notify_one();
+}
+
+void VelocityPlanner::traceWriterLoop() {
+    std::deque<nlohmann::json> batch;
+    while (true) {
+        {
+            std::unique_lock lock(trace_mutex_);
+            trace_cv_.wait(lock, [this]() { return !trace_queue_.empty() || !trace_running_; });
+            if (!trace_running_ && trace_queue_.empty()) {
+                break;
+            }
+            batch.swap(trace_queue_);
+        }
+        for (const auto& record : batch) {
+            trace_file_ << record.dump() << '\n';
+        }
+        batch.clear();
+        trace_file_.flush(); // one flush per batch, still makes completed iterations visible to the live viewer
+    }
 }
 
 void VelocityPlanner::setMaxCarVelocity(float velocity_mps) {
@@ -84,8 +127,7 @@ core::SpeedControlOut VelocityPlanner::step_controller(const core::VehicleState&
     const auto finish_trace = [&](const char* status) {
         if (!trace) return;
         (*trace)["status"] = status;
-        trace_file_ << trace->dump() << '\n';
-        trace_file_.flush(); // make completed iterations visible to the live viewer
+        enqueueTrace(std::move(*trace));
     };
 
 
@@ -314,7 +356,7 @@ bool VelocityPlanner::solver(const core::VehicleState& state, const float pose_t
                 };
             }
             // TODO: 0 vs max negative VS break
-            a_long_avail = 0; // set accel to 0 since our entire limit is consumed by lateral forces and hope we don't crash
+            a_long_avail = -max_accel; // set accel to -max_accel since our entire limit is consumed by lateral forces and hope we don't crash
             
         } else {
             a_long_avail = std::sqrt(max_accel * max_accel - lateral_accel * lateral_accel); // friction circle model
