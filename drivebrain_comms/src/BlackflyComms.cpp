@@ -108,7 +108,7 @@ void BlackflyComms::_aravis_receive_loop() {
                     continue;
                 }
 
-                const guint64 timestamp_ns = arv_buffer_get_timestamp(buffer);
+                const uint64_t timestamp_ns = arv_buffer_get_timestamp(buffer);
                 const auto secs = timestamp_ns / 1000000000ULL;
                 const auto nanos = timestamp_ns % 1000000000ULL;
 
