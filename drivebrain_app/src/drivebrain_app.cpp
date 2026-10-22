@@ -34,6 +34,9 @@ DrivebrainApp::DrivebrainApp(const std::string& json_param_path, const std::stri
 DrivebrainApp::~DrivebrainApp() {
   running = false;
 
+  // The first camera owns the group trigger thread, which refers to all cameras.
+  if (!_camera_drivers.empty()) _camera_drivers.front()->stop_synchronization();
+  _camera_drivers.clear();
   core::MCAPLogger::instance().destroy();
   core::FoxgloveServer::instance().destroy();
   spdlog::info("Logging singletons safely destroyed");
@@ -108,8 +111,16 @@ void DrivebrainApp::run() {
   spdlog::info("Found {} cameras", num_cameras);
   for (unsigned int i = 0; i < num_cameras; i++) {
     auto camera = std::make_unique<comms::BlackflyComms>();
-    camera->start(arv_get_device_id(i), std::string("blackfly_") + arv_get_device_serial_nbr(i), "BayerRG8", 15.0);
+    if (!camera->start(arv_get_device_id(i), std::string("blackfly_") + arv_get_device_serial_nbr(i), "BayerRG8", 15.0)) {
+      spdlog::error("Camera setup failed; disabling synchronized camera group");
+      _camera_drivers.clear();
+      break;
+    }
     _camera_drivers.push_back(std::move(camera));
+  }
+  if (_camera_drivers.size() < expected_cameras || !comms::BlackflyComms::synchronize(_camera_drivers)) {
+    spdlog::error("Synchronized camera capture unavailable; check camera features and Jetson PTP master");
+    _camera_drivers.clear();
   }
 #endif
 

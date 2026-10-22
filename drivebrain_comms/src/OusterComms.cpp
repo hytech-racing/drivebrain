@@ -73,7 +73,7 @@ int comms::OusterComms::_init() {
         calibration->mutable_timestamp()->set_nanos(nanos);
         calibration->set_encoding("ouster_sensor_metadata_json");
         calibration->set_data(metadata_json.data(), metadata_json.size());
-        core::log_mcap_only(calibration, "ouster/calibration");
+        // core::log_mcap_only(calibration, "ouster/calibration");
     } catch (const std::exception& error) {
         spdlog::error("Failed to prepare Ouster calibration: {}", error.what());
         return -1;
@@ -163,7 +163,7 @@ void comms::OusterComms::_loop() {
             recorded_range->set_height(static_cast<uint32_t>(range.rows()));
 
             recorded_range->set_data(compressed_ranges.get(), compressed_size);
-            core::log_mcap_only(recorded_range, "ouster/range");
+            // core::log_mcap_only(recorded_range, "ouster/range");
         } else {
             spdlog::error("Failed to compress Ouster range frame");
         }
