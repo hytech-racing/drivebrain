@@ -91,10 +91,8 @@
         "ka": 0.1,
         "mm_cruise_velocity_deg_s": 720.0,
         "mm_acceleration_deg_s2": 2880.0,
-        "test_mode": false,
+        "arm_steering": false,
         "use_test_angle": false,
-        "use_sine_test": false,
-        "sine_speed_scale": 1.0,
         "test_angle_deg": 0.0
     }
 }

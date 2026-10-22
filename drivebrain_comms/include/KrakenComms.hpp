@@ -189,14 +189,10 @@ namespace comms
         /* When false, the enable is not fed so the Talon stays disabled (required to upload a license from Tuner X) */
         std::atomic<bool> _enable_output{true};
         /* When false, the motor is held in neutral */
-        std::atomic<bool> _test_mode{false};
-        /* When true (and test mode is on), _run() targets _test_angle_deg instead of set_angle() input */
+        std::atomic<bool> _arm_steering{false};
+        /* When true (and steering is armed), _run() targets _test_angle_deg instead of set_angle() input */
         std::atomic<bool> _use_test_angle{false};
         std::atomic<float> _test_angle_deg{0.0f};
-        /* When true (and test mode is on), _run() targets a hard coded sinusoid, overriding the other inputs */
-        std::atomic<bool> _use_sine_test{false};
-        /* Multiplier on the sine test frequency, 1.0 is the base 4 s period */
-        std::atomic<float> _sine_speed_scale{1.0f};
         boost::signals2::scoped_connection _param_connection;
 
         std::unique_ptr<ctre::phoenix6::hardware::TalonFX> _kraken;

@@ -169,24 +169,18 @@ namespace comms
         spdlog::info("KrakenComms: sticky faults at startup: {}", _describe_faults(true));
 
         _enable_output = foxglove.get_param<bool>("kraken_comms/enable_output").value_or(true);
-        _test_mode = foxglove.get_param<bool>("kraken_comms/test_mode").value_or(false);
+        _arm_steering = foxglove.get_param<bool>("kraken_comms/arm_steering").value_or(false);
         _use_test_angle = foxglove.get_param<bool>("kraken_comms/use_test_angle").value_or(false);
         _test_angle_deg = foxglove.get_param<float>("kraken_comms/test_angle_deg").value_or(0.0f);
-        _use_sine_test = foxglove.get_param<bool>("kraken_comms/use_sine_test").value_or(false);
-        _sine_speed_scale = foxglove.get_param<float>("kraken_comms/sine_speed_scale").value_or(1.0f);
-        if (_test_mode)
+        if (_arm_steering)
         {
-            if (_use_sine_test)
+            if (_use_test_angle)
             {
-                spdlog::warn("KrakenComms: test_mode enabled, targeting sine test at {}x speed", _sine_speed_scale.load());
-            }
-            else if (_use_test_angle)
-            {
-                spdlog::warn("KrakenComms: test_mode enabled, targeting test angle {} deg", _test_angle_deg.load());
+                spdlog::warn("KrakenComms: steering armed, targeting test angle {} deg", _test_angle_deg.load());
             }
             else
             {
-                spdlog::warn("KrakenComms: test_mode enabled, targeting commanded angle");
+                spdlog::warn("KrakenComms: steering armed, targeting commanded angle");
             }
         }
 
@@ -247,13 +241,13 @@ namespace comms
             _enable_output = *enable_output;
         }
 
-        if (auto is_test_mode_on = core::process_param_update<bool>(new_param_map, "kraken_comms/test_mode"))
+        if (auto arm_steering = core::process_param_update<bool>(new_param_map, "kraken_comms/arm_steering"))
         {
-            if (*is_test_mode_on != _test_mode.load())
+            if (*arm_steering != _arm_steering.load())
             {
-                spdlog::warn("KrakenComms: test_mode {}", *is_test_mode_on ? "enabled" : "disabled");
+                spdlog::warn("KrakenComms: steering {}", *arm_steering ? "armed" : "disarmed");
             }
-            _test_mode = *is_test_mode_on;
+            _arm_steering = *arm_steering;
         }
 
         if (auto is_test_angle_on = core::process_param_update<bool>(new_param_map, "kraken_comms/use_test_angle"))
@@ -263,20 +257,6 @@ namespace comms
                 spdlog::warn("KrakenComms: use_test_angle {}", *is_test_angle_on ? "enabled" : "disabled");
             }
             _use_test_angle = *is_test_angle_on;
-        }
-
-        if (auto is_sine_test_on = core::process_param_update<bool>(new_param_map, "kraken_comms/use_sine_test"))
-        {
-            if (*is_sine_test_on != _use_sine_test.load())
-            {
-                spdlog::warn("KrakenComms: use_sine_test {}", *is_sine_test_on ? "enabled" : "disabled");
-            }
-            _use_sine_test = *is_sine_test_on;
-        }
-
-        if (auto new_sine_speed_scale = core::process_param_update<float>(new_param_map, "kraken_comms/sine_speed_scale"))
-        {
-            _sine_speed_scale = *new_sine_speed_scale;
         }
 
         if (auto new_test_angle = core::process_param_update<float>(new_param_map, "kraken_comms/test_angle_deg"))
@@ -504,14 +484,7 @@ namespace comms
         int last_logged_fault_field = 0;
         bool is_fault_signal_ok = true;
 
-        // Sine test sweeps -80 to 80 deg, restarting from 0 deg each time it is enabled.
-        // Phase is accumulated per tick so changing sine_speed_scale mid-test doesn't jump the target.
-        constexpr float sine_amplitude_deg = 80.0f;
-        constexpr float sine_period_s = 4.0f;
-        bool was_sine_running = false;
-        bool was_test_mode = false;
-        float sine_phase_rad = 0.0f;
-        auto last_sine_tick = steady_clock::time_point{};
+        bool was_steering_armed = false;
 
         while (_running)
         {
@@ -564,36 +537,19 @@ namespace comms
             }
             else
             {
-                const bool is_sine_running = _test_mode && _use_sine_test;
                 const auto now = steady_clock::now();
-                if (is_sine_running && !was_sine_running)
-                {
-                    sine_phase_rad = 0.0f;
-                }
-                else if (is_sine_running)
-                {
-                    const float dt_s = duration<float>(now - last_sine_tick).count();
-                    sine_phase_rad += 2.0f * static_cast<float>(M_PI) * _sine_speed_scale.load() * dt_s / sine_period_s;
-                    sine_phase_rad = std::fmod(sine_phase_rad, 2.0f * static_cast<float>(M_PI));
-                }
-                last_sine_tick = now;
-                was_sine_running = is_sine_running;
 
-                const bool is_test_mode = _test_mode;
-                if (is_test_mode && !was_test_mode)
+                const bool is_steering_armed = _arm_steering;
+                if (is_steering_armed && !was_steering_armed)
                 {
                     // Hold where the column is until something else commands an angle
                     set_angle(column_deg);
                 }
-                was_test_mode = is_test_mode;
+                was_steering_armed = is_steering_armed;
 
-                if (is_test_mode)
+                if (is_steering_armed)
                 {
-                    float input_deg = _use_test_angle ? _test_angle_deg.load() : get_commanded_angle_deg();
-                    if (is_sine_running)
-                    {
-                        input_deg = sine_amplitude_deg * std::sin(sine_phase_rad);
-                    }
+                    const float input_deg = _use_test_angle ? _test_angle_deg.load() : get_commanded_angle_deg();
                     const float target_deg = std::clamp(input_deg, _config.min_angle_deg, _config.max_angle_deg);
 
                     const float column_velocity_deg_s = static_cast<float>(_kraken->GetVelocity().GetValueAsDouble() * 360.0);
