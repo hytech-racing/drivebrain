@@ -186,7 +186,7 @@ void comms::OusterComms::_loop() {
             ++m;
         }
         live_data->resize(m * point_size);
-        core::log_foxglove_only(pc); // TODO FIX
+        core::log_foxglove_only(live_pc);
         core::StateTracker::instance().handle_receive_protobuf_message(pc);
         
     }
