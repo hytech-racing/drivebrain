@@ -56,12 +56,24 @@ void DrivebrainApp::run() {
 
   spdlog::info("Constructed drivebrain controller interface");
 
-  _acu_core_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::CCUData>>(_io_context, 6666);
+  _acu_core_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::ACUCoreData>>(_io_context, 7777);
   _acu_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::ACUAllData>>(_io_context, 7766);
   _vcr_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::VCRData_s>>(_io_context, 9999);
   _vcf_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::VCFData_s>>(_io_context, 4444);
 
   spdlog::info("Initialized ethernet drivers");
+
+#if HOOTL_ENABLED
+  if (core::FoxgloveServer::instance().get_param<bool>("oms/enabled").value_or(false)) {
+    auto oms_host = core::FoxgloveServer::instance().get_param<std::string>("oms/host");
+    auto oms_port = core::FoxgloveServer::instance().get_param<int>("oms/port");
+    if (oms_host && oms_port) {
+      _oms_comms = std::make_unique<comms::OMSComms>(_io_context, oms_host.value(), static_cast<uint16_t>(oms_port.value()));
+    } else {
+      spdlog::error("Couldn't load oms/host and oms/port");
+    }
+  }
+#endif
 
 #if HOOTL_ENABLED
   comms::SimComms::create();
