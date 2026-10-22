@@ -1,7 +1,6 @@
 #include "BlackflyComms.hpp"
 #include <ImageCompression.hpp>
 
-#include <chrono>
 #include <foxglove/websocket/common.hpp>
 #include <memory>
 
@@ -109,9 +108,9 @@ void BlackflyComms::_aravis_receive_loop() {
                     continue;
                 }
 
-                auto now = std::chrono::system_clock::now().time_since_epoch();
-                auto secs = std::chrono::duration_cast<std::chrono::seconds>(now).count();
-                auto nanos = std::chrono::duration_cast<std::chrono::nanoseconds>(now).count() % 1000000000;
+                const uint64_t timestamp_ns = arv_buffer_get_timestamp(buffer);
+                const auto secs = timestamp_ns / 1000000000ULL;
+                const auto nanos = timestamp_ns % 1000000000ULL;
 
                 // Log full compressed image to mcap
                 std::size_t compressed_size = 0;
