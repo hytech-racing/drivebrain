@@ -63,6 +63,7 @@ void DrivebrainApp::run() {
 
   spdlog::info("Initialized ethernet drivers");
 
+#if HOOTL_ENABLED
   if (core::FoxgloveServer::instance().get_param<bool>("oms/enabled").value_or(false)) {
     auto oms_host = core::FoxgloveServer::instance().get_param<std::string>("oms/host");
     auto oms_port = core::FoxgloveServer::instance().get_param<int>("oms/port");
@@ -72,6 +73,7 @@ void DrivebrainApp::run() {
       spdlog::error("Couldn't load oms/host and oms/port");
     }
   }
+#endif
 
 #if HOOTL_ENABLED
   comms::SimComms::create();
