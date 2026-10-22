@@ -1,6 +1,11 @@
 {
     "telem_can_device": "can0",
     "aux_can_device": "can1",
+    "oms": {
+        "enabled": true,
+        "host": "192.168.3.50",
+        "port": 51000
+    },
     "SimpleSpeedController": {
         "max_torque": 21.0,
         "max_regen_torque": 10.0,

@@ -23,7 +23,7 @@ namespace core {
         mcap::Timestamp log_time;
     };
 
-    using MsgType = std::shared_ptr<google::protobuf::Message>;
+    using MsgType = std::shared_ptr<const google::protobuf::Message>;
 
     class MCAPLogger {
         public: 
@@ -55,7 +55,7 @@ namespace core {
               spdlog::info("Destructing mcap logger");
               {
                 std::lock_guard lock(_input_buffer_mutex);
-                _logging = false;
+              _logging = false;
               }
 
               _s_instance.store(nullptr, std::memory_order_release);
@@ -158,6 +158,7 @@ namespace core {
             nlohmann::json _initial_params;
             std::unordered_map<std::string, uint32_t> _name_to_id_map;
             std::unordered_map<std::string, uint16_t> _type_to_schema_id_map;
+            std::string _base_dir;
             std::string _log_name = "NONE";
             bool _logging = false;
     };

@@ -1,8 +1,8 @@
-ARG BASE_PLATFORM=linux/amd64
-FROM --platform=${BASE_PLATFORM} ubuntu:22.04
+# Builds for the host's arch (amd64 on CI, arm64 on Apple Silicon). Every Jetson/Phoenix
+# dependency below is an arm64 .deb unpacked into a sysroot, so nothing needs an amd64 host
+FROM ubuntu:22.04 as dev-base
 
 ENV DEBIAN_FRONTEND=noninteractive
-
 RUN apt-get update && apt-get install -y \
     gcc-aarch64-linux-gnu \
     g++-aarch64-linux-gnu \
@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y \
     patchelf \
     && apt-get clean
 
-RUN wget -q "https://github.com/foxglove/mcap/releases/download/releases%2Fmcap-cli%2Fv0.3.0/mcap-linux-amd64" -O /usr/local/bin/mcap \
+RUN wget -q "https://github.com/foxglove/mcap/releases/download/releases%2Fmcap-cli%2Fv0.3.0/mcap-linux-$(dpkg --print-architecture)" -O /usr/local/bin/mcap \
     && chmod +x /usr/local/bin/mcap \
     && mcap --version
 
@@ -64,5 +64,17 @@ RUN mkdir -p ${JETSON_SYSROOT} \
         ${JETSON_SYSROOT}/usr/lib/phoenix6/*_Replay.so
 
 WORKDIR /
+    
+CMD ["/bin/bash"]
+
+# Simulation layer
+FROM dev-base as dev-sim
+RUN wget https://packages.osrfoundation.org/gazebo.gpg -O /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable jammy main" \
+    > /etc/apt/sources.list.d/gazebo-stable.list \
+    && apt-get update && apt-get install -y \
+    libgz-transport13-dev \
+    libgz-msgs10-dev \
+    && apt-get clean
 
 CMD ["/bin/bash"]

@@ -17,7 +17,7 @@ fi
 
 $SCP build-arm/drivebrain "$HOST":/home/hytech/drivebrain
 $SCP config/drivebrain_config.json "$HOST":/home/hytech/drivebrain_config.json
-$SCP build-arm/_deps/ht_can-src/dbc/ht_can.dbc "$HOST":/home/hytech/hytech.dbc
+$SCP dbc/ht_can.dbc "$HOST":/home/hytech/hytech.dbc
 
 ssh $SSH_OPTS -O exit "$HOST" 2>/dev/null || true
 echo "deployed to $HOST"

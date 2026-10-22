@@ -1,5 +1,6 @@
 from conan import ConanFile
 from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout
+from conan.tools.build import cross_building
 from os import path
 
 class DrivebrainSoftware(ConanFile):
@@ -22,11 +23,12 @@ class DrivebrainSoftware(ConanFile):
         self.requires("foxglove-websocket/1.4.0", transitive_headers=True)
         self.requires("foxglove-schemas-protobuf/0.25.1", transitive_headers=True)
         self.requires("protobuf/5.29.3", transitive_headers=True)
-        self.requires("boost/1.80.0")
+        self.requires("boost/1.84.0", override=True)
         self.requires("spdlog/1.13.0")
         self.requires("mcap/2.0.2")
         self.requires("zstd/1.5.5")
         self.requires("dbcppp/3.2.6")
+        self.requires("gtsam/4.2.1")
         self.requires("cppzmq/4.11.0")
         self.requires("libzip/1.11.4")
         self.requires("libcurl/8.21.0")
@@ -34,7 +36,7 @@ class DrivebrainSoftware(ConanFile):
         self.requires("ouster_sdk/1.0.1")
         self.requires("eigen/3.4.0", transitive_headers=True)
         self.requires("ht_proto/master-2026-10-19t05_26_49")
-        self.requires("ht_can/main-337")
+        self.requires("ht_can/main-344")
         
         self.requires("aravis/0.8.33")
         self.requires("opencv/4.14.0", options={
@@ -51,10 +53,10 @@ class DrivebrainSoftware(ConanFile):
         })
 
     def build_requirements(self): 
-        if not self.settings_build.get_safe("cross_build"):
+        if not cross_building(self):
             self.requires("gtest/1.17.0")
         self.tool_requires("protobuf/5.29.3")
-        
+
     def configure(self):
         self.options["aravis"].usb = False
         self.options["hwloc"].shared = True
@@ -63,3 +65,5 @@ class DrivebrainSoftware(ConanFile):
         self.options["ouster_sdk"].build_osf = False
         self.options["ouster_sdk"].build_pcap = False
         self.options["ouster_sdk"].build_mapping = False
+
+        # TODO: we will need onettb at some point for fast parallelization, but it's annoying as fuck to build rn so idgaf
