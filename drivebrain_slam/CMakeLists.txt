@@ -11,5 +11,5 @@ target_include_directories(drivebrain_slam PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/i
 target_link_libraries(drivebrain_slam PUBLIC
     drivebrain_core
     gtsam
-    hytech_msgs_cpp_lib
+    ht_proto::hytech_msgs_cpp_lib
 )

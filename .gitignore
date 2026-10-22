@@ -22,3 +22,4 @@ CMakeUserPresets.json
 *.mcap
 
 tests/replay/mcap/*.mcap
+.agents/

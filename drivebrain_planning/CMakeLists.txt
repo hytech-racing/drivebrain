@@ -6,5 +6,5 @@ target_include_directories(drivebrain_planning INTERFACE "${CMAKE_CURRENT_SOURCE
 
 target_link_libraries(drivebrain_planning INTERFACE
     drivebrain_core
-    hytech_msgs_cpp_lib
+    ht_proto::hytech_msgs_cpp_lib
 )

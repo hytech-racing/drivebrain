@@ -158,7 +158,7 @@ int core::MCAPLogger::open_new_mcap() {
 
     std::vector<std::string> proto_names = {"hytech_msgs.proto", "ht_can.proto", "dv_msgs.proto",
                                             "foxglove/PointCloud.proto", "foxglove/SceneUpdate.proto", "foxglove/FrameTransform.proto",
-                                            "foxglove/CompressedImage.proto", "foxglove/RawImage.proto"};
+                                            "foxglove/CompressedImage.proto", "foxglove/RawImage.proto", "foxglove/ImageAnnotations.proto"};
 
     auto descriptors = get_pb_descriptors(proto_names);
 

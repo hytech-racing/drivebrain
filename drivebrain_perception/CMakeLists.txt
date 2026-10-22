@@ -8,5 +8,5 @@ target_include_directories(drivebrain_perception PUBLIC "${CMAKE_CURRENT_SOURCE_
 
 target_link_libraries(drivebrain_perception PUBLIC
     drivebrain_core
-    hytech_msgs_cpp_lib
+    ht_proto::hytech_msgs_cpp_lib
 )
