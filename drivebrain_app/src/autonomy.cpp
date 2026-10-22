@@ -70,13 +70,13 @@ void Autonomy::_run() {
 
       std::cout << "Filtered cones: " << cones->cones_size() << std::endl;
 
-      core::render_cones(cones, "filtered_cones", "lidar");
+      core::render_cones(cones, "filtered_cones", last_scan->frame_id());
 
       // TODO: cone classifier needs to be invoked here
-      auto path = planning::plan_path(*StateTracker::instance().dv_state().cone_observations);
-      render_path(path, "planned_path", "lidar");
-      StateTracker::instance().set_dv_path(
-          std::make_shared<const std::vector<xyz_vec<float>>>(std::move(path)));
+      // // auto path = planning::plan_path(*StateTracker::instance().dv_state().cone_observations);
+      // render_path(path, "planned_path", "lidar");
+      // StateTracker::instance().set_dv_path(
+      //     std::make_shared<const std::vector<xyz_vec<float>>>(std::move(path)));
     }
 
     std::this_thread::sleep_until(next_tick);

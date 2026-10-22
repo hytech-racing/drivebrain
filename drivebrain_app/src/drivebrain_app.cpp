@@ -104,9 +104,7 @@ void DrivebrainApp::run() {
 
   // CAN device names are defined in the drivebrain JSON config
   _telem_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("telem_can_device").value(), _dbc_path);
-#if !JETSON_ENABLED
   _aux_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("aux_can_device").value(), _dbc_path);
-#endif
   spdlog::info("Initialized CAN drivers");
 
 #if JETSON_ENABLED

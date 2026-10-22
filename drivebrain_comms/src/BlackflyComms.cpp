@@ -156,8 +156,8 @@ void BlackflyComms::_aravis_receive_loop() {
                         for (const auto& det : detections) {
                             cv::Rect r = det.bbox;
                             if (unrotate) {
-                                r.x = width - (r.x + r.width);
-                                r.y = height - (r.y + r.height);
+                                r.x = bgr.cols - (r.x + r.width);
+                                r.y = bgr.rows - (r.y + r.height);
                             }
                             const float x0 = r.x * scale, y0 = r.y * scale;
                             const float x1 = (r.x + r.width) * scale, y1 = (r.y + r.height) * scale;
@@ -193,8 +193,8 @@ void BlackflyComms::_aravis_receive_loop() {
                         return annotations;
                     };
 
-                    core::log_mcap_only(make_annotations(1.0f, true), _name + "/detections");                                     // matches <name>/raw
-                    core::log_foxglove_only(make_annotations(2.0f, false), _name + "/detections"); // matches <name>/compressed
+                    core::log_mcap_only(make_annotations(2.0f, true), _name + "/detections"); // TODO check that the scaling here was actually swapped                                  // matches <name>/raw
+                    core::log_foxglove_only(make_annotations(1.0f, false), _name + "/detections"); // matches <name>/compressed
                 }
 #endif
 

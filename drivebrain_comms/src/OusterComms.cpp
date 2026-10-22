@@ -127,6 +127,9 @@ void comms::OusterComms::_loop() {
         const Eigen::Index n = lut.direction.rows();
 
         auto pc = std::make_shared<foxglove::PointCloud>();
+        const auto now = std::chrono::system_clock::now().time_since_epoch();
+        pc->mutable_timestamp()->set_seconds(std::chrono::duration_cast<std::chrono::seconds>(now).count());
+        pc->mutable_timestamp()->set_nanos(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count() % 1000000000);
         pc->set_frame_id("os_sensor");
         pc->mutable_pose()->mutable_orientation()->set_w(1);
         pc->set_point_stride(3 * sizeof(float));
@@ -183,7 +186,8 @@ void comms::OusterComms::_loop() {
             ++m;
         }
         live_data->resize(m * point_size);
-        core::log_foxglove_only(live_pc);
+        core::log_foxglove_only(pc); // TODO FIX
+        core::StateTracker::instance().handle_receive_protobuf_message(pc);
         
     }
 }

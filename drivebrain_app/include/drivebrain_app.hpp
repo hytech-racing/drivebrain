@@ -107,6 +107,6 @@ private:
 #if HOOTL_ENABLED
   DrivingMode _driving_mode = DrivingMode::TELEOP;
 #else
-  DrivingMode _driving_mode = DrivingMode::DRIVERED;
+  DrivingMode _driving_mode = DrivingMode::DRIVERLESS;
 #endif
 };

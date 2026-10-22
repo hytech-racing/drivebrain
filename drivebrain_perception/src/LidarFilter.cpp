@@ -14,8 +14,28 @@ namespace {
     struct ClusterFeatures {
         core::LidarPoint centroid{0, 0, 0}, min{0, 0, 0}, max{0, 0, 0};
         float width_x_m = 0, width_y_m = 0, height_z_m = 0; 
+        float top_height_m = 0;  // cluster top above the local ground estimate
         float max_horizontal_width_m = 0, range_m = 0; 
         std::size_t num_points = 0;
+    };
+
+    /* Estimated ground height per polar cell, from remove_ground */
+    struct GroundGrid {
+        int num_radial_bins = 0, num_angular_bins = 0;
+        std::vector<float> ground_z;
+
+        /* Cell index of a point, or -1 outside the grid */
+        int cell(float x, float y) const {
+            const float ri = (std::hypot(x, y) - GRID_MIN_RANGE_M) / GRID_RADIAL_BIN_SIZE_M;
+            const float ti = (std::atan2(x, -y) - GRID_MIN_THETA_RAD) / GRID_ANGULAR_BIN_SIZE_RAD;
+            if (ri < 0 || ri >= num_radial_bins || ti < 0 || ti >= num_angular_bins) return -1;
+            return static_cast<int>(ri) * num_angular_bins + static_cast<int>(ti);
+        }
+
+        float at(float x, float y) const {
+            const int i = cell(x, y);
+            return i < 0 ? -SENSOR_HEIGHT_ABOVE_GROUND_M : ground_z[i];
+        }
     };
 
     // Arranges cell key in the format of 64 bits cx (high 32 bits) cy (low 32 bits)
@@ -23,33 +43,27 @@ namespace {
         return (static_cast<std::int64_t>(cx) << 32) | static_cast<std::uint32_t>(cy);
     }
 
-    // Flattens a 2D grid index into a 1D array index
-    int flatten_index(int radial_index, int angular_index, int num_angular_bins) {
-        return radial_index * num_angular_bins + angular_index;
-    }
-
     /**
      * Removes ground points from the input point cloud.
      * Points are classified as ground or non-ground based on a grid-based height estimation.
      * 
      * @param in The input point cloud.
+     * @param grid Receives the ground height estimated for each cell.
      * @return A new point cloud containing only non-ground points.
      */
-    std::shared_ptr<const foxglove::PointCloud> remove_ground(const foxglove::PointCloud& in) {
+    std::shared_ptr<const foxglove::PointCloud> remove_ground(const foxglove::PointCloud& in, GroundGrid& grid) {
         const auto scan = core::points(in);
 
         // Determine the grid size
-        int num_angular_bins = std::ceil((GRID_MAX_THETA_RAD - GRID_MIN_THETA_RAD) / GRID_ANGULAR_BIN_SIZE_RAD);
-        int num_radial_bins = std::ceil((GRID_MAX_RANGE_M - GRID_MIN_RANGE_M) / GRID_RADIAL_BIN_SIZE_M);
-        std::vector<Cell> cells(num_radial_bins * num_angular_bins);
+        grid.num_angular_bins = std::ceil((GRID_MAX_THETA_RAD - GRID_MIN_THETA_RAD) / GRID_ANGULAR_BIN_SIZE_RAD);
+        grid.num_radial_bins = std::ceil((GRID_MAX_RANGE_M - GRID_MIN_RANGE_M) / GRID_RADIAL_BIN_SIZE_M);
+        std::vector<Cell> cells(grid.num_radial_bins * grid.num_angular_bins);
+        grid.ground_z.assign(cells.size(), -SENSOR_HEIGHT_ABOVE_GROUND_M);
 
-        // Assign points to cells
+        // Assign points to cells (grid angle measured around car-forward, os_sensor -y)
         for (std::size_t i = 0; i < scan.size(); ++i) {
-            const auto& point = scan[i];
-            const float ri = (std::hypot(point.x, point.y) - GRID_MIN_RANGE_M) / GRID_RADIAL_BIN_SIZE_M;
-            const float ti = (std::atan2(point.y, point.x) - GRID_MIN_THETA_RAD) / GRID_ANGULAR_BIN_SIZE_RAD;
-            if (ri < 0 || ri >= num_radial_bins || ti < 0 || ti >= num_angular_bins) continue;
-            cells[flatten_index(static_cast<int>(ri), static_cast<int>(ti), num_angular_bins)].point_indices.push_back(i);
+            const int c = grid.cell(scan[i].x, scan[i].y);
+            if (c >= 0) cells[c].point_indices.push_back(i);
         }
 
         // Estimate the ground height for each cell by looking at the nth pensicile and classify points as ground or non-ground
@@ -57,17 +71,18 @@ namespace {
         std::vector<core::LidarPoint> non_ground;
         non_ground.reserve(scan.size());
 
-        for (auto& cell : cells) {
+        for (std::size_t c = 0; c < cells.size(); ++c) {
+            const auto& cell = cells[c];
             z.clear();
             for (auto i : cell.point_indices) z.push_back(scan[i].z);
 
-            float ground = FLAT_GROUND_Z_MAX_M;
             // Get nth percentile of the z-values to estimate the ground height
             if (!z.empty() && z.size() >= MIN_POINTS_PER_CELL) {
                 const auto nth = static_cast<std::ptrdiff_t>(GROUND_PERCENTILE * (z.size()-1));
                 std::nth_element(z.begin(), z.begin() + nth, z.end());
-                ground = z[nth];
+                grid.ground_z[c] = z[nth];
             }
+            const float ground = grid.ground_z[c];
 
             for (auto i : cell.point_indices) {
                 if (scan[i].z > ground + NON_GROUND_HEIGHT_THRESHOLD_M) non_ground.push_back(scan[i]);
@@ -158,9 +173,10 @@ namespace {
      * 
      * @param clusters The vector of clusters to extract features from.
      * @param filtered_cloud The filtered point cloud corresponding to the clusters.
+     * @param grid The ground height estimates, for heights relative to the local ground.
      * @return A vector of ClusterFeatures for each cluster.
      */
-    std::vector<ClusterFeatures> extract_features(const std::vector<Cluster>& clusters, const foxglove::PointCloud& filtered_cloud) {
+    std::vector<ClusterFeatures> extract_features(const std::vector<Cluster>& clusters, const foxglove::PointCloud& filtered_cloud, const GroundGrid& grid) {
         const auto pts = core::points(filtered_cloud); 
         std::vector<ClusterFeatures> features;
         features.reserve(clusters.size());
@@ -188,6 +204,7 @@ namespace {
             feature.width_x_m = feature.max.x - feature.min.x;
             feature.width_y_m = feature.max.y - feature.min.y;
             feature.height_z_m = feature.max.z - feature.min.z;
+            feature.top_height_m = feature.max.z - grid.at(feature.centroid.x, feature.centroid.y);
             feature.max_horizontal_width_m = std::max(feature.width_x_m, feature.width_y_m);
             feature.range_m = std::hypot(feature.centroid.x, feature.centroid.y);
 
@@ -220,9 +237,7 @@ namespace {
             else if (feature.height_z_m > MAX_CONE_HEIGHT_M) continue;
             else if (feature.max_horizontal_width_m > max_width) continue;
             else if (elongation > MAX_ELONGATION) continue;
-
-            // TODO report this
-            const double confidence = by_range(NEAR_ACCEPTED_CONFIDENCE, MID_ACCEPTED_CONFIDENCE, FAR_ACCEPTED_CONFIDENCE);
+            else if (feature.top_height_m > MAX_CONE_TOP_HEIGHT_M) continue;
 
             // Add the dv cone
             auto* cone = cones->add_cones();
@@ -242,9 +257,10 @@ namespace {
 } // END OF ANONYMOUS NAMESPACE
 
     std::shared_ptr<dv_msgs::Cones> filter_cloud(const foxglove::PointCloud& scan) {
-        std::shared_ptr<const foxglove::PointCloud> filtered_scan = remove_ground(scan);
+        GroundGrid ground;
+        std::shared_ptr<const foxglove::PointCloud> filtered_scan = remove_ground(scan, ground);
         auto clusters = cluster(*filtered_scan);
-        auto features = extract_features(clusters, *filtered_scan);
+        auto features = extract_features(clusters, *filtered_scan, ground);
         auto cones = extract_cones(features, *filtered_scan);
         const auto& ts = scan.timestamp();
         uint64_t microseconds = (static_cast<uint64_t>(ts.seconds()) * 1'000'000ULL) 
