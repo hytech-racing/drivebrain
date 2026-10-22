@@ -15,14 +15,7 @@
 
 namespace comms
 {
-    /**
-     * Steering position control runs on drivebrain. Each tick a trapezoidal motion profile walks a reference
-     * toward the target angle, then a PID on the steering column angle (from the steering estimator) plus
-     * S/V/A feedforward tracks that reference. The resulting voltage is streamed to the Kraken's TalonFX as an
-     * open loop VoltageOut. The D term uses the Kraken's velocity, which is far less noisy than differentiating
-     * the analog column angle. The motor encoder is seeded from the column angle once at startup so the
-     * TalonFX soft limits line up with the column angle.
-    */
+    /* Controls the steering motor with PID and a Trapezoidal Motion Profile */
     class KrakenComms
     {
     public:
@@ -50,21 +43,13 @@ namespace comms
         */
         struct tuningParams_s
         {
-            // Same units as the TalonFX Slot0 gains (mechanism rotations), so old Kraken tuning carries over
-
-            // Feedback gains: PID on error between the profile reference and the column angle
             float kraken_P;
             float kraken_I;
             float kraken_D;
-
-            // Feedforward gains: SVA. S is applied in the direction the profile is moving. Once the profile
-            // has settled it follows the error instead, and is off inside the deadband.
             float kraken_S;
             float kraken_S_deadband_deg;
             float kraken_V;
             float kraken_A;
-
-            // Trapezoidal motion profile limits
             float motion_magic_cruise_velocity_deg_s;
             float motion_magic_acceleration_deg_s2;
 
@@ -186,11 +171,8 @@ namespace comms
         std::mutex _tuning_mutex;
         tuningParams_s _tuning_params{};
 
-        /* When false, the enable is not fed so the Talon stays disabled (required to upload a license from Tuner X) */
         std::atomic<bool> _enable_output{true};
-        /* When false, the motor is held in neutral */
         std::atomic<bool> _arm_steering{false};
-        /* When true (and steering is armed), _run() targets _test_angle_deg instead of set_angle() input */
         std::atomic<bool> _use_test_angle{false};
         std::atomic<float> _test_angle_deg{0.0f};
         boost::signals2::scoped_connection _param_connection;

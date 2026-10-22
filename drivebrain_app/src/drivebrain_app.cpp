@@ -125,7 +125,7 @@ void DrivebrainApp::run() {
   // Initialize controllers
   const size_t num_controllers = 2;
   _mode1 = std::make_shared<control::LoadCellTorqueController>();
-  if (!_mode1->init()) {
+  if (!_mode1->init()) 
     spdlog::error("Failed to initialize mode 1");
   }
 
