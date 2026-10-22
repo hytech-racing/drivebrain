@@ -379,7 +379,7 @@ namespace comms
                 if (steady_clock::now() - last_seed_attempt >= seed_retry_period)
                 {
                     last_seed_attempt = steady_clock::now();
-                    const auto state_and_validity = core::StateTracker::instance().get_latest_state_and_validity();
+                    const auto state_and_validity = core::StateTracker::instance().vehicle_state();
                     const auto bootup_steer_deg = state_and_validity.first.steering_column_angle_deg;
                     if (state_and_validity.first.updated_steering_estimator)
                     {

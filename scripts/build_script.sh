@@ -4,7 +4,7 @@ set -e
 linkflags="-static"
 for a in "$@"; do
   case "$a" in
-    --test) shouldTest=1 ;;
+    --test|--local) shouldTest=1 ;;  # --local kept as an alias for the sim workflow
     --clean) shouldClean=1 ;;
     --local-cache-only) localCacheOnly=1 ;;
     --jetson) jetson="-DJETSON=ON"; linkflags="" ;;
@@ -23,8 +23,8 @@ if [ "$shouldTest" = 1 ]; then
 fi
 
 if [ "$shouldClean" = 1 ]; then
-  rm -rf .venv
-  rm -rf cmake
+rm -rf .venv
+rm -rf cmake
 fi
 
 python3 -m venv .venv
@@ -50,11 +50,11 @@ if [ "$localCacheOnly" = 1 ]; then
     -of=cmake \
     --no-remote
 else
-  conan install . \
-    --build=missing \
-    --profile:build=default \
-    --profile:host="$profile" \
-    -of=cmake
+conan install . \
+  --build=missing \
+  --profile:build=default \
+  --profile:host="$profile" \
+  -of=cmake
 fi
 
 

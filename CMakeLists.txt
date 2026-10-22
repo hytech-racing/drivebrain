@@ -28,6 +28,9 @@ add_subdirectory(drivebrain_core)
 add_subdirectory(drivebrain_comms)
 add_subdirectory(drivebrain_control)
 add_subdirectory(drivebrain_estimation)
+add_subdirectory(drivebrain_planning)
+add_subdirectory(drivebrain_perception)
+add_subdirectory(drivebrain_slam)
 
 #################################
 # Find packages
@@ -42,6 +45,7 @@ find_package(dbcppp REQUIRED)
 find_package(aravis REQUIRED)
 find_package(OpenCV REQUIRED CONFIG)
 find_package(Eigen3 REQUIRED)
+find_package(GTSAM REQUIRED)
 
 
 if (HOOTL)
@@ -51,6 +55,7 @@ endif()
 #################################
 # Upstreams (non-conan)
 #################################
+# 
 FetchContent_Declare(
     vn_driver_lib
     GIT_REPOSITORY https://github.com/hytech-racing/vn_driver_lib.git
@@ -66,6 +71,7 @@ find_package(OusterSDK REQUIRED)
 add_executable(drivebrain
     drivebrain_app/src/main.cpp
     drivebrain_app/src/drivebrain_app.cpp
+    drivebrain_app/src/autonomy.cpp
 )
 
 #add_executable(drivebrain
@@ -94,12 +100,13 @@ if(JETSON)
     target_link_libraries(drivebrain PRIVATE TensorRT)
 endif()
 
-target_link_libraries(drivebrain PUBLIC
-    foxglove-websocket::foxglove-websocket
+target_link_libraries(drivebrain PUBLIC 
+    foxglove-websocket::foxglove-websocket 
     foxglove-schemas-protobuf::foxglove-schemas-protobuf
     mcap::mcap
     protobuf::libprotobuf
     boost::boost
+    gtsam
     ht_proto::hytech_msgs_cpp_lib
     ht_can::hytech_can_msgs_cpp_lib
     drivebrain_core
@@ -113,6 +120,9 @@ target_link_libraries(drivebrain PUBLIC
     opencv_imgproc
     opencv_imgcodecs
     drivebrain_estimation
+    drivebrain_planning
+    drivebrain_perception
+    drivebrain_slam
 )
 
 if(JETSON)

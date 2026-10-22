@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <exception>
 #include <foxglove/websocket/base64.hpp>
 #include <foxglove/websocket/parameter.hpp>
@@ -12,16 +13,26 @@
 #include <google/protobuf/util/time_util.h>
 #include <boost/signals2.hpp>
 #include <MCAPLogger.hpp>
-#include <string> 
+#include <string>
 #include <atomic>
 #include <cassert>
 #include <optional>
+#include <deque>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 #include <spdlog/spdlog.h>
 
 #include "hytech_msgs.pb.h"
 #include <foxglove/CompressedImage.pb.h>
 
 namespace core {
+
+    struct OutgoingMsg {
+        uint32_t channel_id;
+        uint64_t timestamp;
+        std::string data;
+    };
 
     using DBParam = std::variant<bool, int, float, double, std::string, std::monostate>; 
 
@@ -71,20 +82,29 @@ namespace core {
             static void destroy();
             
             /**
-             * Destructs the foxglove server instance by stopping the server. 
+             * Destructs the foxglove server instance by stopping the broadcast
+             * thread (before any producer can enqueue into a dead server) and
+             * then stopping the websocket server.
              */
             ~FoxgloveServer() {
-                _server->stop(); 
-                spdlog::info("Destructed and stopped foxglove websocket server"); 
+                {
+                    std::unique_lock lock(_send_mutex);
+                    _send_running = false;
+                }
+                _send_cv.notify_all();
+                if (_send_thread.joinable()) _send_thread.join();
+
+                _server->stop();
+                spdlog::info("Destructed and stopped foxglove websocket server");
             }
-            
+
             /**
-             * Sends a protobuf to be viewed in Foxglove.
-             * 
+             * Queues a protobuf for broadcast to Foxglove
+             *
              * @param msg the message to be sent
              * @param topic topic to send on, defaults to the message type name. A new topic gets its channel on first use.
              */
-            void send_live_telem_msg(std::shared_ptr<google::protobuf::Message> msg, const std::string &topic = "");
+            void send_live_telem_msg(std::shared_ptr<const google::protobuf::Message> msg, const std::string& topic = { });
 
             /**
              * Registers a callback function to be run whenever a parameter is updated in Foxglove.
@@ -123,11 +143,14 @@ namespace core {
                 }
             }
 
-        private: 
+        private:
             FoxgloveServer(std::string parameters_file);
 
             /* Registers JSON params on init. Recursively called to support multi-level JSON */
             void _init_params(const nlohmann::json &json_obj, const std::string &prefix);
+
+            /* Drains the broadcast queue and sends to clients. */
+            void _broadcast_loop();
 
             /* Singleton move semantics */
             FoxgloveServer(const FoxgloveServer&) = delete;
@@ -154,8 +177,15 @@ namespace core {
             std::unique_ptr<foxglove::ServerInterface<websocketpp::connection_hdl>> _server;
             foxglove::ServerOptions _server_options;
 
-            std::mutex _parameter_mutex; 
+            std::mutex _parameter_mutex;
             std::mutex _channel_mutex;
+
+            static constexpr uint32_t MAX_SEND_QUEUE = 256;
+            std::deque<OutgoingMsg> _send_queue;
+            std::mutex _send_mutex;
+            std::condition_variable _send_cv;
+            std::thread _send_thread;
+            bool _send_running = false;
     };
 }
 
