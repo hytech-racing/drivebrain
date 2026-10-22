@@ -30,8 +30,11 @@ fi
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
-# conan remote add artifactory "$ARTIFACTORY_URL" --force
-
+if ! conan remote list | grep -q "^artifactory:"; then
+  conan remote add artifactory "$ARTIFACTORY_URL" --force
+  echo "If you don't know the password, ask in software chat"
+  conan remote login artifactory user -p
+fi
 # let cmake infer this
 unset CC
 unset CXX
