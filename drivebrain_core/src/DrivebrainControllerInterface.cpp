@@ -61,7 +61,7 @@ void core::DrivebrainControllerInterface::_request_start_logging() {
 
 void core::DrivebrainControllerInterface::_request_stop_logging() {
     std::tuple<std::string, bool> mcap_status = core::MCAPLogger::instance().status();
-    bool is_logging = std::get<1>(mcap_status);
+    bool is_logging = std::get<1>(mcap_status
     if (is_logging) {
         core::MCAPLogger::instance().stop_logging();
         core::MCAPLogger::instance().close_active_mcap(); 

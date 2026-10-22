@@ -122,9 +122,7 @@ void DrivebrainApp::run() {
   }
 #endif
 
-  // Initialize controllers  core::DrivebrainControllerInterface::create();
-
-  spdlog::info("Constructed
+  // Initialize controllers
   const size_t num_controllers = 2;
   _mode1 = std::make_shared<control::LoadCellTorqueController>();
   if (!_mode1->init()) {
