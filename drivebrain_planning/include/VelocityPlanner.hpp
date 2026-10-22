@@ -3,11 +3,15 @@
 #include "Controller.hpp"
 #include <StateTracker.hpp>
 
+#include <condition_variable>
 #include <cstddef>
+#include <deque>
 #include <fstream>
+#include <mutex>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 inline constexpr std::size_t kPathPointsAhead = 20;
 
@@ -23,6 +27,7 @@ struct PathPoint {
 class VelocityPlanner {
 public:
     explicit VelocityPlanner(float max_car_velocity);
+    ~VelocityPlanner();
 
     void setMaxCarVelocity(float velocity_mps);
     void setMu(float mu);
@@ -57,6 +62,17 @@ private:
     std::vector<PathPoint> path_points_;
     std::ofstream trace_file_;
     std::size_t trace_iteration_ = 0;
+
+    // Trace records are handed to a writer thread so serializing and flushing never block the control tick.
+    static constexpr std::size_t kMaxQueuedTraces = 1024;
+    std::deque<nlohmann::json> trace_queue_;
+    std::mutex trace_mutex_;
+    std::condition_variable trace_cv_;
+    bool trace_running_ = true;
+    std::thread trace_thread_;
+
+    void enqueueTrace(nlohmann::json&& record);
+    void traceWriterLoop();
 
     /**
      * Walk the path in direction given by `forward` and assign the maximum velocity to each point based on curvature and current speed.
