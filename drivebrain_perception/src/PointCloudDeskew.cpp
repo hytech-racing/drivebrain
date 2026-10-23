@@ -67,15 +67,8 @@ std::shared_ptr<const foxglove::PointCloud> deskew_cloud(const foxglove::PointCl
   std::vector<Eigen::Isometry3d> T_ref_from_bin(DESKEW_TIME_BINS);
   for (int b = 0; b < DESKEW_TIME_BINS; b++) {
     const double dt = t_min + (b + 0.5) * t_span / DESKEW_TIME_BINS;
-    // SE(2) exponential of the constant twist over dt
-    const double theta = twist_base.z() * dt;
-    const Eigen::Vector2d v = twist_base.head<2>() * dt;
-    const bool straight = std::abs(theta) < 1e-6;
-    const double s = straight ? 1.0 : std::sin(theta) / theta;
-    const double c = straight ? 0.0 : (1.0 - std::cos(theta)) / theta;
-    const Eigen::Isometry2d T_base_ref_from_base_bin =
-        core::geometry::make_pose2d(s * v.x() - c * v.y(), c * v.x() + s * v.y(), theta);
-    T_ref_from_bin[b] = T_lidar_base * core::geometry::to_pose3d(T_base_ref_from_base_bin) * T_base_lidar;
+    T_ref_from_bin[b] =
+        T_lidar_base * core::geometry::to_pose3d(core::geometry::integrate_twist(twist_base, dt)) * T_base_lidar;
   }
 
   for (std::size_t i = 0; i < n; i++) {

@@ -9,10 +9,7 @@ using namespace core;
 
 namespace {
 
-/* Odometry is published at this rate at most, not at the 400 Hz VN rate */
 constexpr uint64_t ODOM_PUBLISH_PERIOD_NS = 20'000'000;
-
-/* The trail is a growing line strip, so it is redrawn at this period */
 constexpr uint64_t ODOM_TRAIL_RENDER_PERIOD_NS = 500'000'000;
 
 }  // namespace
@@ -23,6 +20,8 @@ StateTracker::StateTracker() {
     };
     _T_base_lidar = Eigen::Translation3d(mount("lidar_x_m"), mount("lidar_y_m"), mount("lidar_z_m")) *
                     Eigen::AngleAxisd(mount("lidar_yaw_deg") * M_PI / 180.0, Eigen::Vector3d::UnitZ());
+    _oms_position_base_m = {FoxgloveServer::instance().get_param<float>("Odometry/oms_position_base_x_m").value(),
+                            FoxgloveServer::instance().get_param<float>("Odometry/oms_position_base_y_m").value()};
 }
 
 /****************************************************************
@@ -90,26 +89,29 @@ void StateTracker::handle_receive_protobuf_message(std::shared_ptr<google::proto
             _vehicle_state.current_ypr_rad = ypr_rad;
             _vehicle_state.ins_status.status_mode = ins_mode_int;
             _vehicle_state.ins_status.vel_uncertainty = vel_u;
-
-            // VN is the odometry EKF's prediction, in FLU
-            const uint64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                std::chrono::system_clock::now().time_since_epoch()).count();
-            if (_odom_ekf.update(estimation::ImuMeasurement{now_ns, body_accel_mss.x, -body_accel_mss.y,
-                                                            -angular_rate_rads.z})) {
-                _publish_odometry();
-            }
         }
     } else if (msg->GetDescriptor() == hytech_msgs::OMSData::descriptor()) {
         auto in_msg = std::static_pointer_cast<hytech_msgs::OMSData>(msg);
-        // the sensor is mounted facing backwards, so both velocity axes are flipped
-        const double vx_mps = -in_msg->motion().vel_x_kmh() / 3.6;
-        const double vy_mps = -in_msg->motion().vel_y_kmh() / 3.6;
         const uint64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();
         {
             std::unique_lock lk(_state_mutex);
-            if (_odom_ekf.update(estimation::GssMeasurement{
-                    _oms_sample_host_time_ns(in_msg->sample_time_s(), now_ns), vx_mps, vy_mps})) {
+            const uint64_t ts = _oms_sample_host_time_ns(in_msg->sample_time_s(), now_ns);
+            if (ts > _odom_ns) {
+                // the sensor is mounted facing backwards, so both velocity axes are flipped; yaw rate is unaffected
+                Eigen::Vector3d twist(-in_msg->motion().vel_x_kmh() / 3.6, -in_msg->motion().vel_y_kmh() / 3.6,
+                                      in_msg->rate_hor_deg_s().z() * M_PI / 180.0);
+                // velocity at the sensor -> base_link: v_base = v_sensor - w x r
+                twist.x() += twist.z() * _oms_position_base_m.y();
+                twist.y() -= twist.z() * _oms_position_base_m.x();
+                if (in_msg->status().standstill()) twist.setZero();
+                else if (!in_msg->status().status_ok()) twist = _odom_twist;
+
+                if (_odom_ns != 0) {
+                    _odom_pose = _odom_pose * geometry::integrate_twist(0.5 * (_odom_twist + twist), (ts - _odom_ns) * 1e-9);
+                }
+                _odom_ns = ts;
+                _odom_twist = twist;
                 _publish_odometry();
             }
         }
@@ -177,8 +179,7 @@ std::optional<Eigen::Isometry2d> StateTracker::odom_pose(uint64_t timestamp_ns, 
 
 Eigen::Vector3d StateTracker::odom_twist() {
     std::unique_lock lk(_state_mutex);
-    const Eigen::Vector2d vel = _odom_ekf.velocity_base_mps();
-    return Eigen::Vector3d(vel.x(), vel.y(), _odom_ekf.yaw_rate_radps());
+    return _odom_twist;
 }
 
 uint64_t StateTracker::_oms_sample_host_time_ns(float sample_time_s, uint64_t recv_ns) {
@@ -191,8 +192,8 @@ uint64_t StateTracker::_oms_sample_host_time_ns(float sample_time_s, uint64_t re
 }
 
 void StateTracker::_publish_odometry() {
-    const uint64_t ts = _odom_ekf.timestamp_ns();
-    const Eigen::Isometry2d pose = _odom_ekf.pose_odom_from_base();
+    const uint64_t ts = _odom_ns;
+    const Eigen::Isometry2d& pose = _odom_pose;
     _odom_buffer.insert(ts, pose);
 
     if (ts - _last_odom_publish_ns < ODOM_PUBLISH_PERIOD_NS) return;
@@ -218,10 +219,9 @@ void StateTracker::_publish_odometry() {
     estimate->set_x_odom_m(pose.translation().x());
     estimate->set_y_odom_m(pose.translation().y());
     estimate->set_yaw_odom_rad(geometry::yaw(pose));
-    const Eigen::Vector2d vel = _odom_ekf.velocity_base_mps();
-    estimate->set_vx_vehicle_flu_mps(vel.x());
-    estimate->set_vy_vehicle_flu_mps(vel.y());
-    estimate->set_yaw_rate_vehicle_flu_radps(_odom_ekf.yaw_rate_radps());
+    estimate->set_vx_vehicle_flu_mps(_odom_twist.x());
+    estimate->set_vy_vehicle_flu_mps(_odom_twist.y());
+    estimate->set_yaw_rate_vehicle_flu_radps(_odom_twist.z());
     log(estimate, "odometry");
 }
 

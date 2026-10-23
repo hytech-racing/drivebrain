@@ -230,18 +230,19 @@ inline void render_segments(const std::vector<xyz_vec<float>>& points, std::stri
     auto* line = entity->add_lines();
     line->set_type(foxglove::LinePrimitive::LINE_LIST);
     line->mutable_pose()->mutable_orientation()->set_w(1.0);
-    line->set_thickness(0.03);
+    line->set_thickness(0.02);
     for (const auto& point : points) {
         auto* p = line->add_points();
         p->set_x(point.x);
         p->set_y(point.y);
         p->set_z(point.z);
     }
+    // muted so the factor web sits behind the cones and the trail
     auto* color = line->mutable_color();
-    color->set_r(0.3);
-    color->set_g(0.6);
-    color->set_b(1.0);
-    color->set_a(0.8);
+    color->set_r(0.55);
+    color->set_g(0.55);
+    color->set_b(0.55);
+    color->set_a(0.35);
 
     log(scene);
 }

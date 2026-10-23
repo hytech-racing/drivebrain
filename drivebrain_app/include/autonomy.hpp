@@ -49,8 +49,7 @@ private:
   // Rate of OS1 LiDAR
   static constexpr std::chrono::milliseconds PERIOD{100};
 
-  // How long a scan waits for odometry to reach its timestamp
-  static constexpr std::chrono::milliseconds ODOM_TIMEOUT{50};
+  static constexpr std::chrono::milliseconds ODOM_TIMEOUT{100};
 
   // Logs the full deskewed scan each frame (heavy; for offline evaluation)
   static constexpr bool LOG_DESKEWED_CLOUD = true;

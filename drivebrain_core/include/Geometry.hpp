@@ -28,6 +28,17 @@ namespace core::geometry
     return out;
 }
 
+// SE(2) exponential: the pose reached by moving at a constant twist (vx, vy, yaw rate) for dt_s
+[[nodiscard]] inline Eigen::Isometry2d integrate_twist(const Eigen::Vector3d& twist, const double dt_s)
+{
+    const double theta = twist.z() * dt_s;
+    const Eigen::Vector2d v = twist.head<2>() * dt_s;
+    const bool straight = std::abs(theta) < 1e-6;
+    const double s = straight ? 1.0 : std::sin(theta) / theta;
+    const double c = straight ? 0.0 : (1.0 - std::cos(theta)) / theta;
+    return make_pose2d(s * v.x() - c * v.y(), c * v.x() + s * v.y(), theta);
+}
+
 // Projects a 3D pose onto the XY plane, keeping only yaw
 [[nodiscard]] inline Eigen::Isometry2d to_pose2d(const Eigen::Isometry3d& pose)
 {

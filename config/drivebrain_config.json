@@ -57,16 +57,8 @@
         "R_gain": 0.1
     },
     "Odometry": {
-        "initial_position_std_m": 0.1,
-        "initial_yaw_std_rad": 0.1,
-        "initial_velocity_std_mps": 0.5,
-        "position_process_std_m_per_sqrt_s": 0.1,
-        "yaw_process_std_rad_per_sqrt_s": 0.1,
-        "velocity_process_std_mps_per_sqrt_s": 0.5,
-        "gss_vx_noise_std_mps": 0.1,
-        "gss_vy_noise_std_mps": 0.1,
-        "gss_position_base_x_m": -1.108,
-        "gss_position_base_y_m": 0.0
+        "oms_position_base_x_m": -1.108,
+        "oms_position_base_y_m": 0.0
     },
     "StaticTransforms": {
         "lidar_x_m": 1.244,

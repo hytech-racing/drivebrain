@@ -21,7 +21,6 @@
 #include "dv_msgs.pb.h"
 #include "FzEstimator.h"
 #include "SteeringEstimator.h"
-#include "OdomEkf.h"
 #include "OdomBuffer.h"
 
 /**
@@ -398,7 +397,7 @@ namespace core {
 
             /**
              * Pose of base_link in the odom frame at the given host timestamp, interpolated
-             * from the odometry EKF history.
+             * from the odometry history.
              *
              * @param timestamp_ns host time to look up
              * @param timeout how long to wait for odometry to reach the timestamp
@@ -407,7 +406,7 @@ namespace core {
             std::optional<Eigen::Isometry2d> odom_pose(uint64_t timestamp_ns,
                                                        std::chrono::nanoseconds timeout = {});
 
-            /* Latest EKF body velocity and yaw rate: (vx m/s, vy m/s, yaw rate rad/s) */
+            /* Latest body velocity and yaw rate from the OMS: (vx m/s, vy m/s, yaw rate rad/s) */
             Eigen::Vector3d odom_twist();
 
             /* Lidar mounting pose in base_link, from the StaticTransforms config */
@@ -444,7 +443,7 @@ namespace core {
 
             void _update_estimators();
 
-            /* Inserts the EKF state into the odometry buffer and publishes it; called with _state_mutex held */
+            /* Inserts the odometry pose into the buffer and publishes it; called with _state_mutex held */
             void _publish_odometry();
 
             /* Maps the OMS 1 kHz sample clock onto host time, undoing the TCP burst grouping */
@@ -461,7 +460,11 @@ namespace core {
             TeleopCommand _teleop_command = { };
             std::mutex _teleop_mutex;
             
-            estimation::OdomEkf _odom_ekf;
+            // Odometry dead-reckoned from the OMS velocity and yaw rate
+            Eigen::Isometry2d _odom_pose = Eigen::Isometry2d::Identity();
+            Eigen::Vector3d _odom_twist = Eigen::Vector3d::Zero();  // vx, vy (m/s), yaw rate (rad/s) in base_link
+            uint64_t _odom_ns = 0;
+            Eigen::Vector2d _oms_position_base_m = Eigen::Vector2d::Zero();
             // Deskew looks back one scan (100 ms) plus the scan's processing delay
             estimation::OdomBuffer _odom_buffer{1'000'000'000ULL};
             int64_t _oms_clock_offset_ns = std::numeric_limits<int64_t>::max();
