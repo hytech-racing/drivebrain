@@ -1,7 +1,9 @@
 #include "OusterComms.hpp"
 #include "Telemetry.hpp"
 #include "RangeCompression.hpp"
+#include "StateTracker.hpp"
 #include "dv_msgs.pb.h"
+#include <algorithm>
 #include <chrono>
 #include <exception>
 #include <memory>
@@ -122,9 +124,19 @@ void comms::OusterComms::_loop() {
 
         // }
 
-        // write xyz directly into the foxglove pointcloud buffer
+        // range image (row-major, columns = scan time) and the xyz lookup table for it
         const auto& lut = _lut[index];
         const Eigen::Index n = lut.direction.rows();
+        const auto range = frame.field<uint32_t>(ouster::sdk::core::ChanField::RANGE);
+        const Eigen::Index w = range.cols();
+        const uint32_t* rng = range.data();
+        const float* dir = lut.direction.data();
+        const float* ofs = lut.offset.data();
+
+        // per-column sensor timestamps; points are stamped relative to the last valid column (scan end)
+        const auto column_ts = frame.timestamp();
+        uint64_t scan_end_ts = 0;
+        for (Eigen::Index u = 0; u < w; ++u) scan_end_ts = std::max<uint64_t>(scan_end_ts, column_ts(u));
 
         auto pc = std::make_shared<foxglove::PointCloud>();
         const auto now = std::chrono::system_clock::now().time_since_epoch();
@@ -132,9 +144,9 @@ void comms::OusterComms::_loop() {
         pc->mutable_timestamp()->set_nanos(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count() % 1000000000);
         pc->set_frame_id("os_sensor");
         pc->mutable_pose()->mutable_orientation()->set_w(1);
-        pc->set_point_stride(3 * sizeof(float));
-        const char* names[] = {"x", "y", "z"};
-        for (int i = 0; i < 3; i++) {
+        pc->set_point_stride(4 * sizeof(float));
+        const char* names[] = {"x", "y", "z", "t"};
+        for (int i = 0; i < 4; i++) {
             auto* f = pc->add_fields();
             f->set_name(names[i]);
             f->set_offset(i * sizeof(float));
@@ -143,10 +155,17 @@ void comms::OusterComms::_loop() {
 
         auto live_pc = std::make_shared<foxglove::PointCloud>(*pc);
 
+        // xyz = range * direction + offset for every return (range 0 = no return), written straight into the cloud
         std::string* data = pc->mutable_data();
-        data->resize(n * 3 * sizeof(float));
-        Eigen::Map<ouster::sdk::core::PointCloudXYZf> points(reinterpret_cast<float*>(data->data()), n, 3);
-        const auto range = frame.field<uint32_t>(ouster::sdk::core::ChanField::RANGE);
+        data->reserve(static_cast<size_t>(n) * 4 * sizeof(float));
+        for (Eigen::Index i = 0; i < n; ++i) {
+            const float r = static_cast<float>(rng[i]);
+            if (r == 0.0f) continue;
+            const uint64_t ts = column_ts(i % w);
+            const float point[4] = {r * dir[3 * i] + ofs[3 * i], r * dir[3 * i + 1] + ofs[3 * i + 1], r * dir[3 * i + 2] + ofs[3 * i + 2],
+                                    ts == 0 ? 0.0f : static_cast<float>(static_cast<double>(static_cast<int64_t>(ts) - static_cast<int64_t>(scan_end_ts)) * 1e-9)};
+            data->append(reinterpret_cast<const char*>(point), sizeof(point));
+        }
 
         std::size_t compressed_size = 0;
         auto compressed_ranges = compressRangeImage(
@@ -171,23 +190,20 @@ void comms::OusterComms::_loop() {
             spdlog::error("Failed to compress Ouster range frame");
         }
 
-        ouster::sdk::core::impl::cartesianT<float>(points, range, lut.direction, lut.offset);
-
-        // stream just every Nth point that has a return (range 0 = no return)
-        constexpr int stream_stride = 16;
-        const size_t point_size = 3 * sizeof(float);
-        std::string* live_data = live_pc->mutable_data();
-        live_data->resize(data->size());
-        size_t m = 0;
-        int valid = 0;
-        for (Eigen::Index i = 0; i < n; ++i) {
-            if (range.data()[i] == 0 || valid++ % stream_stride != 0) continue;
-            std::memcpy(&(*live_data)[m * point_size], &(*data)[i * point_size], point_size);
-            ++m;
-        }
-        live_data->resize(m * point_size);
-        core::log_foxglove_only(live_pc);
+        // full resolution to the mcap and the autonomy stack
+        core::MCAPLogger::instance().log_msg(pc);
         core::StateTracker::instance().handle_receive_protobuf_message(pc);
+
+        // stream just every Nth point
+        constexpr int stream_stride = 16;
+        const size_t point_size = 4 * sizeof(float);
+        const size_t m = data->size() / point_size;
+        std::string* live_data = live_pc->mutable_data();
+        live_data->reserve(data->size() / stream_stride + point_size);
+        for (size_t i = 0; i < m; i += stream_stride) {
+            live_data->append(data->data() + i * point_size, point_size);
+        }
+        core::log_foxglove_only(live_pc);
         
     }
 }

@@ -1,10 +1,20 @@
+#include <cmath>
+
 #include <StateTracker.hpp>
 #include <Telemetry.hpp>
 #include <cmath>
 #include <foxglove/PointCloud.pb.h>
 #include <foxglove/websocket/parameter.hpp>
 
-using namespace core; 
+using namespace core;
+
+StateTracker::StateTracker() {
+    const auto mount = [](const std::string& name) {
+        return FoxgloveServer::instance().get_param<float>("static_transforms/" + name).value();
+    };
+    _T_base_lidar = Eigen::Translation3d(mount("lidar_x_m"), mount("lidar_y_m"), mount("lidar_z_m")) *
+                    Eigen::AngleAxisd(mount("lidar_yaw_deg") * M_PI / 180.0, Eigen::Vector3d::UnitZ());
+}
 
 /****************************************************************
  * Public class methods
@@ -44,6 +54,7 @@ void StateTracker::handle_receive_protobuf_message(std::shared_ptr<google::proto
             std::unique_lock lk(_dv_state_mutex);
             _dv_state.lidar_cloud = in_msg;
         }
+        _dv_state_cv.notify_all();
     } else if (msg->GetDescriptor() == hytech_msgs::VNData::descriptor()) {
         auto in_msg = std::static_pointer_cast<hytech_msgs::VNData>(msg);
         xyz_vec<float> body_vel_ms = {(in_msg->vn_vel_m_s().x()), (in_msg->vn_vel_m_s().y()),
@@ -72,6 +83,11 @@ void StateTracker::handle_receive_protobuf_message(std::shared_ptr<google::proto
             _vehicle_state.ins_status.status_mode = ins_mode_int;
             _vehicle_state.ins_status.vel_uncertainty = vel_u;
         }
+    } else if (msg->GetDescriptor() == hytech_msgs::OMSData::descriptor()) {
+        auto in_msg = std::static_pointer_cast<hytech_msgs::OMSData>(msg);
+        const uint64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+        _odometry.update(*in_msg, now_ns);
     } else if (msg->GetDescriptor() == hytech_msgs::VCRData_s::descriptor()) {
         auto in_msg = std::static_pointer_cast<hytech_msgs::VCRData_s>(msg);
         bool is_rtd = (in_msg->status().vehicle_state() == hytech_msgs::VehicleState_e::READY_TO_DRIVE);
@@ -138,6 +154,21 @@ core::DriverlessState StateTracker::dv_state() {
     }
 
     return current_state;
+}
+
+std::shared_ptr<const foxglove::PointCloud> StateTracker::wait_for_scan(
+    const std::shared_ptr<const foxglove::PointCloud>& last, const std::chrono::milliseconds timeout) {
+    std::unique_lock lk(_dv_state_mutex);
+    _dv_state_cv.wait_for(lk, timeout, [&] { return _dv_state.lidar_cloud && _dv_state.lidar_cloud != last; });
+    return _dv_state.lidar_cloud != last ? _dv_state.lidar_cloud : nullptr;
+}
+
+std::optional<Eigen::Isometry2d> StateTracker::odom_pose(uint64_t timestamp_ns, std::chrono::nanoseconds timeout) {
+    return _odometry.pose(timestamp_ns, timeout);
+}
+
+Eigen::Vector3d StateTracker::odom_twist() {
+    return _odometry.twist();
 }
 
 void StateTracker::set_dv_path(std::shared_ptr<const std::vector<xyz_vec<float>>> path) {
