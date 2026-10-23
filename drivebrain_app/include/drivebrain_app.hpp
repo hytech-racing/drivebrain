@@ -10,6 +10,7 @@
 #include <boost/asio.hpp>
 #include <memory>
 #include "LoadCellTorqueController.hpp"
+#include "TeleopController.hpp"
 #include "VNComms.hpp"
 #include "OusterComms.hpp"
 #include "autonomy.hpp"
@@ -109,6 +110,6 @@ private:
 #if HOOTL_ENABLED
   DrivingMode _driving_mode = DrivingMode::DRIVERLESS; // TODO undo
 #else
-  DrivingMode _driving_mode = DrivingMode::DRIVERLESS;
+  DrivingMode _driving_mode = DrivingMode::DRIVERED;
 #endif
 };

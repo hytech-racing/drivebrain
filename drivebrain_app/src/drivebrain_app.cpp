@@ -54,10 +54,6 @@ void DrivebrainApp::run() {
 
   spdlog::info("Constructed logging singletons");
 
-  core::DrivebrainControllerInterface::create(); 
-
-  spdlog::info("Constructed drivebrain controller interface");
-
   _acu_core_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::ACUCoreData>>(_io_context, 7777);
   _acu_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::ACUAllData>>(_io_context, 7766);
   _vcr_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::VCRData_s>>(_io_context, 9999);
@@ -104,9 +100,10 @@ void DrivebrainApp::run() {
 
   // CAN device names are defined in the drivebrain JSON config
   _telem_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("telem_can_device").value(), _dbc_path);
-  _aux_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("aux_can_device").value(), _dbc_path);
+  // _aux_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("aux_can_device").value(), _dbc_path);
   spdlog::info("Initialized CAN drivers");
 
+  // TODO FIX HOW THIS IS AIDS IF A CAM IS NOT PLUGGED IN
 #if JETSON_ENABLED
   // start every GigE camera aravis can find
   constexpr unsigned int expected_cameras = 2;
@@ -127,7 +124,7 @@ void DrivebrainApp::run() {
 
   // Initialize controllers
   const size_t num_controllers = 2;
-    _mode1 = std::make_shared<control::LoadCellTorqueController>(); 
+  _mode1 = std::make_shared<control::LoadCellTorqueController>();
   if (!_mode1->init()) {
     spdlog::error("Failed to initialize mode 1");
   }
@@ -140,13 +137,16 @@ void DrivebrainApp::run() {
   std::array<std::shared_ptr<control::Controller<core::ControllerOutput, core::VehicleState>>, num_controllers> controllers{_mode1, _mode2};
   
   // Create controller manager instance
-  ControllerManager<control::Controller<ControllerOutput, VehicleState>, num_controllers>::create(controllers);
-  if(!ControllerManager<control::Controller<ControllerOutput, VehicleState>, num_controllers>::instance().init()) {
+  ControllerManager<control::Controller<core::ControllerOutput, core::VehicleState>, num_controllers>::create(controllers);
+  if(!ControllerManager<control::Controller<core::ControllerOutput, core::VehicleState>, num_controllers>::instance().init()) {
     throw std::runtime_error("Failed to initialize controller manager");
   }
 
   spdlog::info("Constructed controller manager");
 
+  core::DrivebrainControllerInterface::create();
+
+  spdlog::info("Constructed drivebrain controller interface");
   if (_driving_mode == DrivingMode::DRIVERLESS || _driving_mode == DrivingMode::TELEOP) {
     _autonomy.start();
   }
@@ -216,8 +216,8 @@ void DrivebrainApp::_actuate(const core::ControllerOutput& out) {
 #if !JETSON_ENABLED
     _telem_can->send_message(desired_rpm_msg);
     _telem_can->send_message(torque_limit_msg);
-    _aux_can->send_message(desired_rpm_msg);
-    _aux_can->send_message(torque_limit_msg);
+    // _aux_can->send_message(desired_rpm_msg);
+    // _aux_can->send_message(torque_limit_msg);
 #endif
 
     core::log(desired_rpm_msg);
@@ -262,12 +262,6 @@ void DrivebrainApp::_loop() {
 
     auto state_and_validity = core::StateTracker::instance().vehicle_state();
 
-#if !HOOTL_ENABLED
-    if (_kraken_comms && state_and_validity.second) {
-      _kraken_comms->set_angle(state_and_validity.first.steering_angle_deg);
-    }
-#endif
-
     core::ControllerOutput out_struct;
     bool command_is_valid;
     if (_driving_mode == DrivingMode::DRIVERLESS) {
@@ -282,6 +276,10 @@ void DrivebrainApp::_loop() {
       auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, 2>::instance();
       out_struct = controller_manager.step_active_controller(state_and_validity.first);
       command_is_valid = state_and_validity.second;
+
+#if !HOOTL_ENABLED
+      if (_kraken_comms && controller_manager.get_active_controller_index() == 1) _kraken_comms->set_angle(_mode2->steering_command_deg);
+#endif
     }
 
     core::StateTracker::instance().set_previous_control_output(out_struct);
