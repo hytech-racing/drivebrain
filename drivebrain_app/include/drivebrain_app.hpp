@@ -1,4 +1,5 @@
 #include "ETHRecvComms.hpp"
+#include "ETHSendComms.hpp"
 #include "OMSComms.hpp"
 #include "CANComms.hpp"
 #if HOOTL_ENABLED
@@ -60,6 +61,13 @@ private:
   */
   core::ControllerOutput _teleop_command(const core::TeleopCommand& command);
 
+  /**
+   * Forwards a speed controller output to the on-car drivebrain over UDP.
+   *
+   * @param out the controller output to forward
+  */
+  void _send_remote_command(const core::ControllerOutput& out);
+
 private:
   boost::asio::io_context _io_context;
 
@@ -80,6 +88,10 @@ private:
   std::unique_ptr<comms::ETHRecvComms<hytech_msgs::ACUCoreData>> _acu_core_eth_driver;
   std::unique_ptr<comms::ETHRecvComms<hytech_msgs::VCRData_s>> _vcr_eth_driver;
   std::unique_ptr<comms::ETHRecvComms<hytech_msgs::VCFData_s>> _vcf_eth_driver;
+
+  /* Forwards drive commands to the on-car drivebrain */
+  std::unique_ptr<comms::ETHSendComms> _remote_car_eth_driver;
+  uint32_t _remote_command_seq = 0;
 
   /* Sensoric OMS optical speed sensor */
   std::unique_ptr<comms::OMSComms> _oms_comms;
