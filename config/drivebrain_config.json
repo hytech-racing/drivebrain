@@ -26,9 +26,9 @@
         "apply_vectoring_in_regen": true
     },
     "PurePursuitController": {
-        "lookahead_distance": 2.5,
+        "lookahead_distance": 4.0,
         "wheelbase": 1.53,
-        "lookahead_base": 2.0,
+        "lookahead_base": 4.0,
         "lookahead_gain_s": 0.3
     },
     "VelocityPlanner": {

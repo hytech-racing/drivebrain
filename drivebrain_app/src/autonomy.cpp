@@ -9,6 +9,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include <Literals.hpp>
 #include <Telemetry.hpp>
 #include <StateTracker.hpp>
 #include <PathPlanner.hpp>
@@ -77,7 +78,6 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
   if (dv.path && !dv.path->empty()) {
     SpeedControlOut speed_out{};
     speed_out.mcu_recv_millis = vehicle_state.prev_MCU_recv_millis;
-    float curvature;
 
     // safely break to 0ms if steering fails
     speed_out.desired_rpms = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -86,12 +86,20 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
     out.desired_steering_deg = 0.0f;
 
 
-    std::optional<float> steering_angle = _lateral_controller.step_controller(vehicle_state, *dv.path, curvature); // pure pursuit
+    const control::driverless::PurePursuitOutput pure_pursuit_output = _lateral_controller.step_controller({vehicle_state, *dv.path}); // pure pursuit
     log(std::make_shared<dv_msgs::PurePursuitDebug>(_lateral_controller.debug()), "control/pure_pursuit_debug");
-    if (steering_angle.has_value()) {
-      out.desired_steering_deg = steering_angle.value();
+    if (pure_pursuit_output.column_angle_deg.has_value()) {
+      out.desired_steering_deg = pure_pursuit_output.column_angle_deg.value();
       _longitudinal_controller.set_path(*dv.path);
-      out.out = _longitudinal_controller.step_controller(vehicle_state, curvature); // velocity controller
+      // out.out = _longitudinal_controller.step_controller(vehicle_state, pure_pursuit_output.curvature); // velocity controller
+      
+      // use const speed, capped at 10 m/s
+      constexpr float TARGET_SPEED_MPS = 10.0f;
+      const float target_rpm = TARGET_SPEED_MPS * static_cast<float>(constants::METERS_PER_SECOND_TO_RPM);
+      speed_out.desired_rpms = {target_rpm, target_rpm, target_rpm, target_rpm};
+      speed_out.torque_lim_nm = {1.0f, 1.0f, 1.0f, 1.0f};
+      out.out = speed_out;
+
       log(std::make_shared<dv_msgs::VelocityPlannerDebug>(_longitudinal_controller.debug()), "planning/velocity_debug");
     } else {
       spdlog::error("Pure Pursuit controller failed to compute steering angle");

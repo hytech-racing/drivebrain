@@ -7,6 +7,7 @@
 #include "dv_msgs.pb.h"
 
 #include <mutex>
+#include <optional>
 #include <vector>
 
 #include <boost/signals2.hpp>
@@ -16,7 +17,17 @@ namespace control {
 namespace driverless {
 
 
-class PurePursuitController {
+struct PurePursuitInput {
+    const core::VehicleState& state;
+    const std::vector<core::xy_vec<float>>& path; // map frame
+};
+
+struct PurePursuitOutput {
+    std::optional<float> column_angle_deg; // nullopt if no valid steering command
+    float curvature;                       // signed, 1/m, for the velocity planner
+};
+
+class PurePursuitController : public Controller<PurePursuitOutput, PurePursuitInput> {
     public:
         // lookahead_distance: fixed lookahead used by step_controller (m)
         // wheelbase: bicycle model wheelbase (m)
@@ -30,7 +41,7 @@ class PurePursuitController {
 
         bool init();
 
-        std::optional<float> step_controller(const core::VehicleState& in, std::vector<core::xy_vec<float>> path, float& curvature_in);
+        PurePursuitOutput step_controller(const PurePursuitInput& in) override;
 
         /** 
             * Calculates the intersection points of the circle of radius lookahead_distance centered at vehicle_pos with the polyline path
@@ -48,13 +59,13 @@ class PurePursuitController {
         * @param vehicle_heading The current heading of the vehicle (map frame).
         * @return The selected goal point.
         */
-        core::xy_vec<float> select_goal_point(const std::vector<core::xy_vec<float>>& goal_point_candidates, core::xy_vec<float> vehicle_pos, core::xy_vec<float> vehicle_heading);
+        std::optional<size_t> select_goal_point(const std::vector<core::xy_vec<float>>& path, const std::vector<core::xy_vec<float>>& goal_point_candidates, core::xy_vec<float> vehicle_pos, core::xy_vec<float> vehicle_heading);
 
         /* Diagnostics of the most recent step_controller() */
         const dv_msgs::PurePursuitDebug& debug() const { return _debug; }
 
-        float get_dt_sec() {
-            return 0.01f; // currently stepping at 100Hz, but this should be configurable
+        float get_dt_sec() override {
+            return 0.004f; // currently stepping at 250Hz, but this should be configurable
         }
 
     private:
@@ -65,9 +76,6 @@ class PurePursuitController {
         boost::signals2::scoped_connection _param_connection;
 
         dv_msgs::PurePursuitDebug _debug;
-
-        // need dynamic lookahead distance
-        float _wheel_radius = 2.302f;
 
         /**
         Get an arc of constant curvature from current point to target whose tangent is instantaneous heading of vehicle.
@@ -80,11 +88,15 @@ class PurePursuitController {
         float get_curvature(core::xy_vec<float> vehicle_pos, core::xy_vec<float> vehicle_heading, core::xy_vec<float> goal_point, float lookahead_distance);
 
 
+        // TODO: Dynamic lookahead
         /**
         Calculates dynamic lookahead distance using vehicle velocity - needs to be updated to use sensor data 
         (ideally sensoric) for true vehicle velocity, currently using sim position and delta t
          */
-        float dynamic_lookahead(float prev_vehicle_x, float prev_vehicle_y, float dt);
+        // float dynamic_lookahead(float prev_vehicle_x, float prev_vehicle_y, float dt);
+        // // need dynamic lookahead distance
+        // float _wheel_radius = 2.302f;
+
 
         // estimator for yaw-to-column angle conversion
         const estimation::SteeringEstimator _steering_estimator{};
