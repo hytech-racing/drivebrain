@@ -10,6 +10,7 @@
 #include "DrivebrainControllerInterface.hpp"
 #include "PathPlanner.hpp"
 #include <StateTracker.hpp>
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <mcap/writer.hpp>
@@ -58,6 +59,12 @@ void DrivebrainApp::run() {
   _acu_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::ACUAllData>>(_io_context, 7766);
   _vcr_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::VCRData_s>>(_io_context, 9999);
   _vcf_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::VCFData_s>>(_io_context, 4444);
+  _remote_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::RemoteDriveCommand>>(_io_context, 5556,
+    [](std::shared_ptr<hytech_msgs::RemoteDriveCommand> msg) {
+      core::log(msg);
+      // copied, the driver reuses msg for the next receive
+      core::StateTracker::instance().set_remote_command(*msg);
+    });
 
   spdlog::info("Initialized ethernet drivers");
 
@@ -125,7 +132,7 @@ void DrivebrainApp::run() {
   // Initialize controllers
   const size_t num_controllers = 2;
   _mode1 = std::make_shared<control::LoadCellTorqueController>();
-  if (!_mode1->init()) 
+  if (!_mode1->init()) {
     spdlog::error("Failed to initialize mode 1");
   }
 
@@ -196,6 +203,31 @@ core::ControllerOutput DrivebrainApp::_teleop_command(const core::TeleopCommand&
   return out;
 }
 
+core::ControllerOutput DrivebrainApp::_remote_command(const core::RemoteCommand& command, bool is_fresh, const core::VehicleState& vehicle_state) {
+  constexpr float REMOTE_MAX_TORQUE_NM = 10.0f;
+
+  core::SpeedControlOut speed{};
+  speed.mcu_recv_millis = vehicle_state.prev_MCU_recv_millis;
+
+  core::ControllerOutput out;
+  if (is_fresh) {
+    const auto& rpms = command.msg.desired_rpms();
+    const auto& torque_lim = command.msg.torque_limit_nm();
+    speed.desired_rpms = {rpms.fl(), rpms.fr(), rpms.rl(), rpms.rr()};
+    speed.torque_lim_nm = {std::clamp(torque_lim.fl(), 0.0f, REMOTE_MAX_TORQUE_NM),
+                           std::clamp(torque_lim.fr(), 0.0f, REMOTE_MAX_TORQUE_NM),
+                           std::clamp(torque_lim.rl(), 0.0f, REMOTE_MAX_TORQUE_NM),
+                           std::clamp(torque_lim.rr(), 0.0f, REMOTE_MAX_TORQUE_NM)};
+
+    if (command.msg.has_desired_steering_deg()) {
+      out.desired_steering_deg = command.msg.desired_steering_deg();
+    }
+  }
+
+  out.out = speed;
+  return out;
+}
+
 void DrivebrainApp::_actuate(const core::ControllerOutput& out) {
   static auto desired_rpm_msg = std::make_shared<hytech::drivebrain_speed_set_input>();
   static auto torque_limit_msg = std::make_shared<hytech::drivebrain_torque_lim_input>();
@@ -262,12 +294,6 @@ void DrivebrainApp::_loop() {
 
     auto state_and_validity = core::StateTracker::instance().vehicle_state();
 
-#if !HOOTL_ENABLED
-    if (_kraken_comms && state_and_validity.second) {
-      _kraken_comms->set_angle(state_and_validity.first.steering_angle_deg);
-    }
-#endif
-
     core::ControllerOutput out_struct;
     bool command_is_valid;
     if (_driving_mode == DrivingMode::DRIVERLESS) {
@@ -277,11 +303,27 @@ void DrivebrainApp::_loop() {
       auto teleop_and_validity = core::StateTracker::instance().teleop_command();
       out_struct = _teleop_command(teleop_and_validity.first);
       command_is_valid = teleop_and_validity.second;
+    } else if (_driving_mode == DrivingMode::REMOTE) {
+      auto remote_and_validity = core::StateTracker::instance().remote_command();
+      out_struct = _remote_command(remote_and_validity.first, remote_and_validity.second, state_and_validity.first);
+      // always actuate so a stale command goes out as zero instead of leaving the last one on CAN
+      command_is_valid = true;
     } else {
       auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, 1>::instance();
       out_struct = controller_manager.step_active_controller(state_and_validity.first);
       command_is_valid = state_and_validity.second;
     }
+
+#if !HOOTL_ENABLED
+    if (_kraken_comms && _driving_mode == DrivingMode::REMOTE) {
+      // remote command is already a column angle. Holds the last target when stale
+      if (out_struct.desired_steering_deg) {
+        _kraken_comms->set_angle(*out_struct.desired_steering_deg);
+      }
+    } else if (_kraken_comms && state_and_validity.second) {
+      _kraken_comms->set_angle(state_and_validity.first.steering_angle_deg);
+    }
+#endif
 
     core::StateTracker::instance().set_previous_control_output(out_struct);
 

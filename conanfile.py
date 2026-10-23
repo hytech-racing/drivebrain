@@ -35,7 +35,7 @@ class DrivebrainSoftware(ConanFile):
         self.requires("openssl/3.6.2")
         self.requires("ouster_sdk/1.0.1")
         self.requires("eigen/3.4.0", transitive_headers=True)
-        self.requires("ht_proto/master-2026-10-19t05_26_49")
+        self.requires("ht_proto/mgoltsman-dv_debug-2026-10-23t01_08_11")
         self.requires("ht_can/main-344")
         
         self.requires("aravis/0.8.33")

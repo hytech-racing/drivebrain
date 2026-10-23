@@ -18,7 +18,7 @@
 #include "hytech_msgs.pb.h"
 #include <BlackflyComms.hpp>
 
-enum class DrivingMode { DRIVERED, DRIVERLESS, TELEOP };
+enum class DrivingMode { DRIVERED, DRIVERLESS, TELEOP, REMOTE };
 
 class DrivebrainApp {
 public:
@@ -61,6 +61,17 @@ private:
   */
   core::ControllerOutput _teleop_command(const core::TeleopCommand& command);
 
+  /**
+   * Maps a remote speed command onto a speed controller output. A stale command
+   * maps to zero rpm and zero torque limit, and torque limits are capped on the car.
+   *
+   * @param command the latest remote command
+   * @param is_fresh whether the command is recent enough to act on
+   * @param vehicle_state the latest vehicle state
+   * @return the controller output to send
+  */
+  core::ControllerOutput _remote_command(const core::RemoteCommand& command, bool is_fresh, const core::VehicleState& vehicle_state);
+
 private:
   boost::asio::io_context _io_context;
 
@@ -81,6 +92,7 @@ private:
   std::unique_ptr<comms::ETHRecvComms<hytech_msgs::ACUCoreData>> _acu_core_eth_driver;
   std::unique_ptr<comms::ETHRecvComms<hytech_msgs::VCRData_s>> _vcr_eth_driver;
   std::unique_ptr<comms::ETHRecvComms<hytech_msgs::VCFData_s>> _vcf_eth_driver;
+  std::unique_ptr<comms::ETHRecvComms<hytech_msgs::RemoteDriveCommand>> _remote_eth_driver;
 
   /* Sensoric OMS optical speed sensor */
   std::unique_ptr<comms::OMSComms> _oms_comms;
@@ -109,6 +121,6 @@ private:
 #if HOOTL_ENABLED
   DrivingMode _driving_mode = DrivingMode::TELEOP;
 #else
-  DrivingMode _driving_mode = DrivingMode::DRIVERLESS;
+  DrivingMode _driving_mode = DrivingMode::REMOTE;
 #endif
 };
