@@ -10,7 +10,7 @@
 #include <string>
 #include <variant>
 
-#define WHEELBASE 1.530f
+#include <spdlog/spdlog.h>
 
 namespace control {
 namespace driverless {
@@ -91,37 +91,86 @@ core::xy_vec<float> PurePursuitController::selectGoalPoint(const std::vector<cor
     return closest_point;
 }
 
-float PurePursuitController::getCurvature(core::xy_vec<float> vehicle_pos, core::xy_vec<float> vehicle_heading, core::xy_vec<float> goal_point) {
+float PurePursuitController::getCurvature(core::xy_vec<float> vehicle_pos, core::xy_vec<float> vehicle_heading, core::xy_vec<float> goal_point, float lookahead_distance) {
     core::xy_vec<float> to_goal = goal_point - vehicle_pos;
     //std::cout << "Vehicle pos: (" << vehicle_pos.x << ", " << vehicle_pos.y << "), Goal point: (" << goal_point.x << ", " << goal_point.y << "), To goal: (" << to_goal.x << ", " << to_goal.y << ")\n";
     float cross_product = vehicle_heading.x * to_goal.y - vehicle_heading.y * to_goal.x;
     //std::cout << "Vehicle heading: (" << vehicle_heading.x << ", " << vehicle_heading.y << "), Cross product: " << cross_product << "\n";
     float sin_error_angle = cross_product / (vehicle_heading.length() * to_goal.length());
     //std::cout << "Sin error angle: " << sin_error_angle << "\n";
-    float curvature = 2.0f * sin_error_angle / lookahead_distance_;
+    float curvature = 2.0f * sin_error_angle / lookahead_distance;
     curvature_ = curvature; // store the curvature for velocity planner
     return curvature;
 }
 
-float PurePursuitController::getSteeringCommand(float curvature, float wheelbase) {
-    return std::atan(curvature * wheelbase);
-}
 
-float PurePursuitController::yaw_to_column_angle(float steering_angle_rads) {
-    static const estimation::SteeringEstimator estimator;
-    return static_cast<float>(estimator.steering_angle_rads_to_column_angle_degs(steering_angle_rads));
+
+void PurePursuitController::_handle_param_updates(const std::unordered_map<std::string, core::DBParam> &new_param_map) {
+
+    spdlog::info("Entering pure pursuit controller parameter updates.");
+
+    if (auto v = core::process_param_update<float>(new_param_map, "purepursuitcontroller/lookahead_distance")) {
+        std::unique_lock lk(_config_mutex);
+        _config.lookahead_distance = *v;
+    }
+
+    if (auto v = core::process_param_update<float>(new_param_map, "purepursuitcontroller/wheelbase")) {
+        std::unique_lock lk(_config_mutex);
+        _config.wheelbase = *v;
+    }
+
+    if (auto v = core::process_param_update<float>(new_param_map, "purepursuitcontroller/lookahead_base")) {
+        std::unique_lock lk(_config_mutex);
+        _config.lookahead_base = *v;
+    }
+
+    if (auto v = core::process_param_update<float>(new_param_map, "purepursuitcontroller/lookahead_gain_s")) {
+        std::unique_lock lk(_config_mutex);
+        _config.lookahead_gain_s = *v;
+    }
+
+    spdlog::info("Exiting pure pursuit controller parameter updates.");
 }
 
 bool PurePursuitController::init() {
-    // stub, needs to fetch and validate k_p and wheelbase
-    return true;
-} 
+    auto opt_lookahead_distance = core::FoxgloveServer::instance().get_param<float>("purepursuitcontroller/lookahead_distance");
+    auto opt_wheelbase = core::FoxgloveServer::instance().get_param<float>("purepursuitcontroller/wheelbase");
+    auto opt_lookahead_base = core::FoxgloveServer::instance().get_param<float>("purepursuitcontroller/lookahead_base");
+    auto opt_lookahead_gain_s = core::FoxgloveServer::instance().get_param<float>("purepursuitcontroller/lookahead_gain_s");
 
-void PurePursuitController::setLookaheadDistance(float distance_m) {
-    lookahead_distance_ = distance_m;
+    bool all_loaded = true;
+    if (!opt_lookahead_distance) { spdlog::error("Missing param: PurePursuitController/lookahead_distance"); all_loaded = false; }
+    if (!opt_wheelbase)          { spdlog::error("Missing param: PurePursuitController/wheelbase");          all_loaded = false; }
+    if (!opt_lookahead_base)     { spdlog::error("Missing param: PurePursuitController/lookahead_base");     all_loaded = false; }
+    if (!opt_lookahead_gain_s)   { spdlog::error("Missing param: PurePursuitController/lookahead_gain_s");   all_loaded = false; }
+
+    if (!all_loaded) {
+        spdlog::error("Couldn't load all params for pure pursuit controller.");
+        return false;
+    }
+    {
+        std::unique_lock lk(_config_mutex);
+        _config.lookahead_distance = opt_lookahead_distance.value();
+        _config.wheelbase          = opt_wheelbase.value();
+        _config.lookahead_base     = opt_lookahead_base.value();
+        _config.lookahead_gain_s   = opt_lookahead_gain_s.value();
+    }
+
+    _param_connection = core::FoxgloveServer::instance().register_param_callback(
+        std::bind(&PurePursuitController::_handle_param_updates, this, std::placeholders::_1),
+        {"purepursuitcontroller/lookahead_distance", "purepursuitcontroller/wheelbase",
+         "purepursuitcontroller/lookahead_base", "purepursuitcontroller/lookahead_gain_s"});
+
+    return true;
 }
 
 std::optional<float> PurePursuitController::step_controller(const core::VehicleState& in, std::vector<core::xy_vec<float>> path, float& curvature_in) {
+    config cur_config;
+    {
+        std::unique_lock lk(_config_mutex);
+        cur_config = _config;
+    }
+
     const core::xy_vec<float> vehicle_pos{in.vehicle_position_map_frame.x, in.vehicle_position_map_frame.y};
     const core::xy_vec<float> vehicle_heading{
         in.vehicle_heading_map_frame_unit_vector.x,
@@ -135,26 +184,26 @@ std::optional<float> PurePursuitController::step_controller(const core::VehicleS
     debug_.Clear();
     debug_.set_timestamp_ns(std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count());
-    debug_.set_lookahead_distance_m(lookahead_distance_);
+    debug_.set_lookahead_distance_m(cur_config.lookahead_distance);
 
-    std::vector<core::xy_vec<float>> goal_point_candidates = getGoalPointCandidates(path, vehicle_pos, lookahead_distance_);
+    std::vector<core::xy_vec<float>> goal_point_candidates = getGoalPointCandidates(path, vehicle_pos, cur_config.lookahead_distance);
     if (goal_point_candidates.empty()) {
         // No valid goal points found, return zeros
         return output;
     }
 
     core::xy_vec<float> target = selectGoalPoint(goal_point_candidates, vehicle_pos, vehicle_heading);
-    const float curvature = getCurvature(vehicle_pos, vehicle_heading, target);
+    const float curvature = getCurvature(vehicle_pos, vehicle_heading, target, cur_config.lookahead_distance);
 
     // Front-wheel steering angle in radians.
-    const float steering_command = getSteeringCommand(curvature, wheelbase_);
+    const float steering_command = std::atan(curvature * cur_config.wheelbase);
     debug_.mutable_target_point_m()->set_x(target.x);
     debug_.mutable_target_point_m()->set_y(target.y);
     debug_.set_curvature(curvature);
     debug_.set_yaw_rad(steering_command);
 
     if (std::isfinite(steering_command)) {
-        const float steering_command_column_angle = yaw_to_column_angle(steering_command);
+        const float steering_command_column_angle = _steering_estimator.steering_angle_rads_to_column_angle_degs(steering_command);
         debug_.set_column_angle_deg(steering_command_column_angle);
         output.emplace(steering_command_column_angle);
     }
@@ -165,6 +214,12 @@ std::optional<float> PurePursuitController::step_controller(const core::VehicleS
 
 
 float PurePursuitController::dynamic_lookahead(float prev_vehicle_x, float prev_vehicle_y, float dt) {
+    config cur_config;
+    {
+        std::unique_lock lk(_config_mutex);
+        cur_config = _config;
+    }
+
     core::veh_vec<float> total_torque = core::StateTracker::instance().vehicle_state().first.current_torques_nm;
     float torque_sum = total_torque.FL + total_torque.FR + total_torque.RL + total_torque.RR;
     float total_force = torque_sum / wheel_radius;
@@ -174,7 +229,7 @@ float PurePursuitController::dynamic_lookahead(float prev_vehicle_x, float prev_
     float dy = dv_state.vehicle_y - prev_vehicle_y;
     float current_velocity = std::sqrt(dx * dx + dy * dy) / dt; // replace with sensor measurements?
 
-    float lookahead_distance = k_d * (current_velocity/ref_velocity) + lookahead_base;
+    float lookahead_distance = cur_config.lookahead_base + cur_config.lookahead_gain_s * current_velocity;
 
     return lookahead_distance;
 

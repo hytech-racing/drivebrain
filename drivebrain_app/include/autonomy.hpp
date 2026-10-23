@@ -54,7 +54,6 @@ private:
   // filter -> classify -> SLAM -> plan
   void _run();
   struct Tuning {
-    float lookahead_distance;
     float max_velocity;
     float mu;
   };
@@ -66,8 +65,7 @@ private:
   control::driverless::PurePursuitController _lateral_controller{};
   planning::VelocityPlanner _longitudinal_controller{10.0f};
   std::mutex _tuning_mutex;
-  Tuning _tuning{_lateral_controller.getLookaheadDistance(),
-                 _longitudinal_controller.getMaxCarVelocity(),
+  Tuning _tuning{_longitudinal_controller.getMaxCarVelocity(),
                  _longitudinal_controller.getMu()};
   boost::signals2::connection _parameter_connection;
 

@@ -3,9 +3,13 @@
 
 #include <StateTracker.hpp>
 #include <Controller.hpp>
+#include <FoxgloveServer.hpp>
 #include "dv_msgs.pb.h"
 
+#include <mutex>
 #include <vector>
+
+#include <boost/signals2.hpp>
 
 
 namespace control {
@@ -14,10 +18,17 @@ namespace driverless {
 
 class PurePursuitController {
     public:
-        bool init();
+        // lookahead_distance: fixed lookahead used by step_controller (m)
+        // wheelbase: bicycle model wheelbase (m)
+        // lookahead_base, lookahead_gain_s: dynamic lookahead = lookahead_base + lookahead_gain_s * v (m, s)
+        struct config {
+            float lookahead_distance;
+            float wheelbase;
+            float lookahead_base;
+            float lookahead_gain_s;
+        };
 
-        void setLookaheadDistance(float distance_m);
-        float getLookaheadDistance() const { return lookahead_distance_; }
+        bool init();
 
         std::optional<float> step_controller(const core::VehicleState& in, std::vector<core::xy_vec<float>> path, float& curvature_in);
 
@@ -55,33 +66,27 @@ class PurePursuitController {
         }
 
     private:
+        void _handle_param_updates(const std::unordered_map<std::string, core::DBParam> &new_param_map);
+
+        std::mutex _config_mutex;
+        config _config{};
+        boost::signals2::scoped_connection _param_connection;
+
         dv_msgs::PurePursuitDebug debug_;
-        float lookahead_distance_{2.5f};
-        float wheelbase_{1.53f};
         float curvature_;
 
         // need dynamic lookahead distance
         float wheel_radius = 2.302f;
-        float ref_velocity = 5.0f; // tunable value
-        float lookahead_base = 2.0f;
-        float k_d = 1.5f;
-        
-        /** 
+
+        /**
         Get an arc of constant curvature from current point to target whose tangent is instantaneous heading of vehicle.
         * @param vehicle_pos The current position of the vehicle (map frame)
         * @param vehicle_heading The current heading of the vehicle (map frame)
         * @param goal_point The target point to reach (map frame)
+        * @param lookahead_distance Parameter for pure pursuit
         * @return The curvature of the arc connecting the vehicle's position to the goal point.
         */
-        float getCurvature(core::xy_vec<float> vehicle_pos, core::xy_vec<float> vehicle_heading, core::xy_vec<float> goal_point);
-
-        /**
-        Converts the curvature to a steering command based on bicycle model.
-        * @param curvature The curvature of the path.
-        * @param wheelbase The wheelbase of the vehicle.
-        * @return The steering command.
-        */
-        float getSteeringCommand(float curvature, float wheelbase);
+        float getCurvature(core::xy_vec<float> vehicle_pos, core::xy_vec<float> vehicle_heading, core::xy_vec<float> goal_point, float lookahead_distance);
 
 
         /**
@@ -90,11 +95,8 @@ class PurePursuitController {
          */
         float dynamic_lookahead(float prev_vehicle_x, float prev_vehicle_y, float dt);
 
-        /**
-        Converts the front-wheel steering angle from getSteeringCommand (radians)
-        to a steering column angle (degrees) for the Kraken.
-         */
-        float yaw_to_column_angle(float steering_angle_rads);
+        // estimator for yaw-to-column angle conversion
+        const estimation::SteeringEstimator _steering_estimator{};
         
 };
 

@@ -3,6 +3,7 @@
 #include "SimComms.hpp"
 #endif
 #include <memory>
+#include <stdexcept>
 #include <variant>
 #include <vector>
 
@@ -28,6 +29,11 @@ void Autonomy::start() {
     return;
   }
 
+  if (!_lateral_controller.init()) {
+    _running = false;
+    throw std::runtime_error("Failed to initialize pure pursuit controller");
+  }
+
   // register callback for tuning parameters for controllers
   auto& foxglove = FoxgloveServer::instance();
   _parameter_connection = foxglove.register_param_callback(
@@ -38,10 +44,9 @@ void Autonomy::start() {
             if (auto param = std::get_if<float>(&it->second); param && *param >= 0.0f) value = *param;
           }
         };
-        update("purepursuitcontroller/lookahead_distance", _tuning.lookahead_distance);
         update("velocityplanner/max_velocity", _tuning.max_velocity);
         update("velocityplanner/mu", _tuning.mu);
-      }, {"purepursuitcontroller/lookahead_distance", "velocityplanner/max_velocity", "velocityplanner/mu"});
+      }, {"velocityplanner/max_velocity", "velocityplanner/mu"});
   _slam.start();
   _thread = std::thread(&Autonomy::_run, this);
   spdlog::info("Autonomy stack started");
@@ -72,7 +77,6 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
     std::lock_guard lock(_tuning_mutex);
     tuning = _tuning;
   }
-  _lateral_controller.setLookaheadDistance(tuning.lookahead_distance);
   _longitudinal_controller.setMaxCarVelocity(tuning.max_velocity);
   _longitudinal_controller.setMu(tuning.mu);
 
