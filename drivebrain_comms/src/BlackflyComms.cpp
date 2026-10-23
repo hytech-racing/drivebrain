@@ -2,11 +2,10 @@
 #include <ImageCompression.hpp>
 
 #include <foxglove/websocket/common.hpp>
+#include <algorithm>
 #include <memory>
 
-#if JETSON_ENABLED
-#include <foxglove/ImageAnnotations.pb.h>
-#endif
+#include "StateTracker.hpp"
 
 using namespace comms;
 
@@ -68,17 +67,6 @@ bool BlackflyComms::start(const std::string& id, const std::string& name, const 
         return false;
     }
 
-#if JETSON_ENABLED
-    try {
-        // FOLLOW UP: depending on performance we may want to run 
-        // the detector in a seperate thread and pop off of a queue
-        // but we'll see how this does.
-        _detector = std::make_unique<Detector>("/home/hytech/engines/cones.engine");
-    } catch (const std::exception& e) {
-        spdlog::error("[{}] Cone detection disabled: {}", _name, e.what());
-    }
-#endif
-
     // Start the receive thread
     _running = true;
     _blackfly_receive_thread = std::thread(&BlackflyComms::_aravis_receive_loop, this);
@@ -129,6 +117,17 @@ void BlackflyComms::_aravis_receive_loop() {
                     spdlog::error("[{}] Failed to compress camera frame", _name);
                 }
 
+                // Full resolution frame for the cone classifier, rotated 180 like the stream below (RGGB becomes BGGR)
+                auto frame = std::make_shared<foxglove::RawImage>();
+                *frame->mutable_timestamp() = mcap_image->timestamp();
+                frame->set_frame_id(_name);
+                frame->set_width(width);
+                frame->set_height(height);
+                frame->set_step(width);
+                frame->set_encoding("bayer_bggr8");
+                frame->set_data(data, width * height);
+                std::reverse(frame->mutable_data()->begin(), frame->mutable_data()->end());
+                core::StateTracker::instance().set_camera_frame(frame);
 
                 // stream compressed image over foxglove stream
                 cv::Mat bgr;

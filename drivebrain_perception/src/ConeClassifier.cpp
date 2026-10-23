@@ -6,12 +6,18 @@
 #include <stdexcept>
 #include <foxglove/ImageAnnotations.pb.h>
 #include <spdlog/spdlog.h>
+#if JETSON_ENABLED
+#include <opencv2/imgproc.hpp>
+#endif
 #include "FoxgloveServer.hpp"
 #include "LidarFilter.hpp"
 #include "Telemetry.hpp"
 
 namespace perception {
 namespace {
+
+    constexpr std::array<dv_msgs::Cones::ConeColor, 4> CLASS_COLORS{
+        dv_msgs::Cones::BLUE, dv_msgs::Cones::YELLOW, dv_msgs::Cones::ORANGE_SMALL, dv_msgs::Cones::UNKNOWN};
 
     const Eigen::Matrix3f R_LIDAR_FLU = (Eigen::Matrix3f() <<
          0, 1, 0,
@@ -117,6 +123,14 @@ namespace {
     }
 
     ConeClassifier::ConeClassifier(const std::string& intrinsics_dir) {
+#if JETSON_ENABLED
+        try {
+            _detector = std::make_unique<comms::Detector>("/home/hytech/engines/cone_color.engine");
+        } catch (const std::exception& e) {
+            spdlog::error("[ConeClassifier] cone coloring disabled: {}", e.what());
+        }
+#endif
+
         namespace fs = std::filesystem;
         if (!fs::is_directory(intrinsics_dir)) {
             spdlog::warn("[ConeClassifier] intrinsics directory '{}' not found, cones will not be projected", intrinsics_dir);
@@ -143,11 +157,40 @@ namespace {
             const CameraModel& cam = cam_it->second;
             const Eigen::Isometry3f T_cam_lidar = camera_from_lidar(name);
 
+            // boxes of the cones in view, by cone index
+            std::vector<std::pair<int, std::array<float, 4>>> boxes;
+            for (int i = 0; i < cones->cones_size(); ++i) {
+                if (const auto box = project_cone(cam, T_cam_lidar, cones->cones(i).position())) boxes.emplace_back(i, *box);
+            }
+
+#if JETSON_ENABLED
+            if (_detector && !boxes.empty() && frame->encoding() == "bayer_bggr8") {
+                const cv::Mat bayer(frame->height(), frame->width(), CV_8UC1, const_cast<char*>(frame->data().data()), frame->step());
+                cv::Mat rgb;
+                cv::cvtColor(bayer, rgb, cv::COLOR_BayerBGGR2RGB);
+
+                std::vector<cv::Mat> patches;
+                for (const auto& [i, box] : boxes) {
+                    const auto [x0, y0, x1, y1] = box;
+                    cv::Mat patch;
+                    cv::resize(rgb(cv::Rect(cv::Point(x0, y0), cv::Point(x1, y1))), patch, cv::Size(PATCH_PX, PATCH_PX), 0, 0, cv::INTER_AREA);
+                    patches.push_back(patch);
+                }
+
+                const auto detections = _detector->classify(patches);
+                for (std::size_t k = 0; k < detections.size(); ++k) {
+                    auto* cone = cones->mutable_cones(boxes[k].first);
+                    if (detections[k].score > cone->color_confidence()) {
+                        cone->set_color(CLASS_COLORS.at(detections[k].class_id));
+                        cone->set_color_confidence(detections[k].score);
+                    }
+                }
+            }
+#endif
+
             auto annotations = std::make_shared<foxglove::ImageAnnotations>();
-            for (const auto& cone : cones->cones()) {
-                const auto box = project_cone(cam, T_cam_lidar, cone.position());
-                if (!box) continue;
-                const auto [x0, y0, x1, y1] = *box;
+            for (const auto& [i, box] : boxes) {
+                const auto [x0, y0, x1, y1] = box;
 
                 auto* outline = annotations->add_points();
                 *outline->mutable_timestamp() = frame->timestamp();
