@@ -100,7 +100,7 @@ void DrivebrainApp::run() {
 
   // CAN device names are defined in the drivebrain JSON config
   _telem_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("telem_can_device").value(), _dbc_path);
-  _aux_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("aux_can_device").value(), _dbc_path);
+  // _aux_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("aux_can_device").value(), _dbc_path);
   spdlog::info("Initialized CAN drivers");
 
   // TODO FIX HOW THIS IS AIDS IF A CAM IS NOT PLUGGED IN
@@ -125,7 +125,7 @@ void DrivebrainApp::run() {
   // Initialize controllers
   const size_t num_controllers = 2;
   _mode1 = std::make_shared<control::LoadCellTorqueController>();
-  if (!_mode1->init()) 
+  if (!_mode1->init()) {
     spdlog::error("Failed to initialize mode 1");
   }
 
@@ -216,8 +216,8 @@ void DrivebrainApp::_actuate(const core::ControllerOutput& out) {
 #if !JETSON_ENABLED
     _telem_can->send_message(desired_rpm_msg);
     _telem_can->send_message(torque_limit_msg);
-    _aux_can->send_message(desired_rpm_msg);
-    _aux_can->send_message(torque_limit_msg);
+    // _aux_can->send_message(desired_rpm_msg);
+    // _aux_can->send_message(torque_limit_msg);
 #endif
 
     core::log(desired_rpm_msg);
@@ -262,12 +262,6 @@ void DrivebrainApp::_loop() {
 
     auto state_and_validity = core::StateTracker::instance().vehicle_state();
 
-#if !HOOTL_ENABLED
-    if (_kraken_comms && state_and_validity.second) {
-      _kraken_comms->set_angle(state_and_validity.first.steering_angle_deg);
-    }
-#endif
-
     core::ControllerOutput out_struct;
     bool command_is_valid;
     if (_driving_mode == DrivingMode::DRIVERLESS) {
@@ -278,9 +272,14 @@ void DrivebrainApp::_loop() {
       out_struct = _teleop_command(teleop_and_validity.first);
       command_is_valid = teleop_and_validity.second;
     } else {
-      auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, 1>::instance();
+      constexpr size_t num_controllers = 2;
+      auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, num_controllers>::instance();
       out_struct = controller_manager.step_active_controller(state_and_validity.first);
       command_is_valid = state_and_validity.second;
+
+#if !HOOTL_ENABLED
+      if (_kraken_comms && controller_manager.get_active_controller_index() == 1) _kraken_comms->set_angle(_mode2->steering_command_deg);
+#endif
     }
 
     core::StateTracker::instance().set_previous_control_output(out_struct);

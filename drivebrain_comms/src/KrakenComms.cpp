@@ -130,8 +130,6 @@ namespace comms
 
         _kraken = std::make_unique<ctre::phoenix6::hardware::TalonFX>(_config.device_id, _config.canbus_name);
 
-        std::cout << "KRAKEN INITIALIZED!!!!" << std::endl;
-
         ctre::phoenix6::configs::TalonFXConfiguration talon_config{};
         talon_config.MotorOutput.NeutralMode = ctre::phoenix6::signals::NeutralModeValue::Coast;
         
@@ -504,7 +502,7 @@ namespace comms
                               "Motor set to neutral until restart.");
             }
 
-            const auto vehicle_state = core::StateTracker::instance().get_latest_state_and_validity().first;
+            const auto vehicle_state = core::StateTracker::instance().vehicle_state().first;
             const float column_deg = vehicle_state.steering_column_angle_deg;
             const bool is_steering_fresh = vehicle_state.updated_steering_estimator &&
                                            steady_clock::now() - vehicle_state.last_steering_recv_time < steering_timeout;
