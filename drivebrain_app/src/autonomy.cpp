@@ -53,11 +53,26 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
 void Autonomy::_run() {
   std::shared_ptr<const foxglove::PointCloud> last_scan;
 
+  // Plan a path through the cones (map frame) and hand it to the controllers
+  auto plan = [](const dv_msgs::Cones& cones) {
+    auto path = planning::plan_path(cones);
+    render_path(path, "planned_path", "map");
+    StateTracker::instance().set_dv_path(std::make_shared<const std::vector<xyz_vec<float>>>(std::move(path)));
+  };
+
   while (_running) {
     const auto scan = StateTracker::instance().wait_for_scan(last_scan, SCAN_WAIT);
     if (!scan) continue;
     last_scan = scan;
     const uint64_t scan_ns = google::protobuf::util::TimeUtil::TimestampToNanoseconds(last_scan->timestamp());
+
+#if HOOTL_ENABLED
+    // TODO: plan from the SLAM map once the sim provides odometry. For now plan from the sim's
+    // ground truth cones, which are in the same frame as the sim pose that pure pursuit tracks
+    if (const auto ground_truth_cones = StateTracker::instance().dv_state().cone_observations) {
+      plan(*ground_truth_cones);
+    }
+#endif
 
     // Get odometry pose for the scan
     const auto pose = StateTracker::instance().odom_pose(scan_ns, ODOM_TIMEOUT);
@@ -80,11 +95,11 @@ void Autonomy::_run() {
     const auto map = _slam->update(*cones, scan_ns, *pose, T_base_lidar);
     if (!map) continue;
 
+#if !HOOTL_ENABLED
     // Update the state tracker with the new cone observations and plan a path
     StateTracker::instance().set_cone_observations(map);
-    auto path = planning::plan_path(*map);
-    render_path(path, "planned_path", "map");
-    StateTracker::instance().set_dv_path(std::make_shared<const std::vector<xyz_vec<float>>>(std::move(path)));
+    plan(*map);
+#endif
   }
 }
 
