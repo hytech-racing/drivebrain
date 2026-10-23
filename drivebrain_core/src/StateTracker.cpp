@@ -20,8 +20,6 @@ StateTracker::StateTracker() {
     };
     _T_base_lidar = Eigen::Translation3d(mount("lidar_x_m"), mount("lidar_y_m"), mount("lidar_z_m")) *
                     Eigen::AngleAxisd(mount("lidar_yaw_deg") * M_PI / 180.0, Eigen::Vector3d::UnitZ());
-    _oms_position_base_m = {FoxgloveServer::instance().get_param<float>("Odometry/oms_position_base_x_m").value(),
-                            FoxgloveServer::instance().get_param<float>("Odometry/oms_position_base_y_m").value()};
 }
 
 /****************************************************************
@@ -94,26 +92,8 @@ void StateTracker::handle_receive_protobuf_message(std::shared_ptr<google::proto
         auto in_msg = std::static_pointer_cast<hytech_msgs::OMSData>(msg);
         const uint64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();
-        {
-            std::unique_lock lk(_state_mutex);
-            const uint64_t ts = _oms_sample_host_time_ns(in_msg->sample_time_s(), now_ns);
-            if (ts > _odom_ns) {
-                // the sensor is mounted facing backwards, so both velocity axes are flipped; yaw rate is unaffected
-                Eigen::Vector3d twist(-in_msg->motion().vel_x_kmh() / 3.6, -in_msg->motion().vel_y_kmh() / 3.6,
-                                      in_msg->rate_hor_deg_s().z() * M_PI / 180.0);
-                // velocity at the sensor -> base_link: v_base = v_sensor - w x r
-                twist.x() += twist.z() * _oms_position_base_m.y();
-                twist.y() -= twist.z() * _oms_position_base_m.x();
-                if (in_msg->status().standstill()) twist.setZero();
-                else if (!in_msg->status().status_ok()) twist = _odom_twist;
-
-                if (_odom_ns != 0) {
-                    _odom_pose = _odom_pose * geometry::integrate_twist(0.5 * (_odom_twist + twist), (ts - _odom_ns) * 1e-9);
-                }
-                _odom_ns = ts;
-                _odom_twist = twist;
-                _publish_odometry();
-            }
+        if (_odometry.update(*in_msg, now_ns)) {
+            _publish_odometry();
         }
     } else if (msg->GetDescriptor() == hytech_msgs::VCRData_s::descriptor()) {
         auto in_msg = std::static_pointer_cast<hytech_msgs::VCRData_s>(msg);
@@ -174,28 +154,15 @@ core::DriverlessState StateTracker::dv_state() {
 }
 
 std::optional<Eigen::Isometry2d> StateTracker::odom_pose(uint64_t timestamp_ns, std::chrono::nanoseconds timeout) {
-    return _odom_buffer.lookup(timestamp_ns, timeout);
+    return _odometry.pose(timestamp_ns, timeout);
 }
 
 Eigen::Vector3d StateTracker::odom_twist() {
-    std::unique_lock lk(_state_mutex);
-    return _odom_twist;
-}
-
-uint64_t StateTracker::_oms_sample_host_time_ns(float sample_time_s, uint64_t recv_ns) {
-    const int64_t sample_ns = static_cast<int64_t>(static_cast<double>(sample_time_s) * 1e9);
-    const int64_t offset_ns = static_cast<int64_t>(recv_ns) - sample_ns;
-    // The freshest sample of each burst has the smallest latency; let the offset creep up to follow clock drift
-    _oms_clock_offset_ns = std::min(offset_ns, _oms_clock_offset_ns == std::numeric_limits<int64_t>::max()
-                                                   ? offset_ns : _oms_clock_offset_ns + 2000);
-    return static_cast<uint64_t>(sample_ns + _oms_clock_offset_ns);
+    return _odometry.twist();
 }
 
 void StateTracker::_publish_odometry() {
-    const uint64_t ts = _odom_ns;
-    const Eigen::Isometry2d& pose = _odom_pose;
-    _odom_buffer.insert(ts, pose);
-
+    const auto [ts, pose] = _odometry.latest();
     if (ts - _last_odom_publish_ns < ODOM_PUBLISH_PERIOD_NS) return;
     _last_odom_publish_ns = ts;
 
@@ -219,9 +186,10 @@ void StateTracker::_publish_odometry() {
     estimate->set_x_odom_m(pose.translation().x());
     estimate->set_y_odom_m(pose.translation().y());
     estimate->set_yaw_odom_rad(geometry::yaw(pose));
-    estimate->set_vx_vehicle_flu_mps(_odom_twist.x());
-    estimate->set_vy_vehicle_flu_mps(_odom_twist.y());
-    estimate->set_yaw_rate_vehicle_flu_radps(_odom_twist.z());
+    const Eigen::Vector3d twist = _odometry.twist();
+    estimate->set_vx_vehicle_flu_mps(twist.x());
+    estimate->set_vy_vehicle_flu_mps(twist.y());
+    estimate->set_yaw_rate_vehicle_flu_radps(twist.z());
     log(estimate, "odometry");
 }
 

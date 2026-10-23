@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <limits>
 #include <optional>
 #include <foxglove/PointCloud.pb.h>
 #include <foxglove/websocket/base64.hpp>
@@ -21,7 +20,7 @@
 #include "dv_msgs.pb.h"
 #include "FzEstimator.h"
 #include "SteeringEstimator.h"
-#include "OdomBuffer.h"
+#include "Odometry.h"
 
 /**
  * The state tracker acts as a thread-safe translation unit
@@ -443,11 +442,8 @@ namespace core {
 
             void _update_estimators();
 
-            /* Inserts the odometry pose into the buffer and publishes it; called with _state_mutex held */
+            /* Publishes the latest odometry pose: tf, odom trail and state estimate; called from the OMS receive path */
             void _publish_odometry();
-
-            /* Maps the OMS 1 kHz sample clock onto host time, undoing the TCP burst grouping */
-            uint64_t _oms_sample_host_time_ns(float sample_time_s, uint64_t recv_ns);
 
             VehicleState _vehicle_state = { };
             RawInputData _raw_input_data = { };
@@ -460,14 +456,8 @@ namespace core {
             TeleopCommand _teleop_command = { };
             std::mutex _teleop_mutex;
             
-            // Odometry dead-reckoned from the OMS velocity and yaw rate
-            Eigen::Isometry2d _odom_pose = Eigen::Isometry2d::Identity();
-            Eigen::Vector3d _odom_twist = Eigen::Vector3d::Zero();  // vx, vy (m/s), yaw rate (rad/s) in base_link
-            uint64_t _odom_ns = 0;
-            Eigen::Vector2d _oms_position_base_m = Eigen::Vector2d::Zero();
             // Deskew looks back one scan (100 ms) plus the scan's processing delay
-            estimation::OdomBuffer _odom_buffer{1'000'000'000ULL};
-            int64_t _oms_clock_offset_ns = std::numeric_limits<int64_t>::max();
+            estimation::Odometry _odometry{1'000'000'000ULL};
             uint64_t _last_odom_publish_ns = 0;
             Eigen::Isometry3d _T_base_lidar = Eigen::Isometry3d::Identity();
             std::vector<xyz_vec<float>> _odom_trail;
