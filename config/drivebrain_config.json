@@ -31,6 +31,12 @@
         "lookahead_base": 4.0,
         "lookahead_gain_s": 0.3
     },
+    "VelocityPlanner": {
+        "max_velocity": 10.0,
+        "mu": 1.0,
+        "path_points_ahead": 20,
+        "path_stale_ratio": 0.3
+    },
     "vn_driver": {
         "device_name": "/dev/ttyUSB0",
         "baud_rate": 921600, 
