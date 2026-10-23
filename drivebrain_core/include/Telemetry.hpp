@@ -4,6 +4,8 @@
 #include <MCAPLogger.hpp>
 #include <FoxgloveServer.hpp>
 #include <foxglove/SceneUpdate.pb.h>
+#include <foxglove/FrameTransform.pb.h>
+#include <Geometry.hpp>
 #include "dv_msgs.pb.h"
 
 namespace core {
@@ -42,6 +44,36 @@ inline void log_foxglove_only(std::shared_ptr<const google::protobuf::Message> m
 }
 
 /**
+ * Publishes a parent <- child transform on the tf topic
+ *
+ * @param parent_frame_id the parent frame
+ * @param child_frame_id the child frame
+ * @param timestamp_ns host time the transform is valid at
+ * @param T_parent_child pose of the child frame expressed in the parent frame
+ */
+inline void publish_transform(const std::string& parent_frame_id, const std::string& child_frame_id,
+                              uint64_t timestamp_ns, const Eigen::Isometry3d& T_parent_child) {
+    auto tf = std::make_shared<foxglove::FrameTransform>();
+    tf->mutable_timestamp()->set_seconds(static_cast<int64_t>(timestamp_ns / 1000000000ULL));
+    tf->mutable_timestamp()->set_nanos(static_cast<int32_t>(timestamp_ns % 1000000000ULL));
+    tf->set_parent_frame_id(parent_frame_id);
+    tf->set_child_frame_id(child_frame_id);
+
+    const Eigen::Vector3d t = T_parent_child.translation();
+    tf->mutable_translation()->set_x(t.x());
+    tf->mutable_translation()->set_y(t.y());
+    tf->mutable_translation()->set_z(t.z());
+
+    const Eigen::Quaterniond q(T_parent_child.linear());
+    tf->mutable_rotation()->set_x(q.x());
+    tf->mutable_rotation()->set_y(q.y());
+    tf->mutable_rotation()->set_z(q.z());
+    tf->mutable_rotation()->set_w(q.w());
+
+    log(tf, "tf");
+}
+
+/**
  * Renders DV cones in Foxglove's 3D panel for viz
  *
  * @param cones the cones to log
@@ -49,7 +81,7 @@ inline void log_foxglove_only(std::shared_ptr<const google::protobuf::Message> m
  * @param frame_id The frame the cone positions are expressed in.
  */
 inline void render_cones(std::shared_ptr<dv_msgs::Cones> cones, std::string id, std::string frame_id = "map") {
-    log(cones);
+    log(cones, id);
 
     auto scene = std::make_shared<foxglove::SceneUpdate>();
     auto* entity = scene->add_entities();
@@ -78,6 +110,25 @@ inline void render_cones(std::shared_ptr<dv_msgs::Cones> cones, std::string id, 
             case dv_msgs::Cones::ORANGE_SMALL: color->set_r(1.0); color->set_g(0.45); color->set_b(0.0); break;
             case dv_msgs::Cones::ORANGE_BIG:   color->set_r(1.0); color->set_g(0.25); color->set_b(0.0); break;
             default:                           color->set_r(0.5); color->set_g(0.5);  color->set_b(0.5); break;
+        }
+
+        // SLAM landmarks carry an id; they are drawn faded until the optimizer has placed them
+        if (cone.landmark_id()) {
+            color->set_a(cone.optimized() ? 1.0 : 0.5);
+            auto* text = entity->add_texts();
+            auto* text_pos = text->mutable_pose()->mutable_position();
+            text_pos->set_x(cone.position().x());
+            text_pos->set_y(cone.position().y());
+            text_pos->set_z(cone.position().z() + 0.5);
+            text->mutable_pose()->mutable_orientation()->set_w(1.0);
+            text->set_billboard(true);
+            text->set_font_size(12.0);
+            text->set_scale_invariant(true);
+            text->mutable_color()->set_r(1.0);
+            text->mutable_color()->set_g(1.0);
+            text->mutable_color()->set_b(1.0);
+            text->mutable_color()->set_a(0.9);
+            text->set_text(std::to_string(cone.landmark_id()));
         }
     }
 
@@ -155,6 +206,43 @@ inline void render_path(const std::vector<xyz_vec<float>>& path, std::string id,
     color->set_g(0.9);
     color->set_b(0.5);
     color->set_a(1.0);
+
+    log(scene);
+}
+
+/**
+ * Renders line segments in Foxglove's 3D panel, one per consecutive pair of points
+ *
+ * @param points segment endpoints, in pairs
+ * @param id The identifier of the segment set (e.g. "slam_factors")
+ * @param frame_id The frame the points are expressed in.
+ */
+inline void render_segments(const std::vector<xyz_vec<float>>& points, std::string id, std::string frame_id = "map") {
+    auto scene = std::make_shared<foxglove::SceneUpdate>();
+    auto* entity = scene->add_entities();
+    entity->set_frame_id(frame_id);
+    entity->set_id(id);
+    auto now = std::chrono::system_clock::now().time_since_epoch();
+    entity->mutable_timestamp()->set_seconds(std::chrono::duration_cast<std::chrono::seconds>(now).count());
+    entity->mutable_timestamp()->set_nanos(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count() % 1000000000);
+    entity->set_frame_locked(true);
+
+    auto* line = entity->add_lines();
+    line->set_type(foxglove::LinePrimitive::LINE_LIST);
+    line->mutable_pose()->mutable_orientation()->set_w(1.0);
+    line->set_thickness(0.02);
+    for (const auto& point : points) {
+        auto* p = line->add_points();
+        p->set_x(point.x);
+        p->set_y(point.y);
+        p->set_z(point.z);
+    }
+    // muted so the factor web sits behind the cones and the trail
+    auto* color = line->mutable_color();
+    color->set_r(0.55);
+    color->set_g(0.55);
+    color->set_b(0.55);
+    color->set_a(0.35);
 
     log(scene);
 }

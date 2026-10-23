@@ -163,6 +163,9 @@ void SimComms::_veh_recv_loop() {
         }
         if (m.size() < 2) { spdlog::error("SimComms: short frame, {} parts", m.size()); continue; }
         auto type_name = m.popstr(); 
+        // an optional topic part (replayed recordings) keeps the message on its original topic
+        std::string topic;
+        if (m.size() > 1) topic = m.popstr();
         auto body = m.pop();
 
         std::shared_ptr<google::protobuf::Message> msg(parse_by_name(type_name, body.data(), body.size()));
@@ -182,9 +185,9 @@ void SimComms::_veh_recv_loop() {
         } else if (desc == hytech_msgs::pose::descriptor()) {
             core::render_pose(std::static_pointer_cast<hytech_msgs::pose>(msg), "ground_truth_pose");
         } else if (desc == foxglove::FrameTransform::descriptor()) {
-            core::log(msg);
+            core::log(msg, topic);
         } else {
-            core::log(msg);
+            core::log(msg, topic);
             core::StateTracker::instance().handle_receive_protobuf_message(msg);
         }
     }
@@ -195,7 +198,7 @@ void SimComms::_lidar_recv_loop() {
         zmq::message_t frame;
         try {
             auto res = _lidar_socket.recv(frame);
-            std::cout << "Received lidar frame of size: " << frame.size() << std::endl;
+            // std::cout << "Received lidar frame of size: " << frame.size() << std::endl;
             if (!res) continue;
         } catch (const zmq::error_t& e) {
             if (e.num() == ETERM) break;
@@ -209,8 +212,8 @@ void SimComms::_lidar_recv_loop() {
             continue;
         }
 
+        core::log(pc, "ouster/points");
         core::StateTracker::instance().handle_receive_protobuf_message(pc);
-        core::log(pc);
     }
 }
 

@@ -10,9 +10,10 @@ add_executable(drivebrain_test
 )
 
 target_link_libraries(drivebrain_test PUBLIC
-    foxglove-websocket::foxglove-websocket
+    foxglove-websocket::foxglove-websocket 
     mcap::mcap
     drivebrain_core
+    drivebrain_comms
     GTest::gtest
 )
 

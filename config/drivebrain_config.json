@@ -56,6 +56,30 @@
         "Q_gain": 0.1,
         "R_gain": 0.1
     },
+    "odometry": {
+        "oms_position_base_x_m": -1.108,
+        "oms_position_base_y_m": 0.0
+    },
+    "static_transforms": {
+        "lidar_x_m": 1.244,
+        "lidar_y_m": 0.0,
+        "lidar_z_m": 0.107,
+        "lidar_yaw_deg": 90.0
+    },
+    "slam": {
+        "map_association_gate_chi2": 9.21,
+        "measurement_std_m": 0.3,
+        "candidate_gate_m": 1.0,
+        "minimum_evidence_to_confirm": 3.0,
+        "minimum_evidence_baseline_m": 0.5,
+        "minimum_detection_confidence": 0.5,
+        "odom_noise_xy_m": 0.05,
+        "odom_noise_yaw_rad": 0.01,
+        "odom_drift_xy_m": 0.03,
+        "odom_drift_yaw_rad": 0.001,
+        "bearing_std_rad": 0.05,
+        "range_std_m": 0.5
+    },
     "use_vectornav": false,
     "use_fake_vn": false,
     "use_surrey_aero": false,
