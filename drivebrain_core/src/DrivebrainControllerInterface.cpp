@@ -30,9 +30,7 @@ void core::DrivebrainControllerInterface::destroy() {
 }
 
 core::DrivebrainControllerInterface::DrivebrainControllerInterface() {
-    core::FoxgloveServer::instance().register_param_callback(
-        std::bind(&core::DrivebrainControllerInterface::_handle_parameter_updates, this, std::placeholders::_1),
-        {"drivebraincontrollerinterface/should_log", "drivebraincontrollerinterface/controller_index"});
+    core::FoxgloveServer::instance().register_param_callback(std::bind(&core::DrivebrainControllerInterface::_handle_parameter_updates, this, std::placeholders::_1));
 }
 
 /* Private Methods */

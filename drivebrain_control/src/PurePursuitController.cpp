@@ -15,7 +15,7 @@
 namespace control {
 namespace driverless {
 
-std::vector<core::xy_vec<float>> PurePursuitController::getGoalPointCandidates(const std::vector<core::xy_vec<float>>& path, core::xy_vec<float> vehicle_pos, float lookahead_distance) {
+std::vector<core::xy_vec<float>> PurePursuitController::get_goal_point_candidates(const std::vector<core::xy_vec<float>>& path, core::xy_vec<float> vehicle_pos, float lookahead_distance) {
     if (path.empty()) {
         return {};
     }
@@ -60,7 +60,7 @@ std::vector<core::xy_vec<float>> PurePursuitController::getGoalPointCandidates(c
     return goal_point_candidates;
 }
 
-core::xy_vec<float> PurePursuitController::selectGoalPoint(const std::vector<core::xy_vec<float>>& goal_point_candidates, core::xy_vec<float> vehicle_pos, core::xy_vec<float> vehicle_heading) {
+core::xy_vec<float> PurePursuitController::select_goal_point(const std::vector<core::xy_vec<float>>& goal_point_candidates, core::xy_vec<float> vehicle_pos, core::xy_vec<float> vehicle_heading) {
     core::xy_vec<float> closest_point;
  
     auto colinearity = [vehicle_pos, vehicle_heading](const core::xy_vec<float>& point) {
@@ -91,7 +91,7 @@ core::xy_vec<float> PurePursuitController::selectGoalPoint(const std::vector<cor
     return closest_point;
 }
 
-float PurePursuitController::getCurvature(core::xy_vec<float> vehicle_pos, core::xy_vec<float> vehicle_heading, core::xy_vec<float> goal_point, float lookahead_distance) {
+float PurePursuitController::get_curvature(core::xy_vec<float> vehicle_pos, core::xy_vec<float> vehicle_heading, core::xy_vec<float> goal_point, float lookahead_distance) {
     core::xy_vec<float> to_goal = goal_point - vehicle_pos;
     //std::cout << "Vehicle pos: (" << vehicle_pos.x << ", " << vehicle_pos.y << "), Goal point: (" << goal_point.x << ", " << goal_point.y << "), To goal: (" << to_goal.x << ", " << to_goal.y << ")\n";
     float cross_product = vehicle_heading.x * to_goal.y - vehicle_heading.y * to_goal.x;
@@ -99,7 +99,6 @@ float PurePursuitController::getCurvature(core::xy_vec<float> vehicle_pos, core:
     float sin_error_angle = cross_product / (vehicle_heading.length() * to_goal.length());
     //std::cout << "Sin error angle: " << sin_error_angle << "\n";
     float curvature = 2.0f * sin_error_angle / lookahead_distance;
-    curvature_ = curvature; // store the curvature for velocity planner
     return curvature;
 }
 
@@ -156,10 +155,7 @@ bool PurePursuitController::init() {
         _config.lookahead_gain_s   = opt_lookahead_gain_s.value();
     }
 
-    _param_connection = core::FoxgloveServer::instance().register_param_callback(
-        std::bind(&PurePursuitController::_handle_param_updates, this, std::placeholders::_1),
-        {"purepursuitcontroller/lookahead_distance", "purepursuitcontroller/wheelbase",
-         "purepursuitcontroller/lookahead_base", "purepursuitcontroller/lookahead_gain_s"});
+    _param_connection = core::FoxgloveServer::instance().register_param_callback(std::bind(&PurePursuitController::_handle_param_updates, this, std::placeholders::_1));
 
     return true;
 }
@@ -181,30 +177,30 @@ std::optional<float> PurePursuitController::step_controller(const core::VehicleS
     
     std::optional<float> output{};
 
-    debug_.Clear();
-    debug_.set_timestamp_ns(std::chrono::duration_cast<std::chrono::nanoseconds>(
+    _debug.Clear();
+    _debug.set_timestamp_ns(std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count());
-    debug_.set_lookahead_distance_m(cur_config.lookahead_distance);
+    _debug.set_lookahead_distance_m(cur_config.lookahead_distance);
 
-    std::vector<core::xy_vec<float>> goal_point_candidates = getGoalPointCandidates(path, vehicle_pos, cur_config.lookahead_distance);
+    std::vector<core::xy_vec<float>> goal_point_candidates = get_goal_point_candidates(path, vehicle_pos, cur_config.lookahead_distance);
     if (goal_point_candidates.empty()) {
         // No valid goal points found, return zeros
         return output;
     }
 
-    core::xy_vec<float> target = selectGoalPoint(goal_point_candidates, vehicle_pos, vehicle_heading);
-    const float curvature = getCurvature(vehicle_pos, vehicle_heading, target, cur_config.lookahead_distance);
+    core::xy_vec<float> target = select_goal_point(goal_point_candidates, vehicle_pos, vehicle_heading);
+    const float curvature = get_curvature(vehicle_pos, vehicle_heading, target, cur_config.lookahead_distance);
 
     // Front-wheel steering angle in radians.
     const float steering_command = std::atan(curvature * cur_config.wheelbase);
-    debug_.mutable_target_point_m()->set_x(target.x);
-    debug_.mutable_target_point_m()->set_y(target.y);
-    debug_.set_curvature(curvature);
-    debug_.set_yaw_rad(steering_command);
+    _debug.mutable_target_point_m()->set_x(target.x);
+    _debug.mutable_target_point_m()->set_y(target.y);
+    _debug.set_curvature(curvature);
+    _debug.set_yaw_rad(steering_command);
 
     if (std::isfinite(steering_command)) {
         const float steering_command_column_angle = _steering_estimator.steering_angle_rads_to_column_angle_degs(steering_command);
-        debug_.set_column_angle_deg(steering_command_column_angle);
+        _debug.set_column_angle_deg(steering_command_column_angle);
         output.emplace(steering_command_column_angle);
     }
 
@@ -222,7 +218,7 @@ float PurePursuitController::dynamic_lookahead(float prev_vehicle_x, float prev_
 
     core::veh_vec<float> total_torque = core::StateTracker::instance().vehicle_state().first.current_torques_nm;
     float torque_sum = total_torque.FL + total_torque.FR + total_torque.RL + total_torque.RR;
-    float total_force = torque_sum / wheel_radius;
+    float total_force = torque_sum / _wheel_radius;
 
     auto dv_state = core::StateTracker::instance().vehicle_sim_pos();
     float dx = dv_state.vehicle_x - prev_vehicle_x;

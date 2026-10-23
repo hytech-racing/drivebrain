@@ -53,21 +53,13 @@ public:
 private:
   // filter -> classify -> SLAM -> plan
   void _run();
-  struct Tuning {
-    float max_velocity;
-    float mu;
-  };
 
   std::thread _thread;
   std::atomic<bool> _running{false};
 
   slam::GraphSlam _slam;
   control::driverless::PurePursuitController _lateral_controller{};
-  planning::VelocityPlanner _longitudinal_controller{10.0f};
-  std::mutex _tuning_mutex;
-  Tuning _tuning{_longitudinal_controller.getMaxCarVelocity(),
-                 _longitudinal_controller.getMu()};
-  boost::signals2::connection _parameter_connection;
+  planning::VelocityPlanner _longitudinal_controller{};
 
   // Rate of OS1 LiDAR
   static constexpr std::chrono::milliseconds _period{100}; 

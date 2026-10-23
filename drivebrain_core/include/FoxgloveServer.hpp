@@ -14,7 +14,6 @@
 #include <boost/signals2.hpp>
 #include <MCAPLogger.hpp>
 #include <string>
-#include <vector>
 #include <atomic>
 #include <cassert>
 #include <optional>
@@ -108,13 +107,11 @@ namespace core {
             void send_live_telem_msg(std::shared_ptr<const google::protobuf::Message> msg, const std::string& topic = { });
 
             /**
-             * Registers a callback for the listed parameter names, or all names if the list is empty.
-             * The callback receives only parameters included in the update.
+             * Registers a callback function to be run whenever a parameter is updated in Foxglove.
+             * @param The function to be reigstered, which takes the form of (const string, param) -> void
              * @return The newly created boost connection
             */
-            boost::signals2::connection register_param_callback(
-                std::function<void(const std::unordered_map<std::string, DBParam>&)> callback,
-                std::vector<std::string> names = {});
+            boost::signals2::connection register_param_callback(std::function<void(const std::unordered_map<std::string, DBParam>&)> callback);
 
             /**
              * Returns all the current parameter values in a JSON format. Mostly used to log the current parameters in an MCAP file

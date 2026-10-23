@@ -3,7 +3,6 @@
 #include <foxglove/websocket/parameter.hpp>
 #include <nlohmann/detail/value_t.hpp>
 #include <fstream>
-#include <utility>
 #include <spdlog/spdlog.h>
 
 static std::string to_lowercase(std::string s) {
@@ -172,7 +171,7 @@ core::FoxgloveServer::FoxgloveServer(std::string file_name) {
 
     hdlrs.parameterChangeHandler = [&](const std::vector<foxglove::Parameter> &params, const std::optional<std::string> &request_id, foxglove::ConnHandle clientHandle)
     {
-        std::unordered_map<std::string, DBParam> updated_params;
+        std::unordered_map<std::string, DBParam> param_copy;
         {
             std::unique_lock lock(_parameter_mutex);
             for (const auto &incoming_param : params) {
@@ -187,12 +186,12 @@ core::FoxgloveServer::FoxgloveServer(std::string file_name) {
                 if (converted_param) {
                     auto value = _get_db_param(converted_param.value());
                     _foxglove_params_map[incoming_param.getName()] = value;
-                    updated_params[incoming_param.getName()] = value;
                 }
             }
+            param_copy = _foxglove_params_map;
         }
         MCAPLogger::instance().log_params(get_all_params()); /* Needed for showing param updates in the outputted MCAP file */
-        if (!updated_params.empty()) _param_update_signal(updated_params);
+        _param_update_signal(param_copy);
     };
 
     hdlrs.parameterRequestHandler = [this](const std::vector<std::string> &param_names, const std::optional<std::string> &request_id,
@@ -241,20 +240,8 @@ core::FoxgloveServer::FoxgloveServer(std::string file_name) {
     params_file.close();
 }
 
-boost::signals2::connection core::FoxgloveServer::register_param_callback(
-    std::function<void(const std::unordered_map<std::string, core::DBParam>&)> callback,
-    std::vector<std::string> names) {
-    if (names.empty()) return _param_update_signal.connect(std::move(callback));
-    return _param_update_signal.connect(
-        [callback = std::move(callback), names = std::move(names)](const auto& updated_params) {
-            std::unordered_map<std::string, DBParam> selected;
-            for (const auto& name : names) {
-                if (auto it = updated_params.find(name); it != updated_params.end()) {
-                    selected.emplace(*it);
-                }
-            }
-            if (!selected.empty()) callback(selected);
-        });
+boost::signals2::connection core::FoxgloveServer::register_param_callback(std::function<void (const std::unordered_map<std::string, core::DBParam> &)> callback) {
+    return _param_update_signal.connect(callback);
 }
 
 nlohmann::json core::FoxgloveServer::get_all_params() {

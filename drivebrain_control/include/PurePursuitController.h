@@ -39,7 +39,7 @@ class PurePursuitController {
             * @param lookahead_distance Parameter for pure pursuit
             * @return A vector of 0-N intersection points.
         */
-        std::vector<core::xy_vec<float>> getGoalPointCandidates(const std::vector<core::xy_vec<float>>& path, core::xy_vec<float> vehicle_pos, float lookahead_distance);
+        std::vector<core::xy_vec<float>> get_goal_point_candidates(const std::vector<core::xy_vec<float>>& path, core::xy_vec<float> vehicle_pos, float lookahead_distance);
 
         /**
         * Selects the most appropriate goal point from a set of candidates based on the vehicle's position and heading.
@@ -48,21 +48,13 @@ class PurePursuitController {
         * @param vehicle_heading The current heading of the vehicle (map frame).
         * @return The selected goal point.
         */
-        core::xy_vec<float> selectGoalPoint(const std::vector<core::xy_vec<float>>& goal_point_candidates, core::xy_vec<float> vehicle_pos, core::xy_vec<float> vehicle_heading);
+        core::xy_vec<float> select_goal_point(const std::vector<core::xy_vec<float>>& goal_point_candidates, core::xy_vec<float> vehicle_pos, core::xy_vec<float> vehicle_heading);
 
         /* Diagnostics of the most recent step_controller() */
-        const dv_msgs::PurePursuitDebug& debug() const { return debug_; }
+        const dv_msgs::PurePursuitDebug& debug() const { return _debug; }
 
         float get_dt_sec() {
             return 0.01f; // currently stepping at 100Hz, but this should be configurable
-        }
-
-        /**
-        * Returns the last calculated curvature from the pure pursuit algorithm.
-        * @return The curvature.
-        */
-        float getCurvature() const {
-            return curvature_;
         }
 
     private:
@@ -72,11 +64,10 @@ class PurePursuitController {
         config _config{};
         boost::signals2::scoped_connection _param_connection;
 
-        dv_msgs::PurePursuitDebug debug_;
-        float curvature_;
+        dv_msgs::PurePursuitDebug _debug;
 
         // need dynamic lookahead distance
-        float wheel_radius = 2.302f;
+        float _wheel_radius = 2.302f;
 
         /**
         Get an arc of constant curvature from current point to target whose tangent is instantaneous heading of vehicle.
@@ -86,7 +77,7 @@ class PurePursuitController {
         * @param lookahead_distance Parameter for pure pursuit
         * @return The curvature of the arc connecting the vehicle's position to the goal point.
         */
-        float getCurvature(core::xy_vec<float> vehicle_pos, core::xy_vec<float> vehicle_heading, core::xy_vec<float> goal_point, float lookahead_distance);
+        float get_curvature(core::xy_vec<float> vehicle_pos, core::xy_vec<float> vehicle_heading, core::xy_vec<float> goal_point, float lookahead_distance);
 
 
         /**

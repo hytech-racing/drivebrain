@@ -34,19 +34,11 @@ void Autonomy::start() {
     throw std::runtime_error("Failed to initialize pure pursuit controller");
   }
 
-  // register callback for tuning parameters for controllers
-  auto& foxglove = FoxgloveServer::instance();
-  _parameter_connection = foxglove.register_param_callback(
-      [this](const std::unordered_map<std::string, DBParam>& params) {
-        std::lock_guard lock(_tuning_mutex);
-        auto update = [&params](const char* name, float& value) {
-          if (auto it = params.find(name); it != params.end()) {
-            if (auto param = std::get_if<float>(&it->second); param && *param >= 0.0f) value = *param;
-          }
-        };
-        update("velocityplanner/max_velocity", _tuning.max_velocity);
-        update("velocityplanner/mu", _tuning.mu);
-      }, {"velocityplanner/max_velocity", "velocityplanner/mu"});
+  if (!_longitudinal_controller.init()) {
+    _running = false;
+    throw std::runtime_error("Failed to initialize velocity planner");
+  }
+
   _slam.start();
   _thread = std::thread(&Autonomy::_run, this);
   spdlog::info("Autonomy stack started");
@@ -56,7 +48,6 @@ void Autonomy::stop() {
   if (!_running.exchange(false)) {
     return;
   }
-  _parameter_connection.disconnect();
   if (_thread.joinable()) {
     _thread.join();
   }
@@ -72,14 +63,6 @@ bool Autonomy::is_valid() {
 
 
 ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
-  Tuning tuning;
-  {
-    std::lock_guard lock(_tuning_mutex);
-    tuning = _tuning;
-  }
-  _longitudinal_controller.setMaxCarVelocity(tuning.max_velocity);
-  _longitudinal_controller.setMu(tuning.mu);
-
   static uint8_t prescale_counter = 0;
   auto dv = StateTracker::instance().dv_state();
   ControllerOutput out = {};
@@ -107,7 +90,7 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
     log(std::make_shared<dv_msgs::PurePursuitDebug>(_lateral_controller.debug()), "control/pure_pursuit_debug");
     if (steering_angle.has_value()) {
       out.desired_steering_deg = steering_angle.value();
-      _longitudinal_controller.setPath(*dv.path);
+      _longitudinal_controller.set_path(*dv.path);
       out.out = _longitudinal_controller.step_controller(vehicle_state, curvature); // velocity controller
       log(std::make_shared<dv_msgs::VelocityPlannerDebug>(_longitudinal_controller.debug()), "planning/velocity_debug");
     } else {

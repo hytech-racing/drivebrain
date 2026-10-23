@@ -13,10 +13,9 @@
 
 namespace planning {
 
-constexpr float kGravity = 9.80665f;
-constexpr float kMinPathTangent = 1e-6f;
-const float kCarWeightKg = 180.0f;
-const float pathStaleLookaheadRatio = 0.3f; // if we haven't gotten an update from path planner and we passed by 0.3 * lookahead distance points, flag it
+constexpr float GRAVITY = 9.80665f;
+constexpr float MIN_PATH_TANGENT = 1e-6f;
+const float CAR_WEIGHT_KG = 180.0f;
 
 using Status = dv_msgs::VelocityPlannerDebug;
 
@@ -25,24 +24,83 @@ static void set_xy(hytech_msgs::xyz_vector* vec, double x, double y) {
     vec->set_y(static_cast<float>(y));
 }
 
-VelocityPlanner::VelocityPlanner(float max_car_velocity)
-    : max_car_velocity_(max_car_velocity) {
-        path_points_.reserve(lookahead_distance_);
+void VelocityPlanner::_handle_param_updates(const std::unordered_map<std::string, core::DBParam> &new_param_map) {
+
+    spdlog::info("Entering velocity planner parameter updates.");
+
+    if (auto v = core::process_param_update<float>(new_param_map, "velocityplanner/max_velocity")) {
+        std::unique_lock lk(_config_mutex);
+        _config.max_velocity = *v;
+    }
+
+    if (auto v = core::process_param_update<float>(new_param_map, "velocityplanner/mu")) {
+        std::unique_lock lk(_config_mutex);
+        _config.mu = *v;
+    }
+
+    if (auto v = core::process_param_update<int>(new_param_map, "velocityplanner/path_points_ahead")) {
+        std::unique_lock lk(_config_mutex);
+        _config.path_points_ahead = *v;
+    }
+
+    if (auto v = core::process_param_update<float>(new_param_map, "velocityplanner/path_stale_ratio")) {
+        std::unique_lock lk(_config_mutex);
+        _config.path_stale_ratio = *v;
+    }
+
+    spdlog::info("Exiting velocity planner parameter updates.");
 }
 
-void VelocityPlanner::setMaxCarVelocity(float velocity_mps) {
-    max_car_velocity_ = velocity_mps;
+bool VelocityPlanner::init() {
+    auto opt_max_velocity = core::FoxgloveServer::instance().get_param<float>("velocityplanner/max_velocity");
+    auto opt_mu = core::FoxgloveServer::instance().get_param<float>("velocityplanner/mu");
+    auto opt_path_points_ahead = core::FoxgloveServer::instance().get_param<int>("velocityplanner/path_points_ahead");
+    auto opt_path_stale_ratio = core::FoxgloveServer::instance().get_param<float>("velocityplanner/path_stale_ratio");
+
+    bool all_loaded = true;
+    if (!opt_max_velocity)      { spdlog::error("Missing param: VelocityPlanner/max_velocity");      all_loaded = false; }
+    if (!opt_mu)                { spdlog::error("Missing param: VelocityPlanner/mu");                all_loaded = false; }
+    if (!opt_path_points_ahead) { spdlog::error("Missing param: VelocityPlanner/path_points_ahead"); all_loaded = false; }
+    if (!opt_path_stale_ratio)  { spdlog::error("Missing param: VelocityPlanner/path_stale_ratio");  all_loaded = false; }
+
+    if (!all_loaded) {
+        spdlog::error("Couldn't load all params for velocity planner.");
+        return false;
+    }
+    {
+        std::unique_lock lk(_config_mutex);
+        _config.max_velocity = opt_max_velocity.value();
+        _config.mu                = opt_mu.value();
+        _config.path_points_ahead = opt_path_points_ahead.value();
+        _config.path_stale_ratio  = opt_path_stale_ratio.value();
+    }
+    _path_points.reserve(opt_path_points_ahead.value());
+
+    _param_connection = core::FoxgloveServer::instance().register_param_callback(std::bind(&VelocityPlanner::_handle_param_updates, this, std::placeholders::_1));
+
+    return true;
 }
 
-void VelocityPlanner::setMu(float mu) {
-    mu_ = mu;
+void VelocityPlanner::set_path(const std::vector<core::xy_vec<float>>& path) {
+    std::size_t path_points_ahead;
+    {
+        std::unique_lock lk(_config_mutex);
+        path_points_ahead = static_cast<std::size_t>(_config.path_points_ahead);
+    }
+
+    if (path.size() < path_points_ahead) {
+        spdlog::error("Path is too short, only {} points, need at least {}", path.size(), path_points_ahead);
+        _path.clear();
+        return;
+    }
+    _path = path;
 }
 
-std::size_t VelocityPlanner::getHorizonPointIndex(const core::VehicleState& state, const core::xy_vec<float>& position, const core::xy_vec<float>& heading) {
+std::size_t VelocityPlanner::get_horizon_point_index(const core::VehicleState& state, const core::xy_vec<float>& position, const core::xy_vec<float>& heading) {
     // iterate with offset to allow for wraparound
     size_t index = 0;
-    while (index < path_.size()) {
-        const core::xy_vec<float> to_point = path_[index] - position;
+    while (index < _path.size()) {
+        const core::xy_vec<float> to_point = _path[index] - position;
         if (heading * to_point < 0.0f) { // point is behind the car, skip it
             ++index;
             continue;
@@ -55,6 +113,12 @@ std::size_t VelocityPlanner::getHorizonPointIndex(const core::VehicleState& stat
 
 core::SpeedControlOut VelocityPlanner::step_controller(const core::VehicleState& state,
                                                         const float pose_to_path_curvature) {
+    config cur_config;
+    {
+        std::unique_lock lk(_config_mutex);
+        cur_config = _config;
+    }
+
     // slow down completely with 1/4 of max torque
     core::SpeedControlOut out = {};
     out.desired_rpms = {0.0f, 0.0f, 0.0f, 0.0f}; 
@@ -64,25 +128,25 @@ core::SpeedControlOut VelocityPlanner::step_controller(const core::VehicleState&
     const core::xy_vec<float> car_velocity{state.current_body_vel_ms.x, state.current_body_vel_ms.y}; // TODO: currently global frame but VNData is body frame need to add transforms to drivebrain
     const core::xy_vec<float> car_heading{state.vehicle_heading_map_frame_unit_vector.x, state.vehicle_heading_map_frame_unit_vector.y}; // global frame
 
-    debug_.Clear();
-    debug_.set_timestamp_ns(std::chrono::duration_cast<std::chrono::nanoseconds>(
+    _debug.Clear();
+    _debug.set_timestamp_ns(std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count());
-    debug_.set_iteration(iteration_++);
-    debug_.set_mu(mu_);
-    debug_.set_max_car_velocity_mps(max_car_velocity_);
-    set_xy(debug_.mutable_car_position_m(), car_position.x, car_position.y);
-    set_xy(debug_.mutable_car_heading(), car_heading.x, car_heading.y);
-    set_xy(debug_.mutable_car_velocity_raw_mps(), car_velocity.x, car_velocity.y);
+    _debug.set_iteration(_iteration++);
+    _debug.set_mu(cur_config.mu);
+    _debug.set_max_car_velocity_mps(cur_config.max_velocity);
+    set_xy(_debug.mutable_car_position_m(), car_position.x, car_position.y);
+    set_xy(_debug.mutable_car_heading(), car_heading.x, car_heading.y);
+    set_xy(_debug.mutable_car_velocity_raw_mps(), car_velocity.x, car_velocity.y);
 
     // check all variables we need
     if (car_heading.length() < 1e-6f) {
         spdlog::error("car heading is zero, can't proceed with velocity planning");
-        debug_.set_status(Status::INVALID_HEADING);
+        _debug.set_status(Status::INVALID_HEADING);
         return out;
     }
-    if (path_.empty()) {
+    if (_path.empty()) {
         spdlog::error("Path is empty, can't proceed with velocity planning");
-        debug_.set_status(Status::EMPTY_PATH);
+        _debug.set_status(Status::EMPTY_PATH);
         return out;
     }
 
@@ -90,53 +154,55 @@ core::SpeedControlOut VelocityPlanner::step_controller(const core::VehicleState&
     // TODO: by taking longitudinal velocity along heading, we assume our heading is along pure-pursuit given path
     // heading validated above, so projectOnto can't throw
     const float longitudinal_velocity = car_velocity.projectOnto(car_heading);
-    debug_.set_longitudinal_velocity_mps(longitudinal_velocity);
+    _debug.set_longitudinal_velocity_mps(longitudinal_velocity);
 
     if (longitudinal_velocity < -0.01f) { // avoid VNData/GSS jitter so set threshold to -0.01 m/s
         spdlog::error("Longitudinal velocity is negative, car might be moving backwards: {}", longitudinal_velocity);
-        debug_.set_status(Status::NEGATIVE_LONGITUDINAL_VELOCITY);
+        _debug.set_status(Status::NEGATIVE_LONGITUDINAL_VELOCITY);
         return out;
     }
 
-    start_point_index_= getHorizonPointIndex(state, car_position, car_heading);
-    if (start_point_index_ == std::numeric_limits<size_t>::max()) {
+    _start_point_index= get_horizon_point_index(state, car_position, car_heading);
+    if (_start_point_index == std::numeric_limits<size_t>::max()) {
         spdlog::error("Failed to find closest point on path");
-        debug_.set_status(Status::NO_FORWARD_POINT);
+        _debug.set_status(Status::NO_FORWARD_POINT);
         return out;
     }
 
-    if (start_point_index_ >= static_cast<size_t>(lookahead_distance_ * pathStaleLookaheadRatio)) {
-        spdlog::error("Path is stale, we have passed by {} lookahead points", start_point_index_);
-        debug_.set_status(Status::STALE_PATH);
+    const std::size_t path_points_ahead = static_cast<std::size_t>(cur_config.path_points_ahead);
+    // if we haven't gotten an update from path planner and passed by path_stale_ratio * path_points_ahead points, flag it
+    if (_start_point_index >= static_cast<size_t>(path_points_ahead * cur_config.path_stale_ratio)) {
+        spdlog::error("Path is stale, we have passed by {} lookahead points", _start_point_index);
+        _debug.set_status(Status::STALE_PATH);
         return out;
     }
 
-    path_points_.resize(std::min(lookahead_distance_, path_.size() - start_point_index_));
-    std::optional<float> accel = getAccel(state, pose_to_path_curvature, start_point_index_,
-                                          car_position, longitudinal_velocity);
+    _path_points.resize(std::min(path_points_ahead, _path.size() - _start_point_index));
+    std::optional<float> accel = get_accel(state, pose_to_path_curvature, _start_point_index,
+                                          car_position, longitudinal_velocity, cur_config);
     if (!accel.has_value()) {
-        spdlog::error("Failed to compute acceleration"); // getAccel set the status
+        spdlog::error("Failed to compute acceleration"); // get_accel set the status
         return out;
     }
 
-    const float torque = accel.value() * kCarWeightKg * (constants::WHEEL_DIAMETER / 2.0f) / (4.0f * constants::GEARBOX_RATIO);
+    const float torque = accel.value() * CAR_WEIGHT_KG * (constants::WHEEL_DIAMETER / 2.0f) / (4.0f * constants::GEARBOX_RATIO);
     // TODO: clamp torque to max DTI 
     const float rpm_target = torque > 0 ? 20000.0f : 0.0f;
     out.torque_lim_nm = {torque, torque, torque, torque};
     out.desired_rpms = {rpm_target, rpm_target, rpm_target, rpm_target};
 
-    debug_.set_accel_mps2(*accel);
-    debug_.set_torque_per_wheel_nm(torque);
-    debug_.set_status(Status::OK);
+    _debug.set_accel_mps2(*accel);
+    _debug.set_torque_per_wheel_nm(torque);
+    _debug.set_status(Status::OK);
     return out;
 }
 
-const std::optional<float> VelocityPlanner::getAccel(const core::VehicleState& state, const float pose_to_path_curvature, size_t start_point_index, const core::xy_vec<float>& car_position, const float longitudinal_velocity) {
-    size_t end_point_index = std::min(start_point_index + lookahead_distance_ - 1, path_.size() - 1);
+const std::optional<float> VelocityPlanner::get_accel(const core::VehicleState& state, const float pose_to_path_curvature, size_t start_point_index, const core::xy_vec<float>& car_position, const float longitudinal_velocity, const config& cfg) {
+    size_t end_point_index = std::min(start_point_index + static_cast<std::size_t>(cfg.path_points_ahead) - 1, _path.size() - 1);
     const size_t path_length = end_point_index - start_point_index + 1;
     if (path_length < 3) {
         spdlog::error("Need at least 3 path points for the spline");
-        debug_.set_status(Status::SPLINE_TOO_FEW_POINTS);
+        _debug.set_status(Status::SPLINE_TOO_FEW_POINTS);
         return {};
     }
 
@@ -147,28 +213,28 @@ const std::optional<float> VelocityPlanner::getAccel(const core::VehicleState& s
 
     std::vector<gte::Vector<2, double>> positions;
     positions.reserve(path_length);
-    positions.push_back({path_[start_point_index].x, path_[start_point_index].y});
+    positions.push_back({_path[start_point_index].x, _path[start_point_index].y});
 
     // parametrize the path by cumulative distance along the path (chord length)
     for (std::size_t i = 1; i < path_length; ++i) {
-        positions.push_back({path_[i + start_point_index].x, path_[i + start_point_index].y});
+        positions.push_back({_path[i + start_point_index].x, _path[i + start_point_index].y});
         const double d = std::hypot(positions[i][0] - positions[i - 1][0],
                                     positions[i][1] - positions[i - 1][1]);
         times.push_back(times.back() + d);
         if (std::abs(times.back() - times[i - 1]) < 1e-6) {
             spdlog::error("Path points too close");
-            debug_.set_status(Status::PATH_POINTS_TOO_CLOSE);
+            _debug.set_status(Status::PATH_POINTS_TOO_CLOSE);
             return {};
         }
     }
 
     // fit the spline
-    const auto startDerivative = (positions[1] - positions[0]) / times[1];
-    const auto endDerivative = (positions[path_length - 1] - positions[path_length - 2]) / (times[path_length - 1] - times[path_length - 2]);
+    const auto start_derivative = (positions[1] - positions[0]) / times[1];
+    const auto end_derivative = (positions[path_length - 1] - positions[path_length - 2]) / (times[path_length - 1] - times[path_length - 2]);
 
-    gte::NaturalCubicSpline<2, double> spline(positions, times, startDerivative, endDerivative);
+    gte::NaturalCubicSpline<2, double> spline(positions, times, start_derivative, end_derivative);
     for (const auto& polynomial : spline.GetPolynomials()) {
-        auto* segment = debug_.mutable_spline()->add_segments();
+        auto* segment = _debug.mutable_spline()->add_segments();
         for (const auto& coefficient : polynomial) set_xy(segment->add_coefficients(), coefficient[0], coefficient[1]);
     }
 
@@ -185,7 +251,7 @@ const std::optional<float> VelocityPlanner::getAccel(const core::VehicleState& s
 
         if (path_tangent_squared <= 1e-6) {
             spdlog::error("Spline tangent is too small, cannot compute curvature. Spline fit might be bad.");
-            debug_.set_status(Status::SMALL_SPLINE_TANGENT);
+            _debug.set_status(Status::SMALL_SPLINE_TANGENT);
             return {};
         }
 
@@ -193,44 +259,44 @@ const std::optional<float> VelocityPlanner::getAccel(const core::VehicleState& s
         const double curvature = cross / (path_tangent_squared * std::sqrt(path_tangent_squared));
 
         // sqrt(ax+ay) = mu * g where ax == 0 (ay = v*v*k) => v = sqrt(mu * g / k)
-        const double v_max = std::min(static_cast<double>(max_car_velocity_),
-                                      std::sqrt(static_cast<double>(mu_) * kGravity / std::abs(curvature)));
-        path_points_[i] = {
+        const double v_max = std::min(static_cast<double>(cfg.max_velocity),
+                                      std::sqrt(static_cast<double>(cfg.mu) * GRAVITY / std::abs(curvature)));
+        _path_points[i] = {
             .point = {static_cast<float>(position[0]), static_cast<float>(position[1])},
             .curvature = static_cast<float>(curvature),
             .velocity = static_cast<float>(v_max),
         };
-        auto* debug_point = debug_.add_path_points();
+        auto* debug_point = _debug.add_path_points();
         set_xy(debug_point->mutable_position_m(), position[0], position[1]);
-        debug_point->set_curvature(path_points_[i].curvature);
-        debug_point->set_velocity_mps(path_points_[i].velocity);
+        debug_point->set_curvature(_path_points[i].curvature);
+        debug_point->set_velocity_mps(_path_points[i].velocity);
     }
 
     // run forward and backwards solver
-    if (!solver(state, pose_to_path_curvature, path_length, car_position, longitudinal_velocity, true)) return {};
-    if (!solver(state, pose_to_path_curvature, path_length, car_position, longitudinal_velocity, false)) return {};
-    debug_.set_target_velocity_mps(path_points_[0].velocity);
+    if (!solver(state, pose_to_path_curvature, path_length, car_position, longitudinal_velocity, true, cfg)) return {};
+    if (!solver(state, pose_to_path_curvature, path_length, car_position, longitudinal_velocity, false, cfg)) return {};
+    _debug.set_target_velocity_mps(_path_points[0].velocity);
 
     // calculate accel from target speed at closest path point and current point (a = (v^2 - u^2) / 2d)
     const core::xy_vec<float> position{state.vehicle_position_map_frame.x, state.vehicle_position_map_frame.y}; // global frame
-    const core::xy_vec<float> dist = position - path_points_[0].point;
+    const core::xy_vec<float> dist = position - _path_points[0].point;
     float accel;
     if (dist.length() < 1e-6f) {
         spdlog::error("Distance to closest path point is too small, cannot compute acceleration");
         accel = 0;
-        debug_.set_status(Status::CAR_TOO_CLOSE_TO_FIRST_POINT);
+        _debug.set_status(Status::CAR_TOO_CLOSE_TO_FIRST_POINT);
         return {};
     } else {
-        accel = (path_points_[0].velocity * path_points_[0].velocity - longitudinal_velocity * longitudinal_velocity) / (2 * dist.length());  
+        accel = (_path_points[0].velocity * _path_points[0].velocity - longitudinal_velocity * longitudinal_velocity) / (2 * dist.length());  
     }
     
-    const float max_accel = mu_ * kGravity * 1.01f;
+    const float max_accel = cfg.mu * GRAVITY * 1.01f;
     accel = std::max(-max_accel, accel); // you can't control current car's speed so car-to-first-segment braking isn't enforced by solver
     return std::make_optional(accel);
 }
 
-bool VelocityPlanner::solver(const core::VehicleState& state, const float pose_to_path_curvature, const int path_length, const core::xy_vec<float>& car_position, const float longitudinal_velocity, const bool forward) {
-    const float max_accel = mu_ * kGravity * 1.01f;
+bool VelocityPlanner::solver(const core::VehicleState& state, const float pose_to_path_curvature, const int path_length, const core::xy_vec<float>& car_position, const float longitudinal_velocity, const bool forward, const config& cfg) {
+    const float max_accel = cfg.mu * GRAVITY * 1.01f;
     PathPoint current_point = {
         .point = car_position,
         .curvature = pose_to_path_curvature,
@@ -242,15 +308,15 @@ bool VelocityPlanner::solver(const core::VehicleState& state, const float pose_t
     if (forward) {
         start_point = current_point; // start evaluation from current car position
     } else {
-        start_point = path_points_.back(); // evaluate from the end
-        saved_point = path_points_.back(); // save the last point to put it back after reverse
-        path_points_.pop_back(); // speed at start point is given, avoid reassigning it
-        std::reverse(path_points_.begin(), path_points_.end());
+        start_point = _path_points.back(); // evaluate from the end
+        saved_point = _path_points.back(); // save the last point to put it back after reverse
+        _path_points.pop_back(); // speed at start point is given, avoid reassigning it
+        std::reverse(_path_points.begin(), _path_points.end());
     }
 
     const int max_index = forward ? path_length : path_length - 1; // if backward, we ignore the last point but dont add fist point
     for (size_t i = 0; i < max_index; ++i) {
-        auto& next_point = path_points_[i]; // end of current segment
+        auto& next_point = _path_points[i]; // end of current segment
         auto cur_to_next = (next_point.point - start_point.point); // vector from start to end of segment
         const float ds = cur_to_next.length(); 
         const float lateral_accel = std::abs(start_point.curvature) * start_point.velocity * start_point.velocity; // a_y = v^2 * k
@@ -268,7 +334,7 @@ bool VelocityPlanner::solver(const core::VehicleState& state, const float pose_t
 
         const float v_long_avail = std::sqrt(start_point.velocity * start_point.velocity + 2 * a_long_avail * ds);
         const float new_velocity = std::min(next_point.velocity, v_long_avail);
-        auto* change = debug_.add_changes();
+        auto* change = _debug.add_changes();
         change->set_pass(forward ? dv_msgs::VelocityPlannerChange::FORWARD : dv_msgs::VelocityPlannerChange::BACKWARD);
         change->set_index(forward ? i : static_cast<std::size_t>(path_length - 2) - i);
         change->set_changed(new_velocity < next_point.velocity);
@@ -283,8 +349,8 @@ bool VelocityPlanner::solver(const core::VehicleState& state, const float pose_t
     }
 
     if (!forward) {
-        std::reverse(path_points_.begin(), path_points_.end());
-        path_points_.push_back(saved_point); 
+        std::reverse(_path_points.begin(), _path_points.end());
+        _path_points.push_back(saved_point); 
     }
     return true;
 }

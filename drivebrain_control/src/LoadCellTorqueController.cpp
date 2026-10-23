@@ -87,12 +87,7 @@ bool control::LoadCellTorqueController::init()
     _config.dt_rate_hz               = opt_dt_rate_hz.value();
     _config.apply_vectoring_in_regen = opt_apply_vectoring_in_regen.value();
 
-    FoxgloveServer::instance().register_param_callback(
-        std::bind(&control::LoadCellTorqueController::_handle_param_updates, this, std::placeholders::_1),
-        {"loadcelltorquecontroller/max_torque", "loadcelltorquecontroller/max_regen_torque",
-         "loadcelltorquecontroller/rear_torque_scale", "loadcelltorquecontroller/regen_torque_scale",
-         "loadcelltorquecontroller/positive_speed_set", "loadcelltorquecontroller/max_power_kw",
-         "loadcelltorquecontroller/dt_rate_hz", "loadcelltorquecontroller/apply_vectoring_in_regen"});
+    FoxgloveServer::instance().register_param_callback(std::bind(&control::LoadCellTorqueController::_handle_param_updates, this, std::placeholders::_1));
     
     return true;
 }
