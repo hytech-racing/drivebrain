@@ -1,5 +1,6 @@
 #pragma once
 
+#include <condition_variable>
 #include <cstdint>
 #include <optional>
 #include <foxglove/PointCloud.pb.h>
@@ -381,6 +382,15 @@ namespace core {
             DriverlessState dv_state();
 
             /**
+             * Blocks until a scan newer than `last` arrives.
+             *
+             * @param timeout how long to wait before giving up
+             * @return the new scan, or nullptr on timeout
+             */
+            std::shared_ptr<const foxglove::PointCloud> wait_for_scan(
+                const std::shared_ptr<const foxglove::PointCloud>& last, std::chrono::milliseconds timeout);
+
+            /**
              * Sets the latest planned path produced by the autonomy stack.
              *
              * @param path the planned path, map frame
@@ -449,6 +459,7 @@ namespace core {
 
             DriverlessState _dv_state = { };
             std::mutex _dv_state_mutex;
+            std::condition_variable _dv_state_cv;
 
             TeleopCommand _teleop_command = { };
             std::mutex _teleop_mutex;

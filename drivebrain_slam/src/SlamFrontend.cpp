@@ -7,6 +7,7 @@
 #include <unordered_set>
 
 #include <FoxgloveServer.hpp>
+#include <spdlog/spdlog.h>
 
 namespace slam {
 
@@ -57,15 +58,16 @@ std::vector<std::pair<std::size_t, std::size_t>> nearest_neighbor(const Eigen::M
 
 /**
  * Squared Mahalanobis distance between a detection's position and a map landmark's position, both in odom,
- * under the innovation covariance: the car's pose covariance projected onto the landmark plus detection noise
+ * under the innovation covariance: the car's pose uncertainty relative to that landmark, projected onto it,
+ * plus detection noise
  */
 double mahalanobis_squared(const Eigen::Vector2d& detection_odom, const Eigen::Vector2d& landmark_odom,
-                           const Eigen::Vector2d& car_odom, const Eigen::Matrix3d& pose_covariance_odom,
+                           const Eigen::Vector2d& car_odom, const Eigen::Matrix3d& relative_pose_covariance,
                            const Eigen::Matrix2d& detection_covariance) {
     const Eigen::Vector2d lever = landmark_odom - car_odom;
     Eigen::Matrix<double, 2, 3> J;
     J << 1.0, 0.0, -lever.y(), 0.0, 1.0, lever.x();
-    const Eigen::Matrix2d S = J * pose_covariance_odom * J.transpose() + detection_covariance;
+    const Eigen::Matrix2d S = J * relative_pose_covariance * J.transpose() + detection_covariance;
     const Eigen::Vector2d innovation = detection_odom - landmark_odom;
     return innovation.dot(S.ldlt().solve(innovation));
 }
@@ -79,6 +81,9 @@ constexpr std::uint64_t IN_GRAPH_MAX_AGE_NS = 1'000'000'000;
 SlamFrontend::SlamFrontend() {
     _map_gate_chi2 = core::FoxgloveServer::instance().get_param<float>("Slam/map_association_gate_chi2").value();
     _measurement_std_m = core::FoxgloveServer::instance().get_param<float>("Slam/measurement_std_m").value();
+    const double drift_xy = core::FoxgloveServer::instance().get_param<float>("Slam/odom_drift_xy_m").value();
+    const double drift_yaw = core::FoxgloveServer::instance().get_param<float>("Slam/odom_drift_yaw_rad").value();
+    _odom_drift_per_frame.diagonal() << drift_xy * drift_xy, drift_xy * drift_xy, drift_yaw * drift_yaw;
     _candidate_gate_m = core::FoxgloveServer::instance().get_param<float>("Slam/candidate_gate_m").value();
     _minimum_evidence_to_confirm =
         core::FoxgloveServer::instance().get_param<float>("Slam/minimum_evidence_to_confirm").value();
@@ -98,6 +103,7 @@ std::optional<ObservationFrame> SlamFrontend::process_frame(const ConeFrame& fra
         return std::nullopt;
     }
     _last_frame_ns = frame.timestamp_ns;
+    _frame_count++;
 
     std::vector<Detection> detections;
     for (const ConeDetection& detection : frame.detections) {
@@ -125,6 +131,7 @@ std::optional<ObservationFrame> SlamFrontend::process_frame(const ConeFrame& fra
 
     _debug.set_landmark_observations(out.observations.size());
     for (const LandmarkObservation& observation : out.observations) {
+        _last_observed_frame[observation.landmark_id] = _frame_count;
         if (observation.status == LandmarkStatus::New) {
             _debug.add_new_landmark_ids(observation.landmark_id);
         }
@@ -214,22 +221,24 @@ void SlamFrontend::_match_mapped_landmarks(const std::vector<Detection>& detecti
         landmarks_odom.push_back(pose_odom_from_map * landmark.position_map_m);
     }
 
-    // GTSAM gives the pose covariance in the pose's own frame; rotate it into odom
-    Eigen::Matrix3d odom_from_body = Eigen::Matrix3d::Identity();
-    odom_from_body.topLeftCorner<2, 2>() = out.pose_odom_from_base.rotation();
-    const Eigen::Matrix3d pose_covariance_odom = odom_from_body * _map_state->pose_covariance * odom_from_body.transpose();
     const Eigen::Vector2d car_odom = out.pose_odom_from_base.translation();
     const Eigen::Matrix2d detection_covariance = _measurement_std_m * _measurement_std_m * Eigen::Matrix2d::Identity();
 
     Eigen::MatrixXd distance(detections.size(), landmarks_odom.size());
-    for (std::size_t d = 0; d < detections.size(); ++d) {
-        for (std::size_t l = 0; l < landmarks_odom.size(); ++l) {
+    for (std::size_t l = 0; l < landmarks_odom.size(); ++l) {
+        // odometry drift since this landmark was last seen
+        const double frames_since_seen = std::max(
+            1.0, static_cast<double>(_frame_count - _last_observed_frame[_map_state->landmarks[l].landmark_id]));
+        const Eigen::Matrix3d relative_pose_covariance = frames_since_seen * _odom_drift_per_frame;
+        for (std::size_t d = 0; d < detections.size(); ++d) {
             distance(d, l) = mahalanobis_squared(detections[d].position_odom_m, landmarks_odom[l], car_odom,
-                                                 pose_covariance_odom, detection_covariance);
+                                                 relative_pose_covariance, detection_covariance);
         }
     }
     for (const auto& [d, l] : nearest_neighbor(distance, used, _map_gate_chi2)) {
         const std::uint64_t id = _map_state->landmarks[l].landmark_id;
+        spdlog::debug("slamdbg match ts {} id {} innov {:.2f} lever {:.1f}", out.timestamp_ns, id,
+                     (detections[d].position_odom_m - landmarks_odom[l]).norm(), (landmarks_odom[l] - car_odom).norm());
         out.observations.push_back({id, detections[d].position_base_m, LandmarkStatus::InMap});
         _color_by_landmark_id[id].add(detections[d].color, detections[d].color_confidence);
         diag.set_optimized_associations(diag.optimized_associations() + 1);

@@ -53,6 +53,7 @@ void StateTracker::handle_receive_protobuf_message(std::shared_ptr<google::proto
             std::unique_lock lk(_dv_state_mutex);
             _dv_state.lidar_cloud = in_msg;
         }
+        _dv_state_cv.notify_all();
     } else if (msg->GetDescriptor() == hytech_msgs::VNData::descriptor()) {
         auto in_msg = std::static_pointer_cast<hytech_msgs::VNData>(msg);
         xyz_vec<float> body_vel_ms = {(in_msg->vn_vel_m_s().x()), (in_msg->vn_vel_m_s().y()),
@@ -142,6 +143,13 @@ core::DriverlessState StateTracker::dv_state() {
     }
 
     return current_state;
+}
+
+std::shared_ptr<const foxglove::PointCloud> StateTracker::wait_for_scan(
+    const std::shared_ptr<const foxglove::PointCloud>& last, const std::chrono::milliseconds timeout) {
+    std::unique_lock lk(_dv_state_mutex);
+    _dv_state_cv.wait_for(lk, timeout, [&] { return _dv_state.lidar_cloud && _dv_state.lidar_cloud != last; });
+    return _dv_state.lidar_cloud != last ? _dv_state.lidar_cloud : nullptr;
 }
 
 std::optional<Eigen::Isometry2d> StateTracker::odom_pose(uint64_t timestamp_ns, std::chrono::nanoseconds timeout) {

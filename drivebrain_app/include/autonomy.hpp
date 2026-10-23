@@ -46,8 +46,8 @@ public:
   bool is_valid();
 
 private:
-  // Rate of OS1 LiDAR
-  static constexpr std::chrono::milliseconds PERIOD{100};
+  // How long to wait for the next scan before re-checking that the stack is still running
+  static constexpr std::chrono::milliseconds SCAN_WAIT{200};
 
   static constexpr std::chrono::milliseconds ODOM_TIMEOUT{100};
 

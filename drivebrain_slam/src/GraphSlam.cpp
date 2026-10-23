@@ -158,7 +158,6 @@ std::optional<MapState> GraphSlam::update(const ObservationFrame& frame) {
         map.sequence = _next_sequence++;
         map.timestamp_ns = frame.timestamp_ns;
         map.pose_map_from_odom = eigen_pose(pose_map_from_odom);
-        map.pose_covariance = _isam.marginalCovariance(pose_key);
         for (const std::uint64_t id : _landmark_ids) {
             map.landmarks.push_back({id, estimate.at<gtsam::Point2>(L(id))});
         }

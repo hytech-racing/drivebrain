@@ -41,8 +41,6 @@ struct MapState {
     std::uint64_t sequence{};
     std::uint64_t timestamp_ns{};
     Eigen::Isometry2d pose_map_from_odom = Eigen::Isometry2d::Identity();
-    // Marginal covariance of the latest solved pose (x, y, yaw), in the pose's own frame
-    Eigen::Matrix3d pose_covariance = Eigen::Matrix3d::Zero();
     std::vector<MapLandmark> landmarks;
 };
 
@@ -161,11 +159,12 @@ private:
                                                                        const std::vector<Detection>& detections,
                                                                        std::vector<bool>& used, std::uint64_t now_ns);
 
-    // Chi-squared value for the map association gate. Grows with the solved
-    // pose's covariance along a lap without map matches and closes again at the first one
+    // Chi-squared value for the map association gate
     double _map_gate_chi2{};
     // Detection position noise in the innovation covariance
     double _measurement_std_m{};
+    // Odometry drift per frame (random walk); accumulated since a landmark was last observed
+    Eigen::Matrix3d _odom_drift_per_frame = Eigen::Matrix3d::Zero();
     double _candidate_gate_m{};
     // Summed detection confidence at which an unconfirmed candidate becomes a landmark
     double _minimum_evidence_to_confirm{};
@@ -180,6 +179,8 @@ private:
     // 0 is the proto default for "no landmark", so ids start at 1
     std::uint64_t _next_landmark_id{1};
     std::optional<std::uint64_t> _last_frame_ns;
+    std::uint64_t _frame_count{};
+    std::unordered_map<std::uint64_t, std::uint64_t> _last_observed_frame;
     dv_msgs::SlamFrontendDebug _debug;
 };
 

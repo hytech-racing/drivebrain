@@ -57,16 +57,12 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
 }
 
 void Autonomy::_run() {
-  auto next_tick = std::chrono::steady_clock::now();
   std::shared_ptr<const foxglove::PointCloud> last_scan;
 
   while (_running) {
-    next_tick += PERIOD;
-    std::this_thread::sleep_until(next_tick);
-
-    auto dv = StateTracker::instance().dv_state();
-    if (!dv.lidar_is_valid || dv.lidar_cloud == last_scan) continue;
-    last_scan = dv.lidar_cloud;
+    const auto scan = StateTracker::instance().wait_for_scan(last_scan, SCAN_WAIT);
+    if (!scan) continue;
+    last_scan = scan;
     const uint64_t scan_ns = google::protobuf::util::TimeUtil::TimestampToNanoseconds(last_scan->timestamp());
 
     const auto pose = StateTracker::instance().odom_pose(scan_ns, ODOM_TIMEOUT);
