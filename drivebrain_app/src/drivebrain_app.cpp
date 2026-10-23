@@ -74,9 +74,16 @@ void DrivebrainApp::run() {
 #endif
 
 #if HOOTL_ENABLED
-  comms::SimComms::create();
-  comms::SimComms::instance().start();
+  const bool use_sim = true;
+#else
+  // Sim bridge: the car plans and controls on the sim's world (cones and pose) over ethernet, and still steers for real
+  const bool use_sim = core::FoxgloveServer::instance().get_param<bool>("sim_bridge/enabled").value_or(false);
+  if (use_sim) _driving_mode = DrivingMode::DRIVERLESS;
 #endif
+  if (use_sim) {
+    comms::SimComms::create();
+    comms::SimComms::instance().start();
+  }
 
   bool vn_init_not_successful;
   _vn_driver = std::make_unique<comms::VNDriver>(_io_context, vn_init_not_successful);
@@ -85,8 +92,11 @@ void DrivebrainApp::run() {
   }
 
 #if JETSON_ENABLED
-  _ouster_driver = std::make_unique<comms::OusterComms>();
-  spdlog::info("ouster driver init");
+  // the sim provides the scans, so a real lidar would mix its own in
+  if (!use_sim) {
+    _ouster_driver = std::make_unique<comms::OusterComms>();
+    spdlog::info("ouster driver init");
+  }
 #endif
 
 #if !HOOTL_ENABLED
@@ -231,7 +241,7 @@ void DrivebrainApp::_actuate(const core::ControllerOutput& out) {
 
 #if !JETSON_ENABLED
     _telem_can->send_message(desired_torque_msg);
-    _aux_can->send_message(desired_torque_msg);
+    // _aux_can->send_message(desired_torque_msg);
 #endif
 
     core::log(desired_torque_msg);
@@ -242,7 +252,7 @@ void DrivebrainApp::_actuate(const core::ControllerOutput& out) {
 
 #if !JETSON_ENABLED
     _telem_can->send_message(steering_msg);
-    _aux_can->send_message(steering_msg);
+    // _aux_can->send_message(steering_msg);
 #endif
 
     core::log(steering_msg);
@@ -276,16 +286,19 @@ void DrivebrainApp::_loop() {
       auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, 2>::instance();
       out_struct = controller_manager.step_active_controller(state_and_validity.first);
       command_is_valid = state_and_validity.second;
-
-#if !HOOTL_ENABLED
-      if (_kraken_comms && controller_manager.get_active_controller_index() == 1) _kraken_comms->set_angle(_mode2->steering_command_deg);
-#endif
     }
 
     core::StateTracker::instance().set_previous_control_output(out_struct);
 
     if (command_is_valid) {
       _actuate(out_struct);
+
+#if !HOOTL_ENABLED
+      // Controllers command the front wheel angle, the Kraken takes a steering column angle
+      if (_kraken_comms && out_struct.desired_steering_deg) {
+        _kraken_comms->set_angle(estimation::SteeringEstimator::wheel_degs_to_column_degs(*out_struct.desired_steering_deg));
+      }
+#endif
     }
 
     std::tuple<std::string, bool> mcap_status = core::MCAPLogger::instance().status();

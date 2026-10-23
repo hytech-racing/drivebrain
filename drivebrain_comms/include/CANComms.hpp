@@ -21,9 +21,7 @@
 
 #include <dbcppp/Network.h>
 
-#if HOOTL_ENABLED
 #include "SimComms.hpp"
-#endif
 
 #include <FoxgloveServer.hpp>
 #include <MCAPLogger.hpp>

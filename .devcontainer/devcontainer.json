@@ -4,6 +4,7 @@
     "${localWorkspaceFolder}/docker-compose.yml"
   ],
   "service": "dev",
+  "forwardPorts": [5555],
   "workspaceFolder": "/app",
   "shutdownAction": "stopCompose",
   "customizations": {

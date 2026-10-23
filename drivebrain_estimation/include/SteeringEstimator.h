@@ -28,6 +28,9 @@ class SteeringEstimator {
 
         double get_column_angle_degs();
 
+        // Converts a front wheel angle (degrees) to the steering column angle (degrees) the Kraken is commanded with
+        static double wheel_degs_to_column_degs(double wheel_degs);
+
     private: 
 
         mutable std::mutex _steering_mutex;

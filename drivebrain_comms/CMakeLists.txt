@@ -23,14 +23,11 @@ set(DRIVEBRAIN_COMMS_SRCS
     src/BlackflyComms.cpp
     src/ImageCompression.cpp
     src/RangeCompression.cpp
+    src/SimComms.cpp
 )
 
-if(HOOTL)
-    find_package(cppzmq REQUIRED)
-    list(APPEND DRIVEBRAIN_COMMS_SRCS
-        src/SimComms.cpp
-    )
-else()
+# SimComms is in every build: HOOTL always uses it, and the car uses it for the sim bridge
+if(NOT HOOTL)
     find_package(phoenix6 MODULE REQUIRED)
     list(APPEND DRIVEBRAIN_COMMS_SRCS
         src/KrakenComms.cpp
@@ -71,12 +68,9 @@ if(JETSON)
     target_link_libraries(drivebrain_comms PUBLIC TensorRT)
 endif()
 
-if(HOOTL)
-    target_link_libraries(drivebrain_comms
-        PUBLIC
-            cppzmq
-    )
-else()
+target_link_libraries(drivebrain_comms PUBLIC cppzmq)
+
+if(NOT HOOTL)
     target_link_libraries(drivebrain_comms
         PUBLIC
             phoenix6

@@ -1,6 +1,7 @@
 #include <SimComms.hpp>
 #include <foxglove/PointCloud.pb.h>
 #include <foxglove/FrameTransform.pb.h>
+#include <google/protobuf/util/time_util.h>
 #include <memory>
 #include "StateTracker.hpp"
 #include "dv_msgs.pb.h"
@@ -210,6 +211,8 @@ void SimComms::_lidar_recv_loop() {
             spdlog::error("SimComms: failed to parse foxglove::PointCloud");
             continue;
         }
+        // Stamp on arrival: over the sim bridge the sim's clock isn't ours, and lidar validity is judged against this
+        *pc->mutable_timestamp() = google::protobuf::util::TimeUtil::GetCurrentTime();
 
         core::log(pc, "ouster/points");
         core::StateTracker::instance().handle_receive_protobuf_message(pc);

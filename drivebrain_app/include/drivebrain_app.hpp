@@ -1,9 +1,8 @@
 #include "ETHRecvComms.hpp"
 #include "OMSComms.hpp"
 #include "CANComms.hpp"
-#if HOOTL_ENABLED
-# include "SimComms.hpp"
-#else
+#include "SimComms.hpp"
+#if !HOOTL_ENABLED
 # include "KrakenComms.hpp"
 #endif
 #include <MCAPLogger.hpp>

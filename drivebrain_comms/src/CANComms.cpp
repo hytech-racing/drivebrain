@@ -42,6 +42,11 @@ void comms::CANComms::send_message(std::shared_ptr<google::protobuf::Message> me
 #if HOOTL_ENABLED
     comms::SimComms::instance().send_message(message);
 #else
+    // Sim bridge: the sim also gets every command so its car moves, on top of the real CAN bus
+    if (comms::SimComms::is_created()) {
+        comms::SimComms::instance().send_message(message);
+    }
+
     can_frame frame{};
     int return_code = _encode_can_frame(message, &frame);
     if (return_code < 0) {

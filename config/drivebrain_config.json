@@ -6,6 +6,9 @@
         "host": "192.168.3.50",
         "port": 51000
     },
+    "sim_bridge": {
+        "enabled": false
+    },
     "SimpleSpeedController": {
         "max_torque": 21.0,
         "max_regen_torque": 10.0,

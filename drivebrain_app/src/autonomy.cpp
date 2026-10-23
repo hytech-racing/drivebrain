@@ -11,6 +11,7 @@
 #include <LidarFilter.hpp>
 #include <PointCloudDeskew.hpp>
 #include <PathPlanner.hpp>
+#include <SimComms.hpp>
 
 namespace core {
 
@@ -66,13 +67,14 @@ void Autonomy::_run() {
     last_scan = scan;
     const uint64_t scan_ns = google::protobuf::util::TimeUtil::TimestampToNanoseconds(last_scan->timestamp());
 
-#if HOOTL_ENABLED
-    // TODO: plan from the SLAM map once the sim provides odometry. For now plan from the sim's
-    // ground truth cones, which are in the same frame as the sim pose that pure pursuit tracks
-    if (const auto ground_truth_cones = StateTracker::instance().dv_state().cone_observations) {
-      plan(*ground_truth_cones);
+    // With a sim (HOOTL or the sim bridge), plan from its ground truth cones, which are in the same frame
+    // as the sim pose that pure pursuit tracks, and skip perception and SLAM
+    if (comms::SimComms::is_created()) {
+      if (const auto ground_truth_cones = StateTracker::instance().dv_state().cone_observations) {
+        plan(*ground_truth_cones);
+      }
+      continue;
     }
-#endif
 
     // Get odometry pose for the scan
     const auto pose = StateTracker::instance().odom_pose(scan_ns, ODOM_TIMEOUT);
@@ -95,11 +97,9 @@ void Autonomy::_run() {
     const auto map = _slam->update(*cones, scan_ns, *pose, T_base_lidar);
     if (!map) continue;
 
-#if !HOOTL_ENABLED
     // Update the state tracker with the new cone observations and plan a path
     StateTracker::instance().set_cone_observations(map);
     plan(*map);
-#endif
   }
 }
 

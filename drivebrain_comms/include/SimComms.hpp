@@ -26,6 +26,9 @@ class SimComms {
 
         static SimComms& instance();
 
+        /* Whether drivebrain is talking to a sim, locally (HOOTL) or over the sim bridge */
+        static bool is_created() { return _s_instance.load(std::memory_order_acquire) != nullptr; }
+
         static void destroy();
 
     private: 
