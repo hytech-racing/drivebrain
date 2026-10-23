@@ -50,7 +50,7 @@
     },
     "DrivebrainControllerInterface": {
         "should_log": true, 
-        "controller_index": 1
+        "controller_index": 0
     },
     "FzEstimator": {
         "Q_gain": 0.1,

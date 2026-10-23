@@ -63,7 +63,7 @@ void Autonomy::_run() {
 
     auto dv = StateTracker::instance().dv_state();
 
-    if (dv.lidar_is_valid && dv.lidar_cloud != last_scan) {
+    if (dv.lidar_is_valid && dv.lidar_cloud != last_scan && dv.cone_observations) {
       last_scan = dv.lidar_cloud;
 
       std::shared_ptr<dv_msgs::Cones> cones = perception::filter_cloud(*last_scan);
@@ -72,11 +72,9 @@ void Autonomy::_run() {
 
       core::render_cones(cones, "filtered_cones", last_scan->frame_id());
 
-      // TODO: cone classifier needs to be invoked here
-      // // auto path = planning::plan_path(*StateTracker::instance().dv_state().cone_observations);
-      // render_path(path, "planned_path", "lidar");
-      // StateTracker::instance().set_dv_path(
-      //     std::make_shared<const std::vector<xyz_vec<float>>>(std::move(path)));
+      auto path = planning::plan_path(*dv.cone_observations);
+      render_path(path, "planned_path", "map");
+      StateTracker::instance().set_dv_path(std::make_shared<const std::vector<xyz_vec<float>>>(std::move(path)));
     }
 
     std::this_thread::sleep_until(next_tick);

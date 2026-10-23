@@ -251,6 +251,9 @@ namespace core {
         float old_energy_meter_kw;
         DrivetrainData dt_data;
         AccumulatorData acc_data;
+
+        xyz_vec<float> vehicle_position_map_frame;
+        xyz_vec<float> vehicle_heading_map_frame_unit_vector;
     };
 
     enum class ControllerManagerStatus
