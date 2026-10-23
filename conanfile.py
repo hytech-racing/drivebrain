@@ -35,7 +35,7 @@ class DrivebrainSoftware(ConanFile):
         self.requires("openssl/3.6.2")
         self.requires("ouster_sdk/1.0.1")
         self.requires("eigen/3.4.0", transitive_headers=True)
-        self.requires("ht_proto/master-2026-10-19t05_26_49")
+        self.requires("ht_proto/mgoltsman-dv_debug-2026-10-22t23_39_06")
         self.requires("ht_can/main-344")
         
         self.requires("aravis/0.8.33")
@@ -59,6 +59,11 @@ class DrivebrainSoftware(ConanFile):
 
     def configure(self):
         self.options["aravis"].usb = False
+        if not cross_building(self):
+            # The prebuilt native glib on the remote was built against glibc < 2.34 and fails to link on Ubuntu 22.04
+            # (undefined __dn_expand/__res_nquery). A non-default option changes its package id, so it builds from source.
+            #TODO: DISCUSS PROPER SOLUTION WITH KRISH
+            self.options["glib"].with_selinux = False
         self.options["hwloc"].shared = True
         self.options["gtsam"].with_TBB = False
         self.options["gtsam"].support_nested_dissection = False  # drops metis/gklib (breaks ARM cross-compile)

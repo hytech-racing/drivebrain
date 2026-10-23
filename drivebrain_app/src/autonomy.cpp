@@ -100,10 +100,12 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
 
 
     std::optional<float> steering_angle = _lateral_controller.step_controller(vehicle_state, *dv.path, curvature); // pure pursuit
+    log(std::make_shared<dv_msgs::PurePursuitDebug>(_lateral_controller.debug()), "control/pure_pursuit_debug");
     if (steering_angle.has_value()) {
       out.desired_steering_deg = steering_angle.value();
       _longitudinal_controller.setPath(*dv.path);
       out.out = _longitudinal_controller.step_controller(vehicle_state, curvature); // velocity controller
+      log(std::make_shared<dv_msgs::VelocityPlannerDebug>(_longitudinal_controller.debug()), "planning/velocity_debug");
     } else {
       spdlog::error("Pure Pursuit controller failed to compute steering angle");
     }
@@ -111,14 +113,6 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
 
   //out.out = _longitudinal_controller.step_controller(vehicle_state); // velocity controller
 
-
-  // fetch pure pursuit logs
-  // auto msg = _lateral_controller.getLoggingData();
-  
-  // #if HOOTL_ENABLED
-  //   // std::cout << msg.
-  //   comms::SimComms::instance().send_message(msg);
-  // #endif
 
   return out;
   

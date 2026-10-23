@@ -3,8 +3,8 @@
 
 #include <StateTracker.hpp>
 #include <Controller.hpp>
+#include "dv_msgs.pb.h"
 
-#include <memory>
 #include <vector>
 
 
@@ -14,14 +14,6 @@ namespace driverless {
 
 class PurePursuitController {
     public:
-        struct LoggingData {
-            std::vector<core::xy_vec<float>> path;
-            core::xy_vec<float> vehicle_pos;
-            core::xy_vec<float> target_point;
-            float curvature;
-            float steering_command;
-        };
-
         bool init();
 
         void setLookaheadDistance(float distance_m);
@@ -47,20 +39,8 @@ class PurePursuitController {
         */
         core::xy_vec<float> selectGoalPoint(const std::vector<core::xy_vec<float>>& goal_point_candidates, core::xy_vec<float> vehicle_pos, core::xy_vec<float> vehicle_heading);
 
-// TODO: bring this back for visualizing pure pursuit
-        // /**
-        // * Returns the path, vehicle position, target point, curvature, and steering command.
-        // * @return A shared pointer to a PlannerVisualization message containing the logging data from a local struct
-        // */
-        // std::shared_ptr<hytech_msgs::PlannerVisualization> getLoggingData() const;
-
-        /**
-        * Sets the logging data that will be sent to xcel later.
-        * @param data The logging data to set.
-        */
-        void setLoggingData(const LoggingData& data) {
-            logging_data_ = data;
-        }
+        /* Diagnostics of the most recent step_controller() */
+        const dv_msgs::PurePursuitDebug& debug() const { return debug_; }
 
         float get_dt_sec() {
             return 0.01f; // currently stepping at 100Hz, but this should be configurable
@@ -75,7 +55,7 @@ class PurePursuitController {
         }
 
     private:
-        LoggingData logging_data_;
+        dv_msgs::PurePursuitDebug debug_;
         float lookahead_distance_{2.5f};
         float wheelbase_{1.53f};
         float curvature_;

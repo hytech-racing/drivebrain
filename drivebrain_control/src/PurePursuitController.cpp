@@ -3,6 +3,7 @@
 #include <SteeringEstimator.h>
 
 #include <algorithm>
+#include <chrono>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -131,6 +132,11 @@ std::optional<float> PurePursuitController::step_controller(const core::VehicleS
     
     std::optional<float> output{};
 
+    debug_.Clear();
+    debug_.set_timestamp_ns(std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count());
+    debug_.set_lookahead_distance_m(lookahead_distance_);
+
     std::vector<core::xy_vec<float>> goal_point_candidates = getGoalPointCandidates(path, vehicle_pos, lookahead_distance_);
     if (goal_point_candidates.empty()) {
         // No valid goal points found, return zeros
@@ -139,54 +145,23 @@ std::optional<float> PurePursuitController::step_controller(const core::VehicleS
 
     core::xy_vec<float> target = selectGoalPoint(goal_point_candidates, vehicle_pos, vehicle_heading);
     const float curvature = getCurvature(vehicle_pos, vehicle_heading, target);
-    
+
     // Front-wheel steering angle in radians.
     const float steering_command = getSteeringCommand(curvature, wheelbase_);
-    
-    if (std::isfinite(steering_command)) {        
+    debug_.mutable_target_point_m()->set_x(target.x);
+    debug_.mutable_target_point_m()->set_y(target.y);
+    debug_.set_curvature(curvature);
+    debug_.set_yaw_rad(steering_command);
+
+    if (std::isfinite(steering_command)) {
         const float steering_command_column_angle = yaw_to_column_angle(steering_command);
+        debug_.set_column_angle_deg(steering_command_column_angle);
         output.emplace(steering_command_column_angle);
     }
 
-    LoggingData data {
-        .path = path,
-        .vehicle_pos = vehicle_pos,
-        .target_point = target,
-        .curvature = curvature,
-        .steering_command = steering_command,
-    };
-   //setLoggingData(data);
     curvature_in = curvature; // store the curvature for velocity planner
     return output;
 }
-
-// TODO: bring this back to visualize pure pursuit
-// std::shared_ptr<hytech_msgs::PlannerVisualization> PurePursuitController::getLoggingData() const {
-//     auto msg = std::make_shared<hytech_msgs::PlannerVisualization>();
-//     auto vehicle_pos = hytech_msgs::Point2D();
-//     vehicle_pos.set_x_map_m(logging_data_.vehicle_pos.x);
-//     vehicle_pos.set_y_map_m(logging_data_.vehicle_pos.y);
-//     auto target_point = hytech_msgs::Point2D();
-//     target_point.set_x_map_m(logging_data_.target_point.x);
-//     target_point.set_y_map_m(logging_data_.target_point.y);
-
-
-//     auto arc = msg->mutable_planner_arc();
-//     arc->mutable_begin()->set_x_map_m(logging_data_.vehicle_pos.x);
-//     arc->mutable_begin()->set_y_map_m(logging_data_.vehicle_pos.y);
-//     arc->mutable_end()->set_x_map_m(logging_data_.target_point.x);
-//     arc->mutable_end()->set_y_map_m(logging_data_.target_point.y);
-//     arc->set_signed_curvature_inv_m(logging_data_.curvature);
-
-//     for (const auto& point : logging_data_.path) {
-//         auto path_point = msg->add_midpoints();
-//         path_point->set_x_map_m(point.x);
-//         path_point->set_y_map_m(point.y);
-//     }
-
-//     msg->set_lookahead_distance_m(lookahead_distance_);
-//     return msg;
-// }
 
 
 float PurePursuitController::dynamic_lookahead(float prev_vehicle_x, float prev_vehicle_y, float dt) {

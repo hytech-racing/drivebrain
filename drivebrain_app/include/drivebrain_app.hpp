@@ -104,9 +104,5 @@ private:
   /* Driverless autonomy stack */
   core::Autonomy _autonomy;
 
-#if HOOTL_ENABLED
-  DrivingMode _driving_mode = DrivingMode::TELEOP;
-#else
   DrivingMode _driving_mode = DrivingMode::DRIVERLESS;
-#endif
 };
