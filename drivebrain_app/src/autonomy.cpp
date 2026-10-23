@@ -35,11 +35,6 @@ void Autonomy::start() {
     throw std::runtime_error("Failed to initialize pure pursuit controller");
   }
 
-  if (!_longitudinal_controller.init()) {
-    _running = false;
-    throw std::runtime_error("Failed to initialize velocity planner");
-  }
-
   _slam.start();
   _thread = std::thread(&Autonomy::_run, this);
   spdlog::info("Autonomy stack started");
@@ -90,24 +85,17 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
     log(std::make_shared<dv_msgs::PurePursuitDebug>(_lateral_controller.debug()), "control/pure_pursuit_debug");
     if (pure_pursuit_output.column_angle_deg.has_value()) {
       out.desired_steering_deg = pure_pursuit_output.column_angle_deg.value();
-      _longitudinal_controller.set_path(*dv.path);
-      // out.out = _longitudinal_controller.step_controller(vehicle_state, pure_pursuit_output.curvature); // velocity controller
-      
+
       // use const speed, capped at 10 m/s
       constexpr float TARGET_SPEED_MPS = 10.0f;
       const float target_rpm = TARGET_SPEED_MPS * static_cast<float>(constants::METERS_PER_SECOND_TO_RPM);
       speed_out.desired_rpms = {target_rpm, target_rpm, target_rpm, target_rpm};
       speed_out.torque_lim_nm = {1.0f, 1.0f, 1.0f, 1.0f};
       out.out = speed_out;
-
-      log(std::make_shared<dv_msgs::VelocityPlannerDebug>(_longitudinal_controller.debug()), "planning/velocity_debug");
     } else {
       spdlog::error("Pure Pursuit controller failed to compute steering angle");
     }
-  } 
-
-  //out.out = _longitudinal_controller.step_controller(vehicle_state); // velocity controller
-
+  }
 
   return out;
   

@@ -10,7 +10,6 @@
 #include <StateTracker.hpp>
 #include <GraphSLAM.hpp>
 #include <PurePursuitController.h>
-#include <VelocityPlanner.hpp>
 #include <LidarFilter.hpp>
 
 namespace core {
@@ -59,7 +58,6 @@ private:
 
   slam::GraphSlam _slam;
   control::driverless::PurePursuitController _lateral_controller{};
-  planning::VelocityPlanner _longitudinal_controller{};
 
   // Rate of OS1 LiDAR
   static constexpr std::chrono::milliseconds _period{100}; 
