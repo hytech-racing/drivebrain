@@ -74,7 +74,7 @@ void Autonomy::_run() {
     const Eigen::Isometry3d& T_base_lidar = StateTracker::instance().T_base_lidar();
     publish_transform("base_link", "os_sensor", scan_ns, T_base_lidar);
     const auto cloud = perception::deskew_cloud(*last_scan, StateTracker::instance().odom_twist(), T_base_lidar);
-    if (LOG_DESKEWED_CLOUD) log(cloud, "perception/deskewed_points");
+    log_foxglove_only(cloud, "perception/deskewed_points");
 
     const std::shared_ptr<dv_msgs::Cones> cones = perception::filter_cloud(*cloud);
     render_cones(cones, "filtered_cones", "os_sensor");

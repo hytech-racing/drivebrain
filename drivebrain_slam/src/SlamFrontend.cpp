@@ -29,9 +29,7 @@ std::vector<std::pair<std::size_t, std::size_t>> nearest_neighbor(const Eigen::M
                                                                          std::vector<bool>& used, const double gate) {
     std::vector<Pair> pairs;
     for (std::size_t d = 0; d < static_cast<std::size_t>(distance.rows()); ++d) {
-        if (used[d]) {
-            continue;
-        }
+        if (used[d]) continue; // this detection was matched in an earlier stage, skip
         for (std::size_t t = 0; t < static_cast<std::size_t>(distance.cols()); ++t) {
             if (distance(d, t) <= gate) {
                 pairs.push_back({distance(d, t), d, t});
@@ -125,7 +123,7 @@ std::optional<ObservationFrame> SlamFrontend::process_frame(const ConeFrame& fra
     // Most trusted first; a detection is matched at most once
     _match_mapped_landmarks(detections, used, out);
     _match_graph_landmarks(detections, used, out);
-    _match_unconfirmed(detections, used, out);
+    _match_unconfirmed(detections, used, out); // increase cone evidence
     _spawn_candidates(detections, used, out);
     _prune_candidates(out.timestamp_ns);
 
@@ -312,9 +310,7 @@ void SlamFrontend::_spawn_candidates(const std::vector<Detection>& detections, c
                                      const ObservationFrame& out) {
     dv_msgs::SlamFrontendDiagnostics& diag = *_debug.mutable_diagnostics();
     for (std::size_t d = 0; d < detections.size(); ++d) {
-        if (used[d]) {
-            continue;
-        }
+        if (used[d]) continue;
         Candidate candidate{std::nullopt, detections[d].position_odom_m, 1, detections[d].confidence,
                             out.pose_odom_from_base.translation(), out.timestamp_ns, {}};
         candidate.color_evidence.add(detections[d].color, detections[d].color_confidence);

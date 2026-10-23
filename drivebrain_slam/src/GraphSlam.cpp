@@ -193,7 +193,7 @@ std::shared_ptr<dv_msgs::Cones> Slam::update(const dv_msgs::Cones& cones, const 
     }
 
     const std::optional<ObservationFrame> observations = frontend.process_frame(frame);
-    if (observations) {
+    if (observations) { // send candidates to backend
         if (const std::optional<MapState> solved = backend.update(*observations)) {
             frontend.set_map(*solved);
             map_state = *solved;

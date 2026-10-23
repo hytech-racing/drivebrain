@@ -21,7 +21,7 @@
 #include "dv_msgs.pb.h"
 #include "FzEstimator.h"
 #include "SteeringEstimator.h"
-#include "Odometry.h"
+#include "Odometry.hpp"
 
 /**
  * The state tracker acts as a thread-safe translation unit
@@ -418,7 +418,7 @@ namespace core {
             /* Latest body velocity and yaw rate from the OMS: (vx m/s, vy m/s, yaw rate rad/s) */
             Eigen::Vector3d odom_twist();
 
-            /* Lidar mounting pose in base_link, from the StaticTransforms config */
+            /* Lidar mounting pose in base_link, from the static_transforms config */
             const Eigen::Isometry3d& T_base_lidar() const { return _T_base_lidar; }
 
             /**

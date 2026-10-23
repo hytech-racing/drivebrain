@@ -51,9 +51,6 @@ private:
 
   static constexpr std::chrono::milliseconds ODOM_TIMEOUT{100};
 
-  // Logs the full deskewed scan each frame (heavy; for offline evaluation)
-  static constexpr bool LOG_DESKEWED_CLOUD = false;
-
   // deskew -> detect -> map -> plan, once per lidar scan
   void _run();
 

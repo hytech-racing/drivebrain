@@ -1,4 +1,4 @@
-#include "Odometry.h"
+#include "Odometry.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -20,8 +20,8 @@ constexpr std::uint64_t TRAIL_RENDER_PERIOD_NS = 500'000'000;
 }  // namespace
 
 Odometry::Odometry() {
-    _position_base_m = {core::FoxgloveServer::instance().get_param<float>("Odometry/oms_position_base_x_m").value(),
-                        core::FoxgloveServer::instance().get_param<float>("Odometry/oms_position_base_y_m").value()};
+    _position_base_m = {core::FoxgloveServer::instance().get_param<float>("Odometry/oms_position_base_x_m").value_or(-1.108f),
+                        core::FoxgloveServer::instance().get_param<float>("Odometry/oms_position_base_y_m").value_or(0.0f)};
 }
 
 bool Odometry::update(const hytech_msgs::OMSData& sample, const std::uint64_t receive_ns) {

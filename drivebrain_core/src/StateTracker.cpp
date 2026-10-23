@@ -9,7 +9,7 @@ using namespace core;
 
 StateTracker::StateTracker() {
     const auto mount = [](const std::string& name) {
-        return FoxgloveServer::instance().get_param<float>("StaticTransforms/" + name).value();
+        return FoxgloveServer::instance().get_param<float>("static_transforms/" + name).value();
     };
     _T_base_lidar = Eigen::Translation3d(mount("lidar_x_m"), mount("lidar_y_m"), mount("lidar_z_m")) *
                     Eigen::AngleAxisd(mount("lidar_yaw_deg") * M_PI / 180.0, Eigen::Vector3d::UnitZ());
