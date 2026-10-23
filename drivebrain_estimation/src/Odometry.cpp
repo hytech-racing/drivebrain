@@ -5,11 +5,21 @@
 #include <iterator>
 
 #include <FoxgloveServer.hpp>
+#include <StateTracker.hpp>
+#include <Telemetry.hpp>
 
 using namespace estimation;
 
-Odometry::Odometry(const std::uint64_t history_duration_ns)
-    : _history_duration_ns(history_duration_ns) {
+namespace {
+
+/* Pose history kept for lookup: one lidar scan (100 ms) plus its processing delay, with margin */
+constexpr std::uint64_t HISTORY_NS = 1'000'000'000;
+constexpr std::uint64_t PUBLISH_PERIOD_NS = 20'000'000;
+constexpr std::uint64_t TRAIL_RENDER_PERIOD_NS = 500'000'000;
+
+}  // namespace
+
+Odometry::Odometry() {
     _position_base_m = {core::FoxgloveServer::instance().get_param<float>("Odometry/oms_position_base_x_m").value(),
                         core::FoxgloveServer::instance().get_param<float>("Odometry/oms_position_base_y_m").value()};
 }
@@ -41,12 +51,13 @@ bool Odometry::update(const hytech_msgs::OMSData& sample, const std::uint64_t re
 
         // Always keeps the newest sample
         while (_buffer.size() > 1 &&
-               _buffer.back().first - _buffer.front().first > _history_duration_ns) {
+               _buffer.back().first - _buffer.front().first > HISTORY_NS) {
             _buffer.pop_front();
         }
     }
 
     _cv.notify_all();
+    _publish(_buffer.back().first, _buffer.back().second, _twist);
     return true;
 }
 
@@ -89,11 +100,6 @@ std::optional<Eigen::Isometry2d> Odometry::pose(const std::uint64_t timestamp_ns
     return core::geometry::make_pose2d(position.x(), position.y(), yaw_before + alpha * yaw_delta);
 }
 
-std::pair<std::uint64_t, Eigen::Isometry2d> Odometry::latest() const {
-    std::scoped_lock lock(_mutex);
-    return {_timestamp_ns, _pose};
-}
-
 Eigen::Vector3d Odometry::twist() const {
     std::scoped_lock lock(_mutex);
     return _twist;
@@ -106,4 +112,36 @@ std::uint64_t Odometry::_host_time_ns(const float sample_time_s, const std::uint
     _clock_offset_ns = std::min(offset_ns, _clock_offset_ns == std::numeric_limits<std::int64_t>::max()
                                                ? offset_ns : _clock_offset_ns + 2000);
     return static_cast<std::uint64_t>(sample_ns + _clock_offset_ns);
+}
+
+void Odometry::_publish(const std::uint64_t timestamp_ns, const Eigen::Isometry2d& pose, const Eigen::Vector3d& twist) {
+    if (timestamp_ns - _last_publish_ns < PUBLISH_PERIOD_NS) return;
+    _last_publish_ns = timestamp_ns;
+
+    core::publish_transform("odom", "base_link", timestamp_ns, core::geometry::to_pose3d(pose));
+
+    // odom trail for viz, a point every 0.1 m
+    const Eigen::Vector2f position = pose.translation().cast<float>();
+    if (_trail.empty() || (position - _trail.back()).norm() > 0.1f) {
+        _trail.push_back(position);
+        if (_trail.size() > 10000) _trail.erase(_trail.begin());
+    }
+    if (timestamp_ns - _last_trail_render_ns >= TRAIL_RENDER_PERIOD_NS) {
+        _last_trail_render_ns = timestamp_ns;
+        std::vector<core::xyz_vec<float>> path;
+        path.reserve(_trail.size());
+        for (const Eigen::Vector2f& p : _trail) path.push_back({p.x(), p.y(), 0.0f});
+        core::render_path(path, "odom_trail", "odom");
+    }
+
+    auto estimate = std::make_shared<dv_msgs::DriverlessStateEstimate>();
+    estimate->set_timestamp_ns(timestamp_ns);
+    estimate->set_initialized(true);
+    estimate->set_x_odom_m(pose.translation().x());
+    estimate->set_y_odom_m(pose.translation().y());
+    estimate->set_yaw_odom_rad(core::geometry::yaw(pose));
+    estimate->set_vx_vehicle_flu_mps(twist.x());
+    estimate->set_vy_vehicle_flu_mps(twist.y());
+    estimate->set_yaw_rate_vehicle_flu_radps(twist.z());
+    core::log(estimate, "odometry");
 }

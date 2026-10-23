@@ -43,8 +43,6 @@ GraphSlam::GraphSlam()
           p.evaluateNonlinearError = true;
           return p;
       }()) {
-    _min_range_m = core::FoxgloveServer::instance().get_param<float>("Slam/min_range_m").value();
-    _max_range_m = core::FoxgloveServer::instance().get_param<float>("Slam/max_range_m").value();
     const double odom_xy = core::FoxgloveServer::instance().get_param<float>("Slam/odom_noise_xy_m").value();
     const double odom_yaw = core::FoxgloveServer::instance().get_param<float>("Slam/odom_noise_yaw_rad").value();
     _odom_noise = gtsam::noiseModel::Diagonal::Sigmas(gtsam::Vector3(odom_xy, odom_xy, odom_yaw));
@@ -95,10 +93,6 @@ std::optional<MapState> GraphSlam::update(const ObservationFrame& frame) {
             }
 
             const double range = std::hypot(measurement.x(), measurement.y());
-            if (range < _min_range_m || range > _max_range_m) {
-                rejected.set_outside_measurement_range(rejected.outside_measurement_range() + 1);
-                continue;
-            }
             if (!seen_ids.insert(observation.landmark_id).second) {
                 rejected.set_duplicate_landmark_id(rejected.duplicate_landmark_id() + 1);
                 continue;
@@ -186,35 +180,34 @@ std::map<std::size_t, Eigen::Isometry2d> GraphSlam::optimized_poses() const {
     return poses;
 }
 
-std::shared_ptr<dv_msgs::Cones> Slam::update(const foxglove::PointCloud& cloud, const std::uint64_t scan_ns,
+std::shared_ptr<dv_msgs::Cones> Slam::update(const dv_msgs::Cones& cones, const std::uint64_t scan_ns,
                                              const Eigen::Isometry2d& pose_odom_from_base,
                                              const Eigen::Isometry3d& T_base_lidar) {
-    const std::shared_ptr<dv_msgs::Cones> cones = perception::filter_cloud(cloud);
-    core::render_cones(cones, "filtered_cones", "os_sensor");
-
-    ConeFrame detections{scan_ns, pose_odom_from_base, {}};
-    for (const auto& cone : cones->cones()) {
+    // detections to base_link, confidence from the range to the lidar
+    ConeFrame frame{scan_ns, pose_odom_from_base, {}};
+    for (const auto& cone : cones.cones()) {
         const Eigen::Vector3d p_lidar(cone.position().x(), cone.position().y(), cone.position().z());
         const Eigen::Vector3d p_base = T_base_lidar * p_lidar;
         const float range_m = static_cast<float>(std::hypot(p_lidar.x(), p_lidar.y()));
-        detections.detections.push_back(
+        frame.detections.push_back(
             {p_base.head<2>(), perception::detection_confidence(range_m), dv_msgs::Cones::UNKNOWN, 0.0});
     }
 
-    const std::optional<ObservationFrame> observations = frontend.process_frame(detections);
+    const std::optional<ObservationFrame> observations = frontend.process_frame(frame);
     if (observations) {
         if (const std::optional<MapState> solved = backend.update(*observations)) {
             frontend.set_map(*solved);
             map_state = *solved;
-            core::publish_transform("map", "odom", scan_ns, core::geometry::to_pose3d(solved->pose_map_from_odom));
+            core::publish_transform("map", "odom", frame.timestamp_ns,
+                                    core::geometry::to_pose3d(solved->pose_map_from_odom));
         }
     }
     core::log(std::make_shared<dv_msgs::SlamFrontendDebug>(frontend.debug()), "slam/frontend_debug");
     core::log(std::make_shared<dv_msgs::IncrementalGraphSlamDebug>(backend.debug()), "slam/backend_debug");
 
-    const std::shared_ptr<dv_msgs::Cones> map = frontend.cone_map(scan_ns);
+    const std::shared_ptr<dv_msgs::Cones> map = frontend.cone_map(frame.timestamp_ns);
     if (map && map_state) {
-        render(scan_ns, observations, map);
+        render(frame.timestamp_ns, observations, map);
     }
     return map;
 }

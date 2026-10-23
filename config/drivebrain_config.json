@@ -76,9 +76,7 @@
         "odom_noise_xy_m": 0.05,
         "odom_noise_yaw_rad": 0.01,
         "bearing_std_rad": 0.05,
-        "range_std_m": 0.5,
-        "min_range_m": 0.1,
-        "max_range_m": 50.0
+        "range_std_m": 0.5
     },
     "use_vectornav": false,
     "use_fake_vn": false,

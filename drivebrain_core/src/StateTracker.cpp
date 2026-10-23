@@ -5,14 +5,7 @@
 #include <foxglove/PointCloud.pb.h>
 #include <foxglove/websocket/parameter.hpp>
 
-using namespace core; 
-
-namespace {
-
-constexpr uint64_t ODOM_PUBLISH_PERIOD_NS = 20'000'000;
-constexpr uint64_t ODOM_TRAIL_RENDER_PERIOD_NS = 500'000'000;
-
-}  // namespace
+using namespace core;
 
 StateTracker::StateTracker() {
     const auto mount = [](const std::string& name) {
@@ -92,9 +85,7 @@ void StateTracker::handle_receive_protobuf_message(std::shared_ptr<google::proto
         auto in_msg = std::static_pointer_cast<hytech_msgs::OMSData>(msg);
         const uint64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();
-        if (_odometry.update(*in_msg, now_ns)) {
-            _publish_odometry();
-        }
+        _odometry.update(*in_msg, now_ns);
     } else if (msg->GetDescriptor() == hytech_msgs::VCRData_s::descriptor()) {
         auto in_msg = std::static_pointer_cast<hytech_msgs::VCRData_s>(msg);
         bool is_rtd = (in_msg->status().vehicle_state() == hytech_msgs::VehicleState_e::READY_TO_DRIVE);
@@ -159,38 +150,6 @@ std::optional<Eigen::Isometry2d> StateTracker::odom_pose(uint64_t timestamp_ns, 
 
 Eigen::Vector3d StateTracker::odom_twist() {
     return _odometry.twist();
-}
-
-void StateTracker::_publish_odometry() {
-    const auto [ts, pose] = _odometry.latest();
-    if (ts - _last_odom_publish_ns < ODOM_PUBLISH_PERIOD_NS) return;
-    _last_odom_publish_ns = ts;
-
-    publish_transform("odom", "base_link", ts, geometry::to_pose3d(pose));
-    publish_transform("base_link", "os_sensor", ts, _T_base_lidar);
-
-    // odom trail for viz, a point every 0.1 m
-    const Eigen::Vector2d position = pose.translation();
-    if (_odom_trail.empty() || std::hypot(position.x() - _odom_trail.back().x, position.y() - _odom_trail.back().y) > 0.1) {
-        _odom_trail.push_back({static_cast<float>(position.x()), static_cast<float>(position.y()), 0.0f});
-        if (_odom_trail.size() > 10000) _odom_trail.erase(_odom_trail.begin());
-    }
-    if (ts - _last_trail_render_ns >= ODOM_TRAIL_RENDER_PERIOD_NS) {
-        _last_trail_render_ns = ts;
-        render_path(_odom_trail, "odom_trail", "odom");
-    }
-
-    auto estimate = std::make_shared<dv_msgs::DriverlessStateEstimate>();
-    estimate->set_timestamp_ns(ts);
-    estimate->set_initialized(true);
-    estimate->set_x_odom_m(pose.translation().x());
-    estimate->set_y_odom_m(pose.translation().y());
-    estimate->set_yaw_odom_rad(geometry::yaw(pose));
-    const Eigen::Vector3d twist = _odometry.twist();
-    estimate->set_vx_vehicle_flu_mps(twist.x());
-    estimate->set_vy_vehicle_flu_mps(twist.y());
-    estimate->set_yaw_rate_vehicle_flu_radps(twist.z());
-    log(estimate, "odometry");
 }
 
 void StateTracker::set_dv_path(std::shared_ptr<const std::vector<xyz_vec<float>>> path) {

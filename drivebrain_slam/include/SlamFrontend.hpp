@@ -21,7 +21,7 @@ struct ConeDetection {
 };
 
 /**
- * One perception frame: cone detections plus the odometry pose they were taken at
+ * One perception frame snapshot: cone detections plus the odometry pose they were taken at
  */
 struct ConeFrame {
     std::uint64_t timestamp_ns{};

@@ -442,9 +442,6 @@ namespace core {
 
             void _update_estimators();
 
-            /* Publishes the latest odometry pose: tf, odom trail and state estimate; called from the OMS receive path */
-            void _publish_odometry();
-
             VehicleState _vehicle_state = { };
             RawInputData _raw_input_data = { };
             std::mutex _state_mutex;
@@ -456,12 +453,8 @@ namespace core {
             TeleopCommand _teleop_command = { };
             std::mutex _teleop_mutex;
             
-            // Deskew looks back one scan (100 ms) plus the scan's processing delay
-            estimation::Odometry _odometry{1'000'000'000ULL};
-            uint64_t _last_odom_publish_ns = 0;
+            estimation::Odometry _odometry;
             Eigen::Isometry3d _T_base_lidar = Eigen::Isometry3d::Identity();
-            std::vector<xyz_vec<float>> _odom_trail;
-            uint64_t _last_trail_render_ns = 0;
 
             /* Private constructor called by the init method */
             StateTracker();

@@ -8,6 +8,7 @@
 #include <spdlog/spdlog.h>
 
 #include <Telemetry.hpp>
+#include <LidarFilter.hpp>
 #include <PointCloudDeskew.hpp>
 #include <PathPlanner.hpp>
 
@@ -75,11 +76,16 @@ void Autonomy::_run() {
     }
 
     const Eigen::Isometry3d& T_base_lidar = StateTracker::instance().T_base_lidar();
+    publish_transform("base_link", "os_sensor", scan_ns, T_base_lidar);
     const auto cloud = perception::deskew_cloud(*last_scan, StateTracker::instance().odom_twist(), T_base_lidar);
     if (LOG_DESKEWED_CLOUD) log(cloud, "perception/deskewed_points");
 
-    const auto map = _slam->update(*cloud, scan_ns, *pose, T_base_lidar);
+    const std::shared_ptr<dv_msgs::Cones> cones = perception::filter_cloud(*cloud);
+    render_cones(cones, "filtered_cones", "os_sensor");
+
+    const auto map = _slam->update(*cones, scan_ns, *pose, T_base_lidar);
     if (!map) continue;
+
     StateTracker::instance().set_cone_observations(map);
     auto path = planning::plan_path(*map);
     StateTracker::instance().set_dv_path(std::make_shared<const std::vector<xyz_vec<float>>>(std::move(path)));

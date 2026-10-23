@@ -21,23 +21,19 @@ struct Pair {
 /**
  * Greedy one-to-one matching of unused detections to targets, closest pairs first
  *
- * @param distance distance(d, t) between detection d and target t, compared against the gate
+ * @param distance distance(d, t) between detection d (row) and target t (column), compared against the gate
  * @return the (detection, target) pairs matched; matched detections are marked used
  */
-template <class Distance>
-std::vector<std::pair<std::size_t, std::size_t>> greedy_nearest_neighbor(const std::size_t num_detections,
-                                                                         std::vector<bool>& used,
-                                                                         const std::size_t num_targets,
-                                                                         const Distance& distance, const double gate) {
+std::vector<std::pair<std::size_t, std::size_t>> greedy_nearest_neighbor(const Eigen::MatrixXd& distance,
+                                                                         std::vector<bool>& used, const double gate) {
     std::vector<Pair> pairs;
-    for (std::size_t d = 0; d < num_detections; ++d) {
+    for (std::size_t d = 0; d < static_cast<std::size_t>(distance.rows()); ++d) {
         if (used[d]) {
             continue;
         }
-        for (std::size_t t = 0; t < num_targets; ++t) {
-            const double value = distance(d, t);
-            if (value <= gate) {
-                pairs.push_back({value, d, t});
+        for (std::size_t t = 0; t < static_cast<std::size_t>(distance.cols()); ++t) {
+            if (distance(d, t) <= gate) {
+                pairs.push_back({distance(d, t), d, t});
             }
         }
     }
@@ -46,7 +42,7 @@ std::vector<std::pair<std::size_t, std::size_t>> greedy_nearest_neighbor(const s
         return std::tie(a.distance, a.detection, a.target) < std::tie(b.distance, b.detection, b.target);
     });
 
-    std::vector<bool> target_used(num_targets, false);
+    std::vector<bool> target_used(distance.cols(), false);
     std::vector<std::pair<std::size_t, std::size_t>> matches;
     for (const Pair& pair : pairs) {
         if (used[pair.detection] || target_used[pair.target]) {
@@ -224,12 +220,14 @@ void SlamFrontend::_match_mapped_landmarks(const std::vector<Detection>& detecti
     const Eigen::Vector2d car_odom = out.pose_odom_from_base.translation();
     const Eigen::Matrix2d detection_covariance = _measurement_std_m * _measurement_std_m * Eigen::Matrix2d::Identity();
 
-    const auto distance = [&](std::size_t d, std::size_t l) {
-        return mahalanobis_squared(detections[d].position_odom_m, landmarks_odom[l], car_odom, pose_covariance_odom,
-                                   detection_covariance);
-    };
-    for (const auto& [d, l] : greedy_nearest_neighbor(detections.size(), used, landmarks_odom.size(), distance,
-                                                      _map_gate_chi2)) {
+    Eigen::MatrixXd distance(detections.size(), landmarks_odom.size());
+    for (std::size_t d = 0; d < detections.size(); ++d) {
+        for (std::size_t l = 0; l < landmarks_odom.size(); ++l) {
+            distance(d, l) = mahalanobis_squared(detections[d].position_odom_m, landmarks_odom[l], car_odom,
+                                                 pose_covariance_odom, detection_covariance);
+        }
+    }
+    for (const auto& [d, l] : greedy_nearest_neighbor(distance, used, _map_gate_chi2)) {
         const std::uint64_t id = _map_state->landmarks[l].landmark_id;
         out.observations.push_back({id, detections[d].position_base_m, LandmarkStatus::InMap});
         _color_by_landmark_id[id].add(detections[d].color, detections[d].color_confidence);
@@ -249,11 +247,13 @@ void SlamFrontend::_match_candidates(const CandidateState state, const std::vect
         }
     }
 
-    const auto euclidean = [&](std::size_t d, std::size_t t) {
-        return (detections[d].position_odom_m - targets_odom[t]).norm();
-    };
-    for (const auto& [d, t] : greedy_nearest_neighbor(detections.size(), used, targets_odom.size(), euclidean,
-                                                      _candidate_gate_m)) {
+    Eigen::MatrixXd distance(detections.size(), targets_odom.size());
+    for (std::size_t d = 0; d < detections.size(); ++d) {
+        for (std::size_t t = 0; t < targets_odom.size(); ++t) {
+            distance(d, t) = (detections[d].position_odom_m - targets_odom[t]).norm();
+        }
+    }
+    for (const auto& [d, t] : greedy_nearest_neighbor(distance, used, _candidate_gate_m)) {
         const Detection& detection = detections[d];
         Candidate& candidate = _candidates[candidate_indices[t]];
 

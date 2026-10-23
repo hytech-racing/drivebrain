@@ -39,12 +39,4 @@ namespace core::geometry
     return make_pose2d(s * v.x() - c * v.y(), c * v.x() + s * v.y(), theta);
 }
 
-// Projects a 3D pose onto the XY plane, keeping only yaw
-[[nodiscard]] inline Eigen::Isometry2d to_pose2d(const Eigen::Isometry3d& pose)
-{
-    const Eigen::Matrix3d R = pose.linear();
-    return make_pose2d(pose.translation().x(), pose.translation().y(),
-                       std::atan2(R(1, 0), R(0, 0)));
-}
-
 }  // namespace core::geometry

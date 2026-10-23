@@ -14,7 +14,6 @@
 #include <gtsam/nonlinear/Values.h>
 
 #include <SlamFrontend.hpp>
-#include <foxglove/PointCloud.pb.h>
 #include "dv_msgs.pb.h"
 
 namespace slam {
@@ -62,9 +61,6 @@ private:
     gtsam::SharedNoiseModel _prior_noise = gtsam::noiseModel::Diagonal::Sigmas(gtsam::Vector3(0.01, 0.01, 0.01));
     gtsam::SharedNoiseModel _odom_noise;
     gtsam::SharedNoiseModel _bearing_range_noise;
-    // Observations outside this range are not added
-    double _min_range_m{};
-    double _max_range_m{};
 
     bool _failed{};
     std::size_t _pose_count{};
@@ -82,18 +78,18 @@ private:
 };
 
 /**
- * The full SLAM stack, runs each deskewed scan through cone detection, the frontend and the backend
+ * The full SLAM stack: frontend data association and the factor graph backend
  */
 struct Slam {
     /**
-     * Detects the cones in a scan and passes them through the SLAM frontend and backend
-     * @param cloud the deskewed scan in os_sensor
+     * Runs one scan's cone detections through the frontend and backend
+     * @param cones detected cones in os_sensor
      * @param scan_ns host time of the scan
      * @param pose_odom_from_base the car's odometry pose at the scan time
      * @param T_base_lidar os_sensor -> base_link
      * @return the map of cones, or nullptr before the first map exists
     */
-    std::shared_ptr<dv_msgs::Cones> update(const foxglove::PointCloud& cloud, std::uint64_t scan_ns,
+    std::shared_ptr<dv_msgs::Cones> update(const dv_msgs::Cones& cones, std::uint64_t scan_ns,
                                            const Eigen::Isometry2d& pose_odom_from_base,
                                            const Eigen::Isometry3d& T_base_lidar);
 
