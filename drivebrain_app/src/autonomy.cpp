@@ -4,10 +4,11 @@
 #include <variant>
 #include <vector>
 
+#include <google/protobuf/util/time_util.h>
 #include <spdlog/spdlog.h>
 
 #include <Telemetry.hpp>
-#include <StateTracker.hpp>
+#include <PointCloudDeskew.hpp>
 #include <PathPlanner.hpp>
 
 namespace core {
@@ -20,7 +21,8 @@ void Autonomy::start() {
   if (_running.exchange(true)) {
     return;
   }
-  _slam.start();
+  _slam = std::make_unique<slam::Slam>();
+
   _thread = std::thread(&Autonomy::_run, this);
   spdlog::info("Autonomy stack started");
 }
@@ -32,7 +34,6 @@ void Autonomy::stop() {
   if (_thread.joinable()) {
     _thread.join();
   }
-  _slam.stop();
   spdlog::info("Autonomy stack stopped");
 }
 
@@ -59,27 +60,30 @@ void Autonomy::_run() {
   std::shared_ptr<const foxglove::PointCloud> last_scan;
 
   while (_running) {
-    next_tick += _period;
+    next_tick += PERIOD;
+    std::this_thread::sleep_until(next_tick);
 
     auto dv = StateTracker::instance().dv_state();
+    if (!dv.lidar_is_valid || dv.lidar_cloud == last_scan) continue;
+    last_scan = dv.lidar_cloud;
+    const uint64_t scan_ns = google::protobuf::util::TimeUtil::TimestampToNanoseconds(last_scan->timestamp());
 
-    if (dv.lidar_is_valid && dv.lidar_cloud != last_scan) {
-      last_scan = dv.lidar_cloud;
-
-      std::shared_ptr<dv_msgs::Cones> cones = perception::filter_cloud(*last_scan);
-
-      std::cout << "Filtered cones: " << cones->cones_size() << std::endl;
-
-      core::render_cones(cones, "filtered_cones", last_scan->frame_id());
-
-      // TODO: cone classifier needs to be invoked here
-      // // auto path = planning::plan_path(*StateTracker::instance().dv_state().cone_observations);
-      // render_path(path, "planned_path", "lidar");
-      // StateTracker::instance().set_dv_path(
-      //     std::make_shared<const std::vector<xyz_vec<float>>>(std::move(path)));
+    const auto pose = StateTracker::instance().odom_pose(scan_ns, ODOM_TIMEOUT);
+    if (!pose) {
+      spdlog::warn("Autonomy: no odom pose for scan at {} ns, skipping SLAM", scan_ns);
+      continue;
     }
 
-    std::this_thread::sleep_until(next_tick);
+    const Eigen::Isometry3d& T_base_lidar = StateTracker::instance().T_base_lidar();
+    const auto cloud = perception::deskew_cloud(*last_scan, StateTracker::instance().odom_twist(), T_base_lidar);
+    if (LOG_DESKEWED_CLOUD) log(cloud, "perception/deskewed_points");
+
+    const auto map = _slam->update(*cloud, scan_ns, *pose, T_base_lidar);
+    if (!map) continue;
+    StateTracker::instance().set_cone_observations(map);
+    auto path = planning::plan_path(*map);
+    StateTracker::instance().set_dv_path(std::make_shared<const std::vector<xyz_vec<float>>>(std::move(path)));
+    // do controls!
   }
 }
 

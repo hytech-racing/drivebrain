@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <foxglove/PointCloud.pb.h>
 #include <foxglove/websocket/base64.hpp>
@@ -20,6 +21,8 @@
 #include "dv_msgs.pb.h"
 #include "FzEstimator.h"
 #include "SteeringEstimator.h"
+#include "OdomEkf.h"
+#include "OdomBuffer.h"
 
 /**
  * The state tracker acts as a thread-safe translation unit
@@ -275,7 +278,6 @@ namespace core {
 
     struct LidarPoint { float x, y, z; };
     static_assert(sizeof(LidarPoint) == 12);
-    inline uint64_t num_points(const foxglove::PointCloud& pc) { return pc.data().size() / sizeof(LidarPoint); }
 
     struct PointView {
         const LidarPoint* ptr = nullptr;
@@ -297,7 +299,13 @@ namespace core {
         out->set_frame_id(src.frame_id());
         *out->mutable_pose() = src.pose();
         out->set_point_stride(sizeof(LidarPoint));
-        *out->mutable_fields() = src.fields();
+        const char* names[] = {"x", "y", "z"};
+        for (int i = 0; i < 3; i++) {
+            auto* field = out->add_fields();
+            field->set_name(names[i]);
+            field->set_offset(i * sizeof(float));
+            field->set_type(foxglove::PackedElementField::FLOAT32);
+        }
         out->set_data(reinterpret_cast<const char*>(pts.data()), pts.size() * sizeof(LidarPoint));
         return out;
     }
@@ -312,10 +320,6 @@ namespace core {
         bool lidar_is_valid;
         std::shared_ptr<const dv_msgs::Cones> cone_observations;
         std::shared_ptr<const std::vector<xyz_vec<float>>> path;
-
-        /* Returns the latest LiDAR point cloud in a clean struct */
-        PointView points() const { return lidar_cloud ? core::points(*lidar_cloud) : PointView{}; }
-        uint64_t num_points() const { return lidar_cloud ? core::num_points(*lidar_cloud) : 0; }
     };
 
 
@@ -393,6 +397,23 @@ namespace core {
             void set_cone_observations(std::shared_ptr<const dv_msgs::Cones> cones);
 
             /**
+             * Pose of base_link in the odom frame at the given host timestamp, interpolated
+             * from the odometry EKF history.
+             *
+             * @param timestamp_ns host time to look up
+             * @param timeout how long to wait for odometry to reach the timestamp
+             * @return the pose, or nullopt if the timestamp is outside the buffered history
+             */
+            std::optional<Eigen::Isometry2d> odom_pose(uint64_t timestamp_ns,
+                                                       std::chrono::nanoseconds timeout = {});
+
+            /* Latest EKF body velocity and yaw rate: (vx m/s, vy m/s, yaw rate rad/s) */
+            Eigen::Vector3d odom_twist();
+
+            /* Lidar mounting pose in base_link, from the StaticTransforms config */
+            const Eigen::Isometry3d& T_base_lidar() const { return _T_base_lidar; }
+
+            /**
              * Sets the latest teleop command received from the Foxglove teleop panel.
              *
              * @param command the teleop command
@@ -423,6 +444,12 @@ namespace core {
 
             void _update_estimators();
 
+            /* Inserts the EKF state into the odometry buffer and publishes it; called with _state_mutex held */
+            void _publish_odometry();
+
+            /* Maps the OMS 1 kHz sample clock onto host time, undoing the TCP burst grouping */
+            uint64_t _oms_sample_host_time_ns(float sample_time_s, uint64_t recv_ns);
+
             VehicleState _vehicle_state = { };
             RawInputData _raw_input_data = { };
             std::mutex _state_mutex;
@@ -434,8 +461,17 @@ namespace core {
             TeleopCommand _teleop_command = { };
             std::mutex _teleop_mutex;
             
+            estimation::OdomEkf _odom_ekf;
+            // Deskew looks back one scan (100 ms) plus the scan's processing delay
+            estimation::OdomBuffer _odom_buffer{1'000'000'000ULL};
+            int64_t _oms_clock_offset_ns = std::numeric_limits<int64_t>::max();
+            uint64_t _last_odom_publish_ns = 0;
+            Eigen::Isometry3d _T_base_lidar = Eigen::Isometry3d::Identity();
+            std::vector<xyz_vec<float>> _odom_trail;
+            uint64_t _last_trail_render_ns = 0;
+
             /* Private constructor called by the init method */
-            StateTracker() {}; 
+            StateTracker();
             
             /* Singleton move semantics */
             StateTracker(const StateTracker&) = delete; 

@@ -1,9 +1,29 @@
+#include <cmath>
+
 #include <StateTracker.hpp>
 #include <Telemetry.hpp>
 #include <foxglove/PointCloud.pb.h>
 #include <foxglove/websocket/parameter.hpp>
 
 using namespace core; 
+
+namespace {
+
+/* Odometry is published at this rate at most, not at the 400 Hz VN rate */
+constexpr uint64_t ODOM_PUBLISH_PERIOD_NS = 20'000'000;
+
+/* The trail is a growing line strip, so it is redrawn at this period */
+constexpr uint64_t ODOM_TRAIL_RENDER_PERIOD_NS = 500'000'000;
+
+}  // namespace
+
+StateTracker::StateTracker() {
+    const auto mount = [](const std::string& name) {
+        return FoxgloveServer::instance().get_param<float>("StaticTransforms/" + name).value();
+    };
+    _T_base_lidar = Eigen::Translation3d(mount("lidar_x_m"), mount("lidar_y_m"), mount("lidar_z_m")) *
+                    Eigen::AngleAxisd(mount("lidar_yaw_deg") * M_PI / 180.0, Eigen::Vector3d::UnitZ());
+}
 
 /****************************************************************
  * Public class methods
@@ -70,6 +90,28 @@ void StateTracker::handle_receive_protobuf_message(std::shared_ptr<google::proto
             _vehicle_state.current_ypr_rad = ypr_rad;
             _vehicle_state.ins_status.status_mode = ins_mode_int;
             _vehicle_state.ins_status.vel_uncertainty = vel_u;
+
+            // VN is the odometry EKF's prediction, in FLU
+            const uint64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count();
+            if (_odom_ekf.update(estimation::ImuMeasurement{now_ns, body_accel_mss.x, -body_accel_mss.y,
+                                                            -angular_rate_rads.z})) {
+                _publish_odometry();
+            }
+        }
+    } else if (msg->GetDescriptor() == hytech_msgs::OMSData::descriptor()) {
+        auto in_msg = std::static_pointer_cast<hytech_msgs::OMSData>(msg);
+        // the sensor is mounted facing backwards, so both velocity axes are flipped
+        const double vx_mps = -in_msg->motion().vel_x_kmh() / 3.6;
+        const double vy_mps = -in_msg->motion().vel_y_kmh() / 3.6;
+        const uint64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+        {
+            std::unique_lock lk(_state_mutex);
+            if (_odom_ekf.update(estimation::GssMeasurement{
+                    _oms_sample_host_time_ns(in_msg->sample_time_s(), now_ns), vx_mps, vy_mps})) {
+                _publish_odometry();
+            }
         }
     } else if (msg->GetDescriptor() == hytech_msgs::VCRData_s::descriptor()) {
         auto in_msg = std::static_pointer_cast<hytech_msgs::VCRData_s>(msg);
@@ -127,6 +169,60 @@ core::DriverlessState StateTracker::dv_state() {
     }
 
     return current_state;
+}
+
+std::optional<Eigen::Isometry2d> StateTracker::odom_pose(uint64_t timestamp_ns, std::chrono::nanoseconds timeout) {
+    return _odom_buffer.lookup(timestamp_ns, timeout);
+}
+
+Eigen::Vector3d StateTracker::odom_twist() {
+    std::unique_lock lk(_state_mutex);
+    const Eigen::Vector2d vel = _odom_ekf.velocity_base_mps();
+    return Eigen::Vector3d(vel.x(), vel.y(), _odom_ekf.yaw_rate_radps());
+}
+
+uint64_t StateTracker::_oms_sample_host_time_ns(float sample_time_s, uint64_t recv_ns) {
+    const int64_t sample_ns = static_cast<int64_t>(static_cast<double>(sample_time_s) * 1e9);
+    const int64_t offset_ns = static_cast<int64_t>(recv_ns) - sample_ns;
+    // The freshest sample of each burst has the smallest latency; let the offset creep up to follow clock drift
+    _oms_clock_offset_ns = std::min(offset_ns, _oms_clock_offset_ns == std::numeric_limits<int64_t>::max()
+                                                   ? offset_ns : _oms_clock_offset_ns + 2000);
+    return static_cast<uint64_t>(sample_ns + _oms_clock_offset_ns);
+}
+
+void StateTracker::_publish_odometry() {
+    const uint64_t ts = _odom_ekf.timestamp_ns();
+    const Eigen::Isometry2d pose = _odom_ekf.pose_odom_from_base();
+    _odom_buffer.insert(ts, pose);
+
+    if (ts - _last_odom_publish_ns < ODOM_PUBLISH_PERIOD_NS) return;
+    _last_odom_publish_ns = ts;
+
+    publish_transform("odom", "base_link", ts, geometry::to_pose3d(pose));
+    publish_transform("base_link", "os_sensor", ts, _T_base_lidar);
+
+    // odom trail for viz, a point every 0.1 m
+    const Eigen::Vector2d position = pose.translation();
+    if (_odom_trail.empty() || std::hypot(position.x() - _odom_trail.back().x, position.y() - _odom_trail.back().y) > 0.1) {
+        _odom_trail.push_back({static_cast<float>(position.x()), static_cast<float>(position.y()), 0.0f});
+        if (_odom_trail.size() > 10000) _odom_trail.erase(_odom_trail.begin());
+    }
+    if (ts - _last_trail_render_ns >= ODOM_TRAIL_RENDER_PERIOD_NS) {
+        _last_trail_render_ns = ts;
+        render_path(_odom_trail, "odom_trail", "odom");
+    }
+
+    auto estimate = std::make_shared<dv_msgs::DriverlessStateEstimate>();
+    estimate->set_timestamp_ns(ts);
+    estimate->set_initialized(true);
+    estimate->set_x_odom_m(pose.translation().x());
+    estimate->set_y_odom_m(pose.translation().y());
+    estimate->set_yaw_odom_rad(geometry::yaw(pose));
+    const Eigen::Vector2d vel = _odom_ekf.velocity_base_mps();
+    estimate->set_vx_vehicle_flu_mps(vel.x());
+    estimate->set_vy_vehicle_flu_mps(vel.y());
+    estimate->set_yaw_rate_vehicle_flu_radps(_odom_ekf.yaw_rate_radps());
+    log(estimate, "odometry");
 }
 
 void StateTracker::set_dv_path(std::shared_ptr<const std::vector<xyz_vec<float>>> path) {

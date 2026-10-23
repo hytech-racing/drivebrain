@@ -262,10 +262,7 @@ namespace {
         auto clusters = cluster(*filtered_scan);
         auto features = extract_features(clusters, *filtered_scan, ground);
         auto cones = extract_cones(features, *filtered_scan);
-        const auto& ts = scan.timestamp();
-        uint64_t microseconds = (static_cast<uint64_t>(ts.seconds()) * 1'000'000ULL) 
-                          + (static_cast<uint64_t>(ts.nanos()) / 1'000ULL);
-        cones->set_timestamp_us(microseconds);
+        cones->set_timestamp_us(google::protobuf::util::TimeUtil::TimestampToMicroseconds(scan.timestamp()));
         return cones;
     }
 

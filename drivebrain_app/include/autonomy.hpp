@@ -2,16 +2,16 @@
 
 #include <atomic>
 #include <chrono>
+#include <memory>
 #include <thread>
 
 #include <StateTracker.hpp>
-#include <GraphSLAM.hpp>
-#include <LidarFilter.hpp>
+#include <GraphSlam.hpp>
 
 namespace core {
 
 /**
- * The autonomy stack. 
+ * The autonomy stack.
  * Runs the driverless perception, mapping and planning stack on its own thread
  */
 class Autonomy {
@@ -19,7 +19,7 @@ public:
   ~Autonomy();
 
   /**
-   * Spawns the autonomy stack thread
+   * Constructs the SLAM stack from the config and spawns the autonomy stack thread
    */
   void start();
 
@@ -46,16 +46,21 @@ public:
   bool is_valid();
 
 private:
-  // filter -> classify -> SLAM -> plan
+  // Rate of OS1 LiDAR
+  static constexpr std::chrono::milliseconds PERIOD{100};
+
+  // How long a scan waits for odometry to reach its timestamp
+  static constexpr std::chrono::milliseconds ODOM_TIMEOUT{50};
+
+  // Logs the full deskewed scan each frame (heavy; for offline evaluation)
+  static constexpr bool LOG_DESKEWED_CLOUD = true;
+
+  // deskew -> detect -> map -> plan, once per lidar scan
   void _run();
 
   std::thread _thread;
   std::atomic<bool> _running{false};
-
-  slam::GraphSlam _slam;
-
-  // Rate of OS1 LiDAR
-  static constexpr std::chrono::milliseconds _period{100}; 
+  std::unique_ptr<slam::Slam> _slam;
 };
 
 }
