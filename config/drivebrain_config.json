@@ -82,5 +82,23 @@
         "mm_jerk_deg_s3": 0.0,
         "test_mode": false,
         "test_angle_deg": 0.0
+    },
+    "ConeClassifier": {
+        "blackfly_26191748": {
+            "forward_m": -1.537,
+            "left_m": 0.0,
+            "up_m": 0.3805,
+            "roll_deg": 1.0,
+            "pitch_deg": -4.0,
+            "yaw_deg": 0.5
+        },
+        "blackfly_26291609": {
+            "forward_m": -1.537,
+            "left_m": 0.0,
+            "up_m": 0.4181,
+            "roll_deg": 0.0,
+            "pitch_deg": -4.0,
+            "yaw_deg": 0.0
+        }
     }
 }

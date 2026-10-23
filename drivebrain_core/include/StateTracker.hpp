@@ -1,8 +1,10 @@
 #pragma once
 
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <foxglove/PointCloud.pb.h>
+#include <foxglove/RawImage.pb.h>
 #include <foxglove/websocket/base64.hpp>
 #include <foxglove/websocket/websocket_notls.hpp>
 #include <foxglove/websocket/websocket_server.hpp>
@@ -312,6 +314,7 @@ namespace core {
         bool lidar_is_valid;
         std::shared_ptr<const dv_msgs::Cones> cone_observations;
         std::shared_ptr<const std::vector<xyz_vec<float>>> path;
+        std::map<std::string, std::shared_ptr<const foxglove::RawImage>> camera_frames; // latest frame per camera, keyed by frame_id
 
         /* Returns the latest LiDAR point cloud in a clean struct */
         PointView points() const { return lidar_cloud ? core::points(*lidar_cloud) : PointView{}; }
@@ -391,6 +394,13 @@ namespace core {
              * @param cones the observed cones, vehicle frame
              */
             void set_cone_observations(std::shared_ptr<const dv_msgs::Cones> cones);
+
+            /**
+             * Sets the latest frame from a camera, replacing the previous frame with the same frame_id.
+             *
+             * @param frame the camera frame
+             */
+            void set_camera_frame(std::shared_ptr<const foxglove::RawImage> frame);
 
             /**
              * Sets the latest teleop command received from the Foxglove teleop panel.

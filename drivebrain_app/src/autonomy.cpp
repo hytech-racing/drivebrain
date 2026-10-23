@@ -70,9 +70,10 @@ void Autonomy::_run() {
 
       std::cout << "Filtered cones: " << cones->cones_size() << std::endl;
 
+      cones = _classifier.classify(cones, dv.camera_frames);
+
       core::render_cones(cones, "filtered_cones", last_scan->frame_id());
 
-      // TODO: cone classifier needs to be invoked here
       // // auto path = planning::plan_path(*StateTracker::instance().dv_state().cone_observations);
       // render_path(path, "planned_path", "lidar");
       // StateTracker::instance().set_dv_path(

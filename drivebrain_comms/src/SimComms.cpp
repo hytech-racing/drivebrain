@@ -1,6 +1,8 @@
 #include <SimComms.hpp>
 #include <foxglove/PointCloud.pb.h>
 #include <foxglove/FrameTransform.pb.h>
+#include <foxglove/RawImage.pb.h>
+#include <algorithm>
 #include <memory>
 #include "StateTracker.hpp"
 #include "dv_msgs.pb.h"
@@ -183,6 +185,18 @@ void SimComms::_veh_recv_loop() {
             core::render_pose(std::static_pointer_cast<hytech_msgs::pose>(msg), "ground_truth_pose");
         } else if (desc == foxglove::FrameTransform::descriptor()) {
             core::log(msg);
+        } else if (desc == foxglove::RawImage::descriptor()) {
+            // The blackflys are mounted upside down and the recorded raw frames are unrotated. Rotate 180 so
+            // frames are upright like BlackflyComms' live stream; on an 8 bit image with no row padding that is
+            // reversing the buffer, and it turns the RGGB mosaic into BGGR.
+            auto img = std::static_pointer_cast<foxglove::RawImage>(msg);
+            if (img->encoding() == "bayer_rggb8" && img->step() == img->width()) {
+                std::reverse(img->mutable_data()->begin(), img->mutable_data()->end());
+                img->set_encoding("bayer_bggr8");
+            }
+            // per-camera topic, otherwise every camera lands on "RawImage"
+            core::log(img, img->frame_id() + "/raw");
+            core::StateTracker::instance().set_camera_frame(img);
         } else {
             core::log(msg);
             core::StateTracker::instance().handle_receive_protobuf_message(msg);
