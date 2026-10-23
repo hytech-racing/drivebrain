@@ -170,6 +170,11 @@ void StateTracker::set_cone_observations(std::shared_ptr<const dv_msgs::Cones> c
     _dv_state.cone_observations = std::move(cones);
 }
 
+void StateTracker::set_camera_frame(std::shared_ptr<const foxglove::RawImage> frame) {
+    std::unique_lock lk(_dv_state_mutex);
+    _dv_state.camera_frames[frame->frame_id()] = std::move(frame);
+}
+
 static constexpr std::chrono::milliseconds TELEOP_TIMEOUT(500);
 
 void StateTracker::set_teleop_command(const TeleopCommand& command) {
