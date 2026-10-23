@@ -71,6 +71,8 @@ void DrivebrainApp::run() {
   _vcr_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::VCRData_s>>(_io_context, 9999);
   _vcf_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::VCFData_s>>(_io_context, 4444);
 
+  _remote_car_eth_driver = std::make_unique<comms::ETHSendComms>(_io_context, 5556, "192.168.55.1");
+
   spdlog::info("Initialized ethernet drivers");
 
 #if !HOOTL_ENABLED
@@ -253,6 +255,31 @@ void DrivebrainApp::_actuate(const core::ControllerOutput& out) {
   }
 }
 
+void DrivebrainApp::_send_remote_command(const core::ControllerOutput& out) {
+  auto msg = std::make_shared<hytech_msgs::RemoteDriveCommand>();
+  msg->set_seq(++_remote_command_seq);
+  msg->set_send_time_us(std::chrono::duration_cast<std::chrono::microseconds>(
+      std::chrono::system_clock::now().time_since_epoch()).count());
+  if (const core::SpeedControlOut* speedControl = std::get_if<core::SpeedControlOut>(&out.out)) {
+    msg->mutable_desired_rpms()->set_fl(speedControl->desired_rpms.FL);
+    msg->mutable_desired_rpms()->set_fr(speedControl->desired_rpms.FR);
+    msg->mutable_desired_rpms()->set_rl(speedControl->desired_rpms.RL);
+    msg->mutable_desired_rpms()->set_rr(speedControl->desired_rpms.RR);
+
+    msg->mutable_torque_limit_nm()->set_fl(speedControl->torque_lim_nm.FL);
+    msg->mutable_torque_limit_nm()->set_fr(speedControl->torque_lim_nm.FR);
+    msg->mutable_torque_limit_nm()->set_rl(speedControl->torque_lim_nm.RL);
+    msg->mutable_torque_limit_nm()->set_rr(speedControl->torque_lim_nm.RR);
+
+    if (out.desired_steering_deg) {
+      msg->set_desired_steering_deg(*out.desired_steering_deg);
+    }
+  }
+
+  _remote_car_eth_driver->enqueue_msg_send(msg);
+  core::log(msg);
+}
+
 void DrivebrainApp::_loop() {
   auto loop_time = 0.004;
   std::chrono::microseconds loop_time_ms((int) (loop_time * 1000000.0f));
@@ -292,6 +319,8 @@ void DrivebrainApp::_loop() {
     if (command_is_valid) {
       _actuate(out_struct);
     }
+
+    _send_remote_command(out_struct);
 
     std::tuple<std::string, bool> mcap_status = core::MCAPLogger::instance().status();
     std::string logile_name = std::get<0>(mcap_status);

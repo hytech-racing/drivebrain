@@ -21,10 +21,12 @@ if [ "$shouldTest" = 1 ]; then
   build_folder="build-native"
   hootl="-DHOOTL=ON"
 fi
+# per-build conan output so arm/native generated files never mix
+conan_folder="cmake-${build_folder#build-}"
 
 if [ "$shouldClean" = 1 ]; then
 rm -rf .venv
-rm -rf cmake
+rm -rf cmake cmake-arm cmake-native
 fi
 
 python3 -m venv .venv
@@ -47,32 +49,32 @@ if [ "$localCacheOnly" = 1 ]; then
     --build=missing \
     --profile:build=default \
     --profile:host="$profile" \
-    -of=cmake \
+    -of="$conan_folder" \
     --no-remote
 else
 conan install . \
   --build=missing \
   --profile:build=default \
   --profile:host="$profile" \
-  -of=cmake
+  -of="$conan_folder"
 fi
 
 
 mkdir -p "$build_folder"
 cd "$build_folder"
 
-. ../cmake/conanbuild.sh
+. "../$conan_folder/conanbuild.sh"
 
 cmake .. \
   -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_TOOLCHAIN_FILE=../cmake/conan_toolchain.cmake \
+  -DCMAKE_TOOLCHAIN_FILE="../$conan_folder/conan_toolchain.cmake" \
   -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
   -DCMAKE_EXE_LINKER_FLAGS="$linkflags" \
   $hootl \
   $jetson \
   --log-level=NOTICE
 
-make -j
+make -j4
 
 # run unit tests
 if [ "$shouldTest" = 1 ]; then
