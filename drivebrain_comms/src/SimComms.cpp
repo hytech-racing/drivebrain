@@ -144,7 +144,7 @@ bool SimComms::_setup_lidar_socket(zmq::socket_t& s, uint16_t port) {
         s.set(zmq::sockopt::rcvtimeo, 100);
         s.connect(endpoint(port));
     } catch (const zmq::error_t& e) {
-        spdlog::error("SimComms: failed to connect lidar socket: {}", e.what());
+        spdlog::error("SimComms: failed to connect lidar socket: {}", e.wTbuhat());
         _running = false;
         return false;
     }

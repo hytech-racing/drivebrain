@@ -4,7 +4,7 @@
 
 #include <StateTracker.hpp>
 #include "dv_msgs.pb.h"
-
+#include "FoxgloveServer.hpp"
 
 // left side = blue
 // right side = yellow
@@ -19,6 +19,8 @@ namespace planning {
   */
 
   // Returns the next set of coordinates for the car to follow as a path
-  std::vector<core::xy_vec<float>> plan_path(const dv_msgs::Cones& cones);
+  std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones);
+
+  void _handle_param_updates(const std::unordered_map<std::string, DBParam> &new_param_map);
 
 } // planning namespace

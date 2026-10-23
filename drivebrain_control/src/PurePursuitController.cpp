@@ -18,17 +18,17 @@ static constexpr float MAX_STEERING_ANGLE_RADS = 20.0f * static_cast<float>(M_PI
 namespace control {
 namespace driverless {
 
-std::vector<core::xy_vec<float>> PurePursuitController::get_goal_point_candidates(const std::vector<core::xy_vec<float>>& path, core::xy_vec<float> vehicle_pos, float lookahead_distance) {
+std::vector<core::xyz_vec<float>> PurePursuitController::get_goal_point_candidates(const std::vector<core::xyz_vec<float>>& path, core::xyz_vec<float> vehicle_pos, float lookahead_distance) {
     if (path.empty()) {
         return {};
     }
 
     // Check that there is a distance between each point in the path to create a segment to follow
-    std::vector<core::xy_vec<float>> goal_point_candidates;
-    core::xy_vec<float> p1 = path[0];
+    std::vector<core::xyz_vec<float>> goal_point_candidates;
+    core::xyz_vec<float> p1 = path[0];
     for (size_t i = 1; i < path.size(); ++i) {
-        core::xy_vec<float> p2 = path[i];
-        core::xy_vec<float> d = p2 - p1; // direction vector of the segment
+        core::xyz_vec<float> p2 = path[i];
+        core::xyz_vec<float> d = p2 - p1; // direction vector of the segment
         //std::cout << "Checking segment: (" << p1.x << ", " << p1.y << ") to (" << p2.x << ", " << p2.y << ")\n";
 
         if (d.length() < 1e-6f) {
@@ -38,7 +38,7 @@ std::vector<core::xy_vec<float>> PurePursuitController::get_goal_point_candidate
         }
 
         // solve the quadratic equation for intersection of the circle and the line segment
-        core::xy_vec<float> f = p1 - vehicle_pos;
+        core::xyz_vec<float> f = p1 - vehicle_pos;
         const float discriminant = ((d*f) * (d*f)) - (d*d) * (((f*f)) - lookahead_distance * lookahead_distance);
         //std::cout << "Discriminant: " << discriminant << "\n";
         if (discriminant >= 0.0f) {
@@ -63,12 +63,12 @@ std::vector<core::xy_vec<float>> PurePursuitController::get_goal_point_candidate
     return goal_point_candidates;
 }
 
-std::optional<size_t> PurePursuitController::select_goal_point(const std::vector<core::xy_vec<float>>& path, const std::vector<core::xy_vec<float>>& goal_point_candidates, core::xy_vec<float> vehicle_pos, core::xy_vec<float> vehicle_heading) {
-    core::xy_vec<float> closest_point;
+std::optional<size_t> PurePursuitController::select_goal_point(const std::vector<core::xyz_vec<float>>& path, const std::vector<core::xyz_vec<float>>& goal_point_candidates, core::xyz_vec<float> vehicle_pos, core::xyz_vec<float> vehicle_heading) {
+    core::xyz_vec<float> closest_point;
  
     const auto path_direction = path[1] - path[0];
-    auto colinearity = [vehicle_pos, vehicle_heading, path_direction](const core::xy_vec<float>& point) {
-        const core::xy_vec<float> target_vector = point - vehicle_pos;
+    auto colinearity = [vehicle_pos, vehicle_heading, path_direction](const core::xyz_vec<float>& point) {
+        const core::xyz_vec<float> target_vector = point - vehicle_pos;
         auto dot = path_direction * target_vector;
         auto cos = dot / (vehicle_heading.length() * target_vector.length());
         return cos;
@@ -93,8 +93,8 @@ std::optional<size_t> PurePursuitController::select_goal_point(const std::vector
     return {};
 }
 
-float PurePursuitController::get_curvature(core::xy_vec<float> vehicle_pos, core::xy_vec<float> vehicle_heading, core::xy_vec<float> goal_point, float lookahead_distance) {
-    core::xy_vec<float> to_goal = goal_point - vehicle_pos;
+float PurePursuitController::get_curvature(core::xyz_vec<float> vehicle_pos, core::xyz_vec<float> vehicle_heading, core::xyz_vec<float> goal_point, float lookahead_distance) {
+    core::xyz_vec<float> to_goal = goal_point - vehicle_pos;
     //std::cout << "Vehicle pos: (" << vehicle_pos.x << ", " << vehicle_pos.y << "), Goal point: (" << goal_point.x << ", " << goal_point.y << "), To goal: (" << to_goal.x << ", " << to_goal.y << ")\n";
     float cross_product = vehicle_heading.x * to_goal.y - vehicle_heading.y * to_goal.x;
     //std::cout << "Vehicle heading: (" << vehicle_heading.x << ", " << vehicle_heading.y << "), Cross product: " << cross_product << "\n";
@@ -170,7 +170,7 @@ bool PurePursuitController::init() {
 
 PurePursuitOutput PurePursuitController::step_controller(const PurePursuitInput& in) {
     const core::VehicleState& state = in.state;
-    const std::vector<core::xy_vec<float>>& path = in.path;
+    const std::vector<core::xyz_vec<float>>& path = in.path;
     PurePursuitOutput output{};
 
     config cur_config;
@@ -184,8 +184,8 @@ PurePursuitOutput PurePursuitController::step_controller(const PurePursuitInput&
     _debug.set_lookahead_distance_m(cur_config.lookahead_distance);
 
 
-    const core::xy_vec<float> vehicle_pos{state.vehicle_position_map_frame.x, state.vehicle_position_map_frame.y};
-    const core::xy_vec<float> vehicle_heading{
+    const core::xyz_vec<float> vehicle_pos{state.vehicle_position_map_frame.x, state.vehicle_position_map_frame.y};
+    const core::xyz_vec<float> vehicle_heading{
         state.vehicle_heading_map_frame_unit_vector.x,
         state.vehicle_heading_map_frame_unit_vector.y
     };
@@ -202,7 +202,7 @@ PurePursuitOutput PurePursuitController::step_controller(const PurePursuitInput&
     // std::cout << vehicle_pos.x << ", " << vehicle_pos.y << ", " << vehicle_heading.x << ", " << vehicle_heading.y << "\n";
     
 
-    std::vector<core::xy_vec<float>> goal_point_candidates = get_goal_point_candidates(path, vehicle_pos, cur_config.lookahead_distance);
+    std::vector<core::xyz_vec<float>> goal_point_candidates = get_goal_point_candidates(path, vehicle_pos, cur_config.lookahead_distance);
     if (goal_point_candidates.empty()) {
         // No valid goal points found, return no steering command
         return output;
@@ -213,7 +213,7 @@ PurePursuitOutput PurePursuitController::step_controller(const PurePursuitInput&
         // No valid goal point selected, return no steering command
         return output;
     }
-    core::xy_vec<float> target = goal_point_candidates[goal_point_index.value()];
+    core::xyz_vec<float> target = goal_point_candidates[goal_point_index.value()];
     const float curvature = get_curvature(vehicle_pos, vehicle_heading, target, cur_config.lookahead_distance);
 
     // Front-wheel steering angle in radians, clamped to the steering limit.

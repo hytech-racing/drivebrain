@@ -52,7 +52,6 @@ void Autonomy::stop() {
 }
 
 bool Autonomy::is_valid() {
-  return true;
   auto dv = StateTracker::instance().dv_state();
   return dv.lidar_is_valid && dv.path && !dv.path->empty();
 }
@@ -123,7 +122,7 @@ void Autonomy::_run() {
       auto path = planning::plan_path(*StateTracker::instance().dv_state().cone_observations);
       render_path(path, "planned_path", "map"); //draws a line between path points 
       StateTracker::instance().set_dv_path(
-          std::make_shared<const std::vector<xy_vec<float>>>(std::move(path)));
+          std::make_shared<const std::vector<xyz_vec<float>>>(std::move(path)));
     }
 
     std::this_thread::sleep_until(next_tick);

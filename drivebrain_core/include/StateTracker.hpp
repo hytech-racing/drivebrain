@@ -79,60 +79,27 @@ namespace core {
         T z;
 
         xyz_vec operator+(const xyz_vec& other) const {
-            return {x + other.x, y + other.y};
+            return {x + other.x, y + other.y, z + other.z};
         }
 
         xyz_vec operator-(const xyz_vec& other) const {
-            return {x - other.x, y - other.y};
+            return {x - other.x, y - other.y, z - other.z};
         }
 
         T operator*(const xyz_vec& other) const {
-            return x * other.x + y * other.y;
+            return x * other.x + y * other.y + z * other.z;
         }
 
         xyz_vec operator*(const float scalar) const {
-            return {x * scalar, y * scalar};
+            return {x * scalar, y * scalar, z * scalar};
         }
 
         bool operator==(const xyz_vec& other) const {
-            return x == other.x && y == other.y;
+            return x == other.x && y == other.y && z == other.z;
         }
 
         float length() const {
-            return std::sqrt(x * x + y * y);
-        }
-    };
-
-    /**
-     * @struct Represents an xy vector (2 elements of any type)
-     */
-    template <typename T>
-    struct xy_vec {
-        T x;
-        T y;
-
-        xy_vec operator+(const xy_vec& other) const {
-            return {x + other.x, y + other.y};
-        }
-
-        xy_vec operator-(const xy_vec& other) const {
-            return {x - other.x, y - other.y};
-        }
-
-        T operator*(const xy_vec& other) const {
-            return x * other.x + y * other.y;
-        }
-
-        xy_vec operator*(const float scalar) const {
-            return {x * scalar, y * scalar};
-        }
-
-        bool operator==(const xy_vec& other) const {
-            return x == other.x && y == other.y;
-        }
-
-        float length() const {
-            return std::sqrt(x * x + y * y);
+            return std::sqrt(x * x + y * y + z * z);
         }
     };
 
@@ -197,8 +164,8 @@ namespace core {
      * @struct Represents the outputs of the tire model 
      */
     struct TireDynamics {
-        veh_vec<xy_vec<float>> tire_forces_n;
-        veh_vec<xy_vec<float>> tire_moments_nm;
+        veh_vec<xyz_vec<float>> tire_forces_n;
+        veh_vec<xyz_vec<float>> tire_moments_nm;
         veh_vec<float> accel_saturation_nm;
         veh_vec<float> brake_saturation_nm;
         float v_y_lm;
@@ -318,8 +285,8 @@ namespace core {
         AccumulatorData acc_data;
         Orientation vehicle_orientation;
 
-        xy_vec<float> vehicle_position_map_frame;
-        xy_vec<float> vehicle_heading_map_frame_unit_vector;
+        xyz_vec<float> vehicle_position_map_frame;
+        xyz_vec<float> vehicle_heading_map_frame_unit_vector;
     };
 
     enum class ControllerManagerStatus
@@ -380,7 +347,7 @@ namespace core {
         std::shared_ptr<const foxglove::PointCloud> lidar_cloud;
         bool lidar_is_valid;
         std::shared_ptr<const dv_msgs::Cones> cone_observations;
-        std::shared_ptr<const std::vector<xy_vec<float>>> path;
+        std::shared_ptr<const std::vector<xyz_vec<float>>> path;
 
         /* Returns the latest LiDAR point cloud in a clean struct */
         PointView points() const { return lidar_cloud ? core::points(*lidar_cloud) : PointView{}; }
@@ -392,12 +359,10 @@ namespace core {
         float vehicle_x;
         float vehicle_y;
         float vehicle_z = 0;
-
         float orientation_w;
         float orientation_x;
         float orientation_y;
         float orientation_z;
-
     };
 
 
@@ -465,7 +430,7 @@ namespace core {
              *
              * @param path the planned path, map frame
              */
-            void set_dv_path(std::shared_ptr<const std::vector<xy_vec<float>>> path);
+            void set_dv_path(std::shared_ptr<const std::vector<xyz_vec<float>>> path);
 
             /**
              * Sets the latest cone observations produced by perception.

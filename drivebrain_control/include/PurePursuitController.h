@@ -19,7 +19,7 @@ namespace driverless {
 
 struct PurePursuitInput {
     const core::VehicleState& state;
-    const std::vector<core::xy_vec<float>>& path; // map frame
+    const std::vector<core::xyz_vec<float>>& path; // map frame
 };
 
 struct PurePursuitOutput {
@@ -50,7 +50,7 @@ class PurePursuitController : public Controller<PurePursuitOutput, PurePursuitIn
             * @param lookahead_distance Parameter for pure pursuit
             * @return A vector of 0-N intersection points.
         */
-        std::vector<core::xy_vec<float>> get_goal_point_candidates(const std::vector<core::xy_vec<float>>& path, core::xy_vec<float> vehicle_pos, float lookahead_distance);
+        std::vector<core::xyz_vec<float>> get_goal_point_candidates(const std::vector<core::xyz_vec<float>>& path, core::xyz_vec<float> vehicle_pos, float lookahead_distance);
 
         /**
         * Selects the most appropriate goal point from a set of candidates based on the vehicle's position and heading.
@@ -59,7 +59,7 @@ class PurePursuitController : public Controller<PurePursuitOutput, PurePursuitIn
         * @param vehicle_heading The current heading of the vehicle (map frame).
         * @return The selected goal point.
         */
-        std::optional<size_t> select_goal_point(const std::vector<core::xy_vec<float>>& path, const std::vector<core::xy_vec<float>>& goal_point_candidates, core::xy_vec<float> vehicle_pos, core::xy_vec<float> vehicle_heading);
+        std::optional<size_t> select_goal_point(const std::vector<core::xyz_vec<float>>& path, const std::vector<core::xyz_vec<float>>& goal_point_candidates, core::xyz_vec<float> vehicle_pos, core::xyz_vec<float> vehicle_heading);
 
         /* Diagnostics of the most recent step_controller() */
         const dv_msgs::PurePursuitDebug& debug() const { return _debug; }
@@ -85,7 +85,7 @@ class PurePursuitController : public Controller<PurePursuitOutput, PurePursuitIn
         * @param lookahead_distance Parameter for pure pursuit
         * @return The curvature of the arc connecting the vehicle's position to the goal point.
         */
-        float get_curvature(core::xy_vec<float> vehicle_pos, core::xy_vec<float> vehicle_heading, core::xy_vec<float> goal_point, float lookahead_distance);
+        float get_curvature(core::xyz_vec<float> vehicle_pos, core::xyz_vec<float> vehicle_heading, core::xyz_vec<float> goal_point, float lookahead_distance);
 
 
         // TODO: Dynamic lookahead

@@ -8,35 +8,31 @@
 #include <spdlog/spdlog.h>
 // delaunator v0.4.0 defines non-inline functions in its header, so it must only be included in one TU
 #include <delaunator.hpp>
-#include "FoxgloveServer.hpp"
 
-namespace {
-
-//auto MAX_TRACK_WIDTH_SQ = core::FoxgloveServer::instance().get_param<float>("PathPlanning/max_track_width");
-//auto MIN_COS_TURN = core::FoxgloveServer::instance().get_param<float>("PathPlanning/min_cos_turn");
-constexpr float MAX_TRACK_WIDTH_SQ = 36.0f;
-constexpr float MIN_COS_TURN = -0.3f;      // only reject points that are behind the car
-
-// just to simulate the lidar's max field of view
-constexpr float MAX_JUMP_SQ  = 8.0f * 8.0f;
-constexpr std::size_t PATH_POINTS_AHEAD = 20;
-
-struct VehicleData {
-  float vehicle_x;
-  float vehicle_y;
-  float w;
-  float x;
-  float y;
-  float z;
-};
-
-} // namespace
 
 namespace planning {
 
-  std::vector<core::xy_vec<float>> plan_path(const dv_msgs::Cones& cones) {
+  // auto MAX_TRACK_WIDTH_SQ = core::FoxgloveServer::instance().get_param<float>("PathPlanning/max_track_width");
+  // auto MIN_COS_TURN = core::FoxgloveServer::instance().get_param<float>("PathPlanning/min_cos_turn");
+  constexpr float MAX_TRACK_WIDTH_SQ = 36.0f; // changes between skidpad and accel
+  constexpr float MIN_COS_TURN = -0.3f;      // only reject points that are behind the car
+
+  // just to simulate the lidar's max field of view
+  constexpr float MAX_JUMP_SQ  = 8.0f * 8.0f;
+  constexpr std::size_t PATH_POINTS_AHEAD = 20;
+
+  struct VehicleData {
+    float vehicle_x;
+    float vehicle_y;
+    float w;
+    float x;
+    float y;
+    float z;
+  };
+
+  std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones) {
       /* Initializations */
-      std::vector<core::xy_vec<float>> midpoints; // Set of points to follow
+      std::vector<core::xyz_vec<float>> midpoints; // Set of points to follow
       std::vector<double> coords; // Cone coordinates used to make the delaunay triangulation
       VehicleData vehicle_data;
 
@@ -45,7 +41,7 @@ namespace planning {
       auto vehicle_sim_data = core::StateTracker::instance().vehicle_sim_pos();
       auto vehicle_sensor_data = core::StateTracker::instance().vehicle_state();
 
-      if (in_sim) {
+      #if HOOTL_ENABLED
         vehicle_data.vehicle_x = vehicle_sim_data.vehicle_x;
         vehicle_data.vehicle_y = vehicle_sim_data.vehicle_y;
 
@@ -53,15 +49,14 @@ namespace planning {
         vehicle_data.x = vehicle_sim_data.orientation_x;
         vehicle_data.y = vehicle_sim_data.orientation_y;
         vehicle_data.z = vehicle_sim_data.orientation_z;
+      #endif
 
-      } else {
         vehicle_data.vehicle_x = vehicle_sensor_data.first.vehicle_position_map_frame.x;
         vehicle_data.vehicle_y = vehicle_sensor_data.first.vehicle_position_map_frame.y;
 
         vehicle_data.w = vehicle_sensor_data.first.vehicle_orientation.Qw;
         vehicle_data.x = vehicle_sensor_data.first.vehicle_orientation.Qx;
         vehicle_data.y = vehicle_sensor_data.first.vehicle_orientation.Qy;
-      }
 
 
 
@@ -119,7 +114,7 @@ namespace planning {
 
           float mx = (delaunay.coords[2* curr_edge] + delaunay.coords[2* twin_edge]) / (2.0);
           float my = (delaunay.coords[2*curr_edge + 1] + delaunay.coords[2* twin_edge + 1]) / (2.0);
-          midpoints.push_back({mx, my});
+          midpoints.push_back({mx, my, 0.0f});
 
         }
       }
@@ -191,4 +186,10 @@ namespace planning {
       return midpoints;
 
   } // plan_path
+
+
+
+  void _handle_param_updates(const std::unordered_map<std::string, DBParam> &new_param_map) {
+    
+  } // handle param updates
 } // planning namespace
