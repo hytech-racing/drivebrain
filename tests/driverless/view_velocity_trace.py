@@ -1,16 +1,22 @@
-"""Interactively inspect VelocityPlanner JSONL traces, including a running trace."""
+"""Interactively inspect VelocityPlannerDebug messages recorded in a drivebrain MCAP."""
 
 import argparse
-import json
 import math
+import struct
 import time
 from pathlib import Path
 
 import matplotlib
 import matplotlib.pyplot as plt
+from mcap.exceptions import McapError
+from mcap.reader import make_reader
+from mcap.records import Channel, Message, Schema
+from mcap.stream_reader import StreamReader
+from mcap_protobuf.decoder import DecoderFactory
 
 
-TRACE_PATH = Path("/tmp/velocity-planner.jsonl")
+TOPIC = "planning/velocity_debug"
+RECORDINGS_DIR = Path(__file__).resolve().parents[2] / "recordings"
 VIEWER_KEYS = {"left", "right", "up", "down", "home", "end", "f", "g", "G", "shift+g", "s", "r", "+", "=", "-", " ", "space", "b", "[", "]"}
 
 
@@ -23,79 +29,73 @@ def reserve_viewer_keys():
             ]
 
 
+def load_records(path: Path):
+    try:
+        with path.open("rb") as f:
+            reader = make_reader(f, decoder_factories=[DecoderFactory()])
+            return [message for _, _, _, message in reader.iter_decoded_messages(topics=[TOPIC])]
+    except McapError:
+        pass
+    # No valid footer: drivebrain is still writing this file or was killed. Walk it record by record
+    # and keep everything up to the truncated tail.
+    schemas, channels, records = {}, {}, []
+    decoder_factory = DecoderFactory()
+    with path.open("rb") as f:
+        try:
+            for record in StreamReader(f).records:
+                if isinstance(record, Schema):
+                    schemas[record.id] = record
+                elif isinstance(record, Channel):
+                    channels[record.id] = record
+                elif isinstance(record, Message):
+                    channel = channels.get(record.channel_id)
+                    if channel is not None and channel.topic == TOPIC:
+                        decode = decoder_factory.decoder_for(channel.message_encoding, schemas[channel.schema_id])
+                        records.append(decode(record.data))
+        except (McapError, EOFError, ValueError, struct.error):
+            pass
+    print(f"{path} is unfinished, showing the {len(records)} complete records")
+    return sorted(records, key=lambda record: record.timestamp_ns)
+
+
+def enum_name(message, field, value):
+    return message.DESCRIPTOR.fields_by_name[field].enum_type.values_by_number[value].name
+
+
+def optional(message, field):
+    return getattr(message, field) if message.HasField(field) else None
+
+
 def spline_segments(spline):
-    """Evaluate each logged cubic only between its two adjacent path knots."""
+    """Evaluate each logged cubic only between its two adjacent path points."""
     segments = []
-    for coefficients in spline.get("segments", []):
-        if len(coefficients) != 4 or any(
-            len(coefficient) != 2 or any(value is None or not math.isfinite(value) for value in coefficient)
-            for coefficient in coefficients
-        ):
+    for segment in spline.segments:
+        c = segment.coefficients
+        if len(c) != 4 or not all(math.isfinite(v.x) and math.isfinite(v.y) for v in c):
             continue
         xs, ys = [], []
         for step in range(21):
             u = step / 20
-            x = coefficients[0][0] + u * (coefficients[1][0] + u * (coefficients[2][0] + u * coefficients[3][0]))
-            y = coefficients[0][1] + u * (coefficients[1][1] + u * (coefficients[2][1] + u * coefficients[3][1]))
-            if math.isfinite(x) and math.isfinite(y):
-                xs.append(x)
-                ys.append(y)
-        if xs:
-            segments.append((xs, ys))
+            xs.append(c[0].x + u * (c[1].x + u * (c[2].x + u * c[3].x)))
+            ys.append(c[0].y + u * (c[1].y + u * (c[2].y + u * c[3].y)))
+        segments.append((xs, ys))
     return segments
 
 
-class TraceReader:
-    def __init__(self, path: Path):
-        self.path = path
-        self.file = None
-        self.file_id = None
-        self.records = []
-        self.generation = 0
-
-    def read_available(self):
-        changed = False
-        if self.file is not None:
-            try:
-                info = self.path.stat()
-            except FileNotFoundError:
-                info = None
-            if info is None or (info.st_dev, info.st_ino) != self.file_id or info.st_size < self.file.tell():
-                self.file.close()
-                self.file = None
-                self.file_id = None
-                self.records.clear()
-                self.generation += 1
-                changed = True
-        if self.file is None:
-            if not self.path.exists():
-                return changed
-            self.file = self.path.open(encoding="utf-8")
-            info = self.path.stat()
-            self.file_id = (info.st_dev, info.st_ino)
-        while True:
-            line_start = self.file.tell()
-            line = self.file.readline()
-            if not line:
-                break
-            if not line.endswith("\n"):
-                self.file.seek(line_start)  # writer has not finished this record
-                break
-            try:
-                self.records.append(json.loads(line))
-                changed = True
-            except json.JSONDecodeError as exc:
-                print(f"Skipping invalid trace line at byte {line_start}: {exc}")
-        return changed
+def velocities_after(record, step_count):
+    """path_points velocities after applying the first step_count changes."""
+    speeds = [point.velocity_mps for point in record.path_points]
+    for change in record.changes[:step_count]:
+        if change.index < len(speeds):
+            speeds[change.index] = change.new_velocity_mps
+    return speeds
 
 
 class TraceViewer:
-    def __init__(self, reader: TraceReader, live: bool):
+    def __init__(self, records):
         reserve_viewer_keys()
-        self.reader = reader
-        self.reader_generation = reader.generation
-        self.following = live
-        self.paused = False
+        self.records = records
+        self.playing = False
         self.direction = 1
         self.speed = 1.0
         self.play_anchor_trace_ns = None
@@ -105,7 +105,7 @@ class TraceViewer:
         self.pan_offset = (0.0, 0.0)
         self.pan_start = None
         self.record_index = 0
-        self.change_index = 0
+        self.change_index = len(self.record.changes)
         self.figure, (self.map_ax, self.info_ax) = plt.subplots(
             1, 2, figsize=(14, 8), gridspec_kw={"width_ratios": [3, 1]}
         )
@@ -115,124 +115,71 @@ class TraceViewer:
         self.figure.canvas.mpl_connect("motion_notify_event", self.on_motion)
         self.figure.canvas.mpl_connect("button_release_event", self.on_release)
         self.timer = self.figure.canvas.new_timer(interval=50)
-        self.timer.add_callback(self.poll)
+        self.timer.add_callback(self.tick)
         self.timer.start()
-        self.poll()
         self.draw()
-
-    def poll(self):
-        changed = self.reader.read_available()
-        if self.reader_generation != self.reader.generation:
-            self.reader_generation = self.reader.generation
-            self.record_index = 0
-            self.change_index = 0
-            self.play_anchor_trace_ns = None
-            self.play_anchor_wall_ns = None
-        if not self.reader.records:
-            self.record_index = 0
-            self.change_index = 0
-            self.play_anchor_trace_ns = None
-            self.play_anchor_wall_ns = None
-            if changed:
-                self.draw()
-            return
-        if self.following:
-            if self.play_anchor_trace_ns is None or self.record_index >= len(self.reader.records):
-                # --live starts at the newest record; F from a selected record
-                # instead sets an anchor there and plays toward the live edge.
-                self.record_index = len(self.reader.records) - 1
-                self.change_index = len(self.record["changes"])
-                self.play_anchor_trace_ns = self.record["timestamp_ns"]
-                self.play_anchor_wall_ns = time.monotonic_ns()
-                changed = True
-            else:
-                elapsed_ns = (time.monotonic_ns() - self.play_anchor_wall_ns) * self.speed
-                target_trace_ns = self.play_anchor_trace_ns + self.direction * elapsed_ns
-                if self.direction > 0:
-                    while (self.record_index + 1 < len(self.reader.records)
-                           and self.reader.records[self.record_index + 1]["timestamp_ns"] <= target_trace_ns):
-                        self.record_index += 1
-                        self.change_index = len(self.record["changes"])
-                        changed = True
-                else:
-                    while (self.record_index > 0
-                           and self.reader.records[self.record_index - 1]["timestamp_ns"] >= target_trace_ns):
-                        self.record_index -= 1
-                        self.change_index = len(self.record["changes"])
-                        changed = True
-                    if self.record_index == 0:
-                        self.following = False  # reached the start of the trace
-                        changed = True
-        else:
-            self.record_index = min(self.record_index, len(self.reader.records) - 1)
-        if changed:
-            self.draw()
 
     @property
     def record(self):
-        return self.reader.records[self.record_index]
+        return self.records[self.record_index]
+
+    def go_to(self, index):
+        self.record_index = max(0, min(len(self.records) - 1, index))
+        self.change_index = len(self.record.changes)
+
+    def anchor_playback(self):
+        self.play_anchor_trace_ns = self.record.timestamp_ns
+        self.play_anchor_wall_ns = time.monotonic_ns()
+
+    def tick(self):
+        if not self.playing:
+            return
+        elapsed_ns = (time.monotonic_ns() - self.play_anchor_wall_ns) * self.speed
+        target_trace_ns = self.play_anchor_trace_ns + self.direction * elapsed_ns
+        index = self.record_index
+        if self.direction > 0:
+            while index + 1 < len(self.records) and self.records[index + 1].timestamp_ns <= target_trace_ns:
+                index += 1
+        else:
+            while index > 0 and self.records[index - 1].timestamp_ns >= target_trace_ns:
+                index -= 1
+        at_end = index == (len(self.records) - 1 if self.direction > 0 else 0)
+        if index != self.record_index or at_end:
+            self.go_to(index)
+            self.playing = not at_end
+            self.draw()
 
     def on_key(self, event):
-        if not self.reader.records and event.key not in ("f", "b", " ", "space"):
-            return
         if event.key in ("left", "right", "up", "down", "home", "end", "g", "G", "shift+g"):
-            self.paused = False
+            self.playing = False
         if event.key == "left":
-            self.following = False
-            self.record_index = max(0, self.record_index - 1)
-            self.change_index = len(self.record["changes"])
+            self.go_to(self.record_index - 1)
         elif event.key == "right":
-            self.following = False
-            self.record_index = min(len(self.reader.records) - 1, self.record_index + 1)
-            self.change_index = len(self.record["changes"])
+            self.go_to(self.record_index + 1)
         elif event.key == "down":
-            self.following = False
             self.change_index = max(0, self.change_index - 1)
         elif event.key == "up":
-            self.following = False
-            self.change_index = min(len(self.record["changes"]), self.change_index + 1)
+            self.change_index = min(len(self.record.changes), self.change_index + 1)
         elif event.key == "home":
-            self.following = False
             self.change_index = 0
         elif event.key == "end":
-            self.following = False
-            self.change_index = len(self.record["changes"])
+            self.change_index = len(self.record.changes)
         elif event.key == "g":
-            self.following = False
-            self.record_index = 0
-            self.change_index = len(self.record["changes"])
+            self.go_to(0)
         elif event.key in ("G", "shift+g"):
-            self.following = False
-            self.record_index = len(self.reader.records) - 1
-            self.change_index = len(self.record["changes"])
+            self.go_to(len(self.records) - 1)
         elif event.key in ("[", "]"):
             self.speed = min(32.0, self.speed * 2) if event.key == "]" else max(0.125, self.speed / 2)
-            if self.following and self.reader.records:
-                self.play_anchor_trace_ns = self.record["timestamp_ns"]
-                self.play_anchor_wall_ns = time.monotonic_ns()
-        elif event.key in ("f", "b", " ", "space"):
-            if event.key in (" ", "space") and self.following:
-                self.following = False
-                self.paused = True
-                self.draw()
-                return
-            if event.key == "f":
-                self.direction = 1
-            elif event.key == "b":
-                self.direction = -1
-            self.following = True
-            self.paused = False
-            self.reader.read_available()
-            self.reader_generation = self.reader.generation
-            if self.reader.records:
-                self.record_index = min(self.record_index, len(self.reader.records) - 1)
-                self.play_anchor_trace_ns = self.record["timestamp_ns"]
-                self.play_anchor_wall_ns = time.monotonic_ns()
-            else:
-                self.record_index = 0
-                self.change_index = 0
-                self.play_anchor_trace_ns = None
-                self.play_anchor_wall_ns = None
+            if self.playing:
+                self.anchor_playback()
+        elif event.key in (" ", "space"):
+            self.playing = not self.playing
+            if self.playing:
+                self.anchor_playback()
+        elif event.key in ("f", "b"):
+            self.direction = 1 if event.key == "f" else -1
+            self.playing = True
+            self.anchor_playback()
         elif event.key == "s":
             self.show_spline = not self.show_spline
         elif event.key in ("+", "="):
@@ -247,7 +194,7 @@ class TraceViewer:
         self.draw()
 
     def on_scroll(self, event):
-        if event.inaxes != self.map_ax or not self.reader.records:
+        if event.inaxes != self.map_ax:
             return
         if event.button == "up":
             self.zoom_scale = max(0.05, self.zoom_scale / 1.4)
@@ -258,8 +205,7 @@ class TraceViewer:
         self.draw()
 
     def on_press(self, event):
-        if (event.button != 1 or event.inaxes != self.map_ax or not self.reader.records
-                or self.map_ax.get_navigate_mode() is not None):
+        if event.button != 1 or event.inaxes != self.map_ax or self.map_ax.get_navigate_mode() is not None:
             return
         xlim = self.map_ax.get_xlim()
         ylim = self.map_ax.get_ylim()
@@ -283,64 +229,41 @@ class TraceViewer:
         self.map_ax.clear()
         self.info_ax.clear()
         self.info_ax.axis("off")
-        if not self.reader.records:
-            self.map_ax.text(0.5, 0.5, "Waiting for trace records...", ha="center", va="center")
-            self.figure.canvas.draw_idle()
-            return
 
         record = self.record
-        path = record["path_map"]
-        if path:
-            self.map_ax.scatter([p[0] for p in path], [p[1] for p in path],
+        points = [(p.position_m.x, p.position_m.y) for p in record.path_points]
+        if points:
+            self.map_ax.scatter([p[0] for p in points], [p[1] for p in points],
                                 color="#4d5a66", s=14, zorder=5)
-        spline = record.get("spline", {})
+            self.map_ax.scatter(*points[0], color="#d425ad", marker="*", s=220,
+                                edgecolors="black", label="first path point", zorder=8)
         if self.show_spline:
-            for spline_x, spline_y in spline_segments(spline):
+            for spline_x, spline_y in spline_segments(record.spline):
                 self.map_ax.plot(spline_x, spline_y, color="#ee821c", linewidth=1.0,
                                  alpha=0.65, zorder=2)
 
-        start_index = record["start_path_index"]
-        if start_index is not None and start_index < len(path):
-            p = path[start_index]
-            self.map_ax.scatter(p[0], p[1], color="#d425ad", marker="*", s=220,
-                                edgecolors="black", label=f"first path point [{start_index}]", zorder=8)
-
-        speeds = {}
-        for change in record["changes"][:self.change_index]:
-            speeds[change["path_index"]] = change["new_velocity"]
-        for index, speed in speeds.items():
-            if index < len(path) and speed is not None and math.isfinite(speed):
-                p = path[index]
-                self.map_ax.annotate(f"{speed:.1f}", p, xytext=(3, 4),
+        speeds = velocities_after(record, self.change_index)
+        for point, speed in zip(points, speeds):
+            if math.isfinite(speed):
+                self.map_ax.annotate(f"{speed:.1f}", point, xytext=(3, 4),
                                      textcoords="offset points", fontsize=7, color="#202020")
-        if self.change_index:
-            selected_change = record["changes"][self.change_index - 1]
-            selected = selected_change["path_index"]
-            if selected < len(path):
-                p = path[selected]
-                self.map_ax.scatter(p[0], p[1], facecolors="none", edgecolors="#00a9c5",
-                                    linewidths=2.5, s=260, label=f"selected path point [{selected}]", zorder=7)
-            sample_index = selected_change["index"]
-            samples = spline.get("samples", [])
-            if self.show_spline and sample_index < len(samples):
-                p = samples[sample_index]["position"]
-                if all(value is not None and math.isfinite(value) for value in p):
-                    self.map_ax.scatter(p[0], p[1], color="#ee821c", marker="x", s=100,
-                                        label="selected spline sample", zorder=9)
+        change = record.changes[self.change_index - 1] if self.change_index else None
+        if change is not None and change.index < len(points):
+            self.map_ax.scatter(*points[change.index], facecolors="none", edgecolors="#00a9c5",
+                                linewidths=2.5, s=260, label=f"path_points[{change.index}]", zorder=7)
 
-        car = record["car"]
-        x, y = car["position_map"]
-        hx, hy = car["heading_map"]
+        x, y = record.car_position_m.x, record.car_position_m.y
+        hx, hy = record.car_heading.x, record.car_heading.y
         self.map_ax.scatter(x, y, color="#d43c39", marker="o", s=100, label="car", zorder=6)
         if math.isfinite(hx) and math.isfinite(hy):
-            extent = max([3.0] + [abs(p[0] - x) for p in path] + [abs(p[1] - y) for p in path])
+            extent = max([3.0] + [abs(p[0] - x) for p in points] + [abs(p[1] - y) for p in points])
             arrow_length = min(1.0, 0.12 * extent)
             self.map_ax.arrow(x, y, hx * arrow_length, hy * arrow_length,
                               width=0.012 * arrow_length, head_width=0.12 * arrow_length,
                               color="#d43c39", zorder=6)
 
         # Spline excursions are useful to see, but must not set the plot scale.
-        view_points = [*path, [x, y]]
+        view_points = [*points, (x, y)]
         x_values = [point[0] for point in view_points if math.isfinite(point[0])]
         y_values = [point[1] for point in view_points if math.isfinite(point[1])]
         if x_values and y_values:
@@ -358,22 +281,17 @@ class TraceViewer:
         self.map_ax.grid(alpha=0.25)
         self.map_ax.set_xlabel("map x (m)")
         self.map_ax.set_ylabel("map y (m)")
-        self.map_ax.set_title(f"Iteration {record['iteration']}  |  {record['status']}")
+        status = enum_name(record, "status", record.status)
+        self.map_ax.set_title(f"Iteration {record.iteration}  |  {status}")
 
-        velocity = car["velocity_raw"]
-        if self.paused:
-            mode = "PAUSED"
-        elif self.following and self.direction < 0:
-            mode = f"REVERSE {self.speed:g}x"
-        elif self.following and self.record_index < len(self.reader.records) - 1:
-            mode = f"PLAYING {self.speed:g}x"
-        elif self.following:
-            mode = "LIVE (waiting)"
+        if self.playing:
+            mode = f"{'PLAYING' if self.direction > 0 else 'REVERSE'} {self.speed:g}x"
         else:
-            mode = "MANUAL"
+            mode = "PAUSED"
+        velocity = record.car_velocity_raw_mps
         rows = [
-            f"Record {self.record_index + 1}/{len(self.reader.records)}",
-            f"Step {self.change_index}/{len(record['changes'])}",
+            f"Record {self.record_index + 1}/{len(self.records)}",
+            f"Step {self.change_index}/{len(record.changes)}",
             f"Mode: {mode}",
             f"Spline: {'shown' if self.show_spline else 'hidden'}",
             f"View scale: {self.zoom_scale:.2f}x",
@@ -381,45 +299,36 @@ class TraceViewer:
             "",
             f"Car: ({x:.2f}, {y:.2f}) m",
             f"Heading: ({hx:.3f}, {hy:.3f})",
-            f"Velocity raw: ({velocity[0]:.2f}, {velocity[1]:.2f}) m/s",
-            f"Along heading: {format_value(record['longitudinal_velocity'])} m/s",
-            f"Pursuit curvature: {record['pose_to_path_curvature']:.4f} 1/m",
-            f"Start path index: {start_index}",
+            f"Velocity raw: ({velocity.x:.2f}, {velocity.y:.2f}) m/s",
+            f"Along heading: {format_value(optional(record, 'longitudinal_velocity_mps'))} m/s",
+            f"mu: {record.mu:.2f}  max v: {record.max_car_velocity_mps:.2f} m/s",
             "",
         ]
-        if self.change_index:
-            change = record["changes"][self.change_index - 1]
+        if change is not None:
+            point = record.path_points[change.index] if change.index < len(record.path_points) else None
+            old_velocity = velocities_after(record, self.change_index - 1)[change.index] if point else None
+            arc_length = sum(math.dist(points[i - 1], points[i]) for i in range(1, change.index + 1)) if point else None
             rows.extend([
-                f"Pass: {change['pass']}",
-                f"path_points_[{change['index']}]",
-                f"path_[{change['path_index']}]",
-                f"Changed: {change.get('changed', True)}",
-                f"Velocity: {format_value(change['old_velocity'])} → {format_value(change['new_velocity'])} m/s",
+                f"Pass: {enum_name(change, 'pass', getattr(change, 'pass'))}",
+                f"path_points[{change.index}]  s = {format_value(arc_length)} m",
+                f"Changed: {change.changed}",
+                f"Velocity: {format_value(old_velocity)} → {format_value(change.new_velocity_mps)} m/s",
+                f"Curvature limit: {format_value(point.velocity_mps if point else None)} m/s",
+                f"Point curvature: {format_value(point.curvature if point else None, 5)} 1/m",
+                f"Source curvature: {format_value(change.curvature, 5)} 1/m",
+                f"Lateral accel: {format_value(change.lateral_accel_mps2)} m/s²"
+                + ("  EXCEEDED" if change.lateral_accel_exceeded else ""),
+                f"Long accel available: {format_value(change.longitudinal_accel_available_mps2)} m/s²",
+                f"Allowed by accel: {format_value(change.velocity_allowed_by_accel_mps)} m/s",
+                "",
             ])
-            samples = spline.get("samples", [])
-            if change["index"] < len(samples):
-                sample = samples[change["index"]]
-                rows.append(f"Spline t: {format_value(sample.get('t'), 3)} m")
-                rows.append(f"Spline curvature: {format_value(sample.get('curvature'), 5)} 1/m")
-            if change["pass"] != "initial":
-                rows.extend([
-                    f"Source curvature: {format_value(change.get('curvature'), 5)} 1/m",
-                    f"Lateral accel: {format_value(change.get('lateral_accel'))} m/s²",
-                    f"Long accel available: {format_value(change.get('longitudinal_accel_available'))} m/s²",
-                ])
-            rows.append("")
-        if self.change_index == len(record["changes"]):
-            failure = record.get("failure")
-            if failure:
-                rows.extend(["Failure:", *[f"{k}: {v}" for k, v in failure.items()], ""])
-            accel_calculation = record.get("accel_calculation")
-            if accel_calculation:
-                rows.extend([
-                    f"Target speed: {format_value(accel_calculation['target_velocity'])} m/s",
-                    f"Accel distance: {format_value(accel_calculation['distance'])} m",
-                ])
-            rows.extend([f"Final accel: {format_value(record['accel'])} m/s²",
-                         f"Torque/wheel: {format_value(record['torque_per_wheel_nm'])} Nm", ""])
+        if self.change_index == len(record.changes):
+            rows.extend([
+                f"Target speed: {format_value(optional(record, 'target_velocity_mps'))} m/s",
+                f"Final accel: {format_value(optional(record, 'accel_mps2'))} m/s²",
+                f"Torque/wheel: {format_value(optional(record, 'torque_per_wheel_nm'))} Nm",
+                "",
+            ])
         rows.extend(["←/→  previous/next iteration", "↓/↑  previous/next step",
                      "G/Shift+G  first/last iteration", "Home/End  first/final step",
                      "Space  pause/resume; F/B  play forward/back",
@@ -435,13 +344,24 @@ def format_value(value, digits=2):
     return "—" if value is None else f"{value:.{digits}f}"
 
 
+def latest_recording():
+    recordings = sorted(RECORDINGS_DIR.glob("*.mcap"), key=lambda path: path.stat().st_mtime)
+    return recordings[-1] if recordings else None
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--live", action="store_true", help="Follow new records as they are written")
+    parser.add_argument("mcap", nargs="?", type=Path,
+                        help=f"recording to open (default: newest in {RECORDINGS_DIR})")
     args = parser.parse_args()
-    if not args.live and not TRACE_PATH.exists():
-        parser.error(f"trace does not exist: {TRACE_PATH}")
-    viewer = TraceViewer(TraceReader(TRACE_PATH), args.live)
+    path = args.mcap or latest_recording()
+    if path is None or not path.exists():
+        parser.error(f"no recording given and none found in {RECORDINGS_DIR}" if path is None
+                     else f"recording does not exist: {path}")
+    records = load_records(path)
+    if not records:
+        parser.error(f"no {TOPIC} messages in {path}")
+    viewer = TraceViewer(records)
     plt.show()
     viewer.timer.stop()
 
