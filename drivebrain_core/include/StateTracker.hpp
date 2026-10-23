@@ -122,6 +122,14 @@ namespace core {
     };
 
     /**
+     * @struct A speed command from an off-car drivebrain, received over UDP.
+     */
+    struct RemoteCommand {
+        hytech_msgs::RemoteDriveCommand msg;
+        std::chrono::steady_clock::time_point recv_time;
+    };
+
+    /**
      * @struct Contains requested pedals information
      */
     struct DriverInput {
@@ -409,6 +417,22 @@ namespace core {
              */
             std::pair<TeleopCommand, bool> teleop_command();
 
+            /**
+             * Sets the latest remote command received from the off-car drivebrain.
+             * Commands with a seq that is not newer than the last one are dropped,
+             * unless the last one has timed out (e.g. the sender restarted).
+             *
+             * @param msg the received remote command
+             */
+            void set_remote_command(const hytech_msgs::RemoteDriveCommand& msg);
+
+            /**
+             * Returns the latest remote command.
+             *
+             * @return the remote command, and whether it is recent enough to act on
+             */
+            std::pair<RemoteCommand, bool> remote_command();
+
         private:
 
             template <size_t index, typename inverter_dynamics_message>
@@ -436,6 +460,9 @@ namespace core {
 
             TeleopCommand _teleop_command = { };
             std::mutex _teleop_mutex;
+
+            RemoteCommand _remote_command = { };
+            std::mutex _remote_mutex;
             
             /* Private constructor called by the init method */
             StateTracker() {}; 

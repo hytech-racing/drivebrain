@@ -504,7 +504,7 @@ namespace comms
                               "Motor set to neutral until restart.");
             }
 
-            const auto vehicle_state = core::StateTracker::instance().get_latest_state_and_validity().first;
+            const auto vehicle_state = core::StateTracker::instance().vehicle_state().first;
             const float column_deg = vehicle_state.steering_column_angle_deg;
             const bool is_steering_fresh = vehicle_state.updated_steering_estimator &&
                                            steady_clock::now() - vehicle_state.last_steering_recv_time < steering_timeout;

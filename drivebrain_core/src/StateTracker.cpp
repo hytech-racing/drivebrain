@@ -159,6 +159,34 @@ std::pair<core::TeleopCommand, bool> StateTracker::teleop_command() {
     return {current_command, is_valid};
 }
 
+static constexpr std::chrono::milliseconds REMOTE_TIMEOUT(100);
+
+void StateTracker::set_remote_command(const hytech_msgs::RemoteDriveCommand& msg) {
+    auto now = std::chrono::steady_clock::now();
+    std::unique_lock lk(_remote_mutex);
+
+    bool timed_out = (now - _remote_command.recv_time) >= REMOTE_TIMEOUT;
+    if (!timed_out && msg.seq() <= _remote_command.msg.seq()) {
+        return;
+    }
+
+    _remote_command.msg = msg;
+    _remote_command.recv_time = now;
+}
+
+std::pair<core::RemoteCommand, bool> StateTracker::remote_command() {
+    RemoteCommand current_command;
+    {
+        std::unique_lock lk(_remote_mutex);
+        current_command = _remote_command;
+    }
+
+    bool is_valid = current_command.recv_time.time_since_epoch().count() > 0 &&
+                    (std::chrono::steady_clock::now() - current_command.recv_time) < REMOTE_TIMEOUT;
+
+    return {current_command, is_valid};
+}
+
 /****************************************************************
  * Private class methods
  ****************************************************************/
