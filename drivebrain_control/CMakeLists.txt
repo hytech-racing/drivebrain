@@ -10,12 +10,17 @@ find_package(dbcppp REQUIRED)
 add_library(drivebrain_control
     src/LoadCellTorqueController.cpp
     src/SimplePowerLimiter.cpp
+    src/PurePursuitController.cpp
 )
 
-target_include_directories(drivebrain_control PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_include_directories(drivebrain_control PUBLIC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/driverless/include"
+)
 
 target_link_libraries(drivebrain_control PUBLIC 
     drivebrain_core
+    drivebrain_estimation
     spdlog::spdlog
     nlohmann_json::nlohmann_json
     boost::boost

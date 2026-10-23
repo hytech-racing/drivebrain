@@ -28,6 +28,9 @@ class SteeringEstimator {
 
         double get_column_angle_degs();
 
+        // Convert a front-wheel steering angle in radians to a column target in degrees.
+        double steering_angle_rads_to_column_angle_degs(double steering_angle_rads) const;
+
     private: 
 
         mutable std::mutex _steering_mutex;
@@ -38,6 +41,11 @@ class SteeringEstimator {
 
         InterpolatingTable steer_analog_to_degs{{
             {2960.0, -20.86}, {2059.0, 0.0}, {1164.0, 20.11}
+        }};
+
+        // Inverse of the analog-to-wheel-angle calibration for steering targets.
+        InterpolatingTable steer_degs_to_analog{{
+            {-20.86, 2960.0}, {0.0, 2059.0}, {20.11, 1164.0}
         }};
 
         // Constants for conversion form steering analog -> steering column pos

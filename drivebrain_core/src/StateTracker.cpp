@@ -1,7 +1,9 @@
 #include <StateTracker.hpp>
 #include <Telemetry.hpp>
 #include <foxglove/PointCloud.pb.h>
+#include <foxglove/Pose.pb.h>
 #include <foxglove/websocket/parameter.hpp>
+#include <mutex>
 
 using namespace core; 
 
@@ -86,6 +88,33 @@ void StateTracker::handle_receive_protobuf_message(std::shared_ptr<google::proto
         }
     } else if (msg->GetDescriptor() == foxglove::PointCloud::descriptor()) {
         // UPDATE driverless vehicle state
+    } else if (msg->GetDescriptor() == hytech_msgs::pose::descriptor()) {
+        auto in_msg = std::static_pointer_cast<hytech_msgs::pose>(msg);
+        {
+            std::unique_lock lk(_state_mutex);
+            _vehicle_state.vehicle_position_map_frame.x = in_msg->position().x();
+            _vehicle_state.vehicle_position_map_frame.y = in_msg->position().y();
+
+            const auto orientation = in_msg->orientation();
+            
+            _vehicle_state.vehicle_orientation.Qw = orientation.w();
+            _vehicle_state.vehicle_orientation.Qx = orientation.x();
+            _vehicle_state.vehicle_orientation.Qy = orientation.y();
+            _vehicle_state.vehicle_orientation.Qz = orientation.z();
+
+            const auto Qx = orientation.x();
+            const auto Qy = orientation.y();
+            const auto Qz = orientation.z();
+            const auto Qw = orientation.w();
+
+            const float heading = std::atan2(
+                2.0 * (Qz * Qw + Qx * Qy),
+                -1.0 + 2.0 * (Qw * Qw + Qx * Qx)
+            );
+            _vehicle_state.vehicle_heading_map_frame_unit_vector = {
+                std::cos(heading), std::sin(heading)
+            };
+        }
     } else {
         _receive_low_level_state(msg);
     }
@@ -129,7 +158,7 @@ core::DriverlessState StateTracker::dv_state() {
     return current_state;
 }
 
-void StateTracker::set_dv_path(std::shared_ptr<const std::vector<xyz_vec<float>>> path) {
+void StateTracker::set_dv_path(std::shared_ptr<const std::vector<xy_vec<float>>> path) {
     std::unique_lock lk(_dv_state_mutex);
     _dv_state.path = std::move(path);
 }
@@ -157,6 +186,24 @@ std::pair<core::TeleopCommand, bool> StateTracker::teleop_command() {
                     (std::chrono::steady_clock::now() - current_command.recv_time) < TELEOP_TIMEOUT;
 
     return {current_command, is_valid};
+}
+
+void StateTracker::set_vehicle_sim_pose(std::shared_ptr<const hytech_msgs::pose> vehicle_pose) {
+    std::unique_lock lk(_vehicle_sim_pos_mutex);
+    _vehicle_sim_position.vehicle_x = vehicle_pose -> position().x();
+    _vehicle_sim_position.vehicle_y = vehicle_pose -> position().y();
+    _vehicle_sim_position.vehicle_z = vehicle_pose -> position().z();
+    _vehicle_sim_position.orientation_w = vehicle_pose -> orientation().w();
+    _vehicle_sim_position.orientation_x = vehicle_pose -> orientation().x();
+    _vehicle_sim_position.orientation_y = vehicle_pose -> orientation().y();
+    _vehicle_sim_position.orientation_z = vehicle_pose -> orientation().z();
+}
+
+core::VehicleSimPosition StateTracker::vehicle_sim_pos() {
+    VehicleSimPosition current_position;
+    std::unique_lock lk(_vehicle_sim_pos_mutex);
+    current_position = _vehicle_sim_position;
+    return current_position;
 }
 
 /****************************************************************

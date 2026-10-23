@@ -8,7 +8,6 @@
 #include "Telemetry.hpp"
 #include "ControllerManager.hpp"
 #include "DrivebrainControllerInterface.hpp"
-#include "PathPlanner.hpp"
 #include <StateTracker.hpp>
 #include <atomic>
 #include <chrono>
@@ -19,6 +18,15 @@
 #include <filesystem>
 #include <stdexcept>
 
+#include "ETHRecvComms.hpp"
+#include "FoxgloveServer.hpp"
+#include "MCAPLogger.hpp"
+#include "Telemetry.hpp"
+#include "ControllerManager.hpp"
+#include "DrivebrainControllerInterface.hpp"
+
+#include "dv_msgs.pb.h"
+#include "hytech_msgs.pb.h"
 
 std::atomic<bool> running{true};
 
@@ -80,6 +88,7 @@ void DrivebrainApp::run() {
 #if HOOTL_ENABLED
   comms::SimComms::create();
   comms::SimComms::instance().start();
+  spdlog::info("Initialized simcomms instance");
 #endif
 
   bool vn_init_not_successful;

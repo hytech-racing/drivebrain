@@ -2,10 +2,14 @@
 
 #include <atomic>
 #include <chrono>
+#include <mutex>
 #include <thread>
+#include <unordered_map>
 
+#include <FoxgloveServer.hpp>
 #include <StateTracker.hpp>
 #include <GraphSLAM.hpp>
+#include <PurePursuitController.h>
 #include <LidarFilter.hpp>
 
 namespace core {
@@ -53,6 +57,7 @@ private:
   std::atomic<bool> _running{false};
 
   slam::GraphSlam _slam;
+  control::driverless::PurePursuitController _lateral_controller{};
 
   // Rate of OS1 LiDAR
   static constexpr std::chrono::milliseconds _period{100}; 

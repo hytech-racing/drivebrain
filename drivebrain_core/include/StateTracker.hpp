@@ -77,7 +77,65 @@ namespace core {
         T x;
         T y;
         T z;
+
+        xyz_vec operator+(const xyz_vec& other) const {
+            return {x + other.x, y + other.y};
+        }
+
+        xyz_vec operator-(const xyz_vec& other) const {
+            return {x - other.x, y - other.y};
+        }
+
+        T operator*(const xyz_vec& other) const {
+            return x * other.x + y * other.y;
+        }
+
+        xyz_vec operator*(const float scalar) const {
+            return {x * scalar, y * scalar};
+        }
+
+        bool operator==(const xyz_vec& other) const {
+            return x == other.x && y == other.y;
+        }
+
+        float length() const {
+            return std::sqrt(x * x + y * y);
+        }
     };
+
+    /**
+     * @struct Represents an xy vector (2 elements of any type)
+     */
+    template <typename T>
+    struct xy_vec {
+        T x;
+        T y;
+
+        xy_vec operator+(const xy_vec& other) const {
+            return {x + other.x, y + other.y};
+        }
+
+        xy_vec operator-(const xy_vec& other) const {
+            return {x - other.x, y - other.y};
+        }
+
+        T operator*(const xy_vec& other) const {
+            return x * other.x + y * other.y;
+        }
+
+        xy_vec operator*(const float scalar) const {
+            return {x * scalar, y * scalar};
+        }
+
+        bool operator==(const xy_vec& other) const {
+            return x == other.x && y == other.y;
+        }
+
+        float length() const {
+            return std::sqrt(x * x + y * y);
+        }
+    };
+
 
     /**
      * @struct Represents a ypr vector (3 elements of any type that represent angle)
@@ -139,8 +197,8 @@ namespace core {
      * @struct Represents the outputs of the tire model 
      */
     struct TireDynamics {
-        veh_vec<xyz_vec<float>> tire_forces_n;
-        veh_vec<xyz_vec<float>> tire_moments_nm;
+        veh_vec<xy_vec<float>> tire_forces_n;
+        veh_vec<xy_vec<float>> tire_moments_nm;
         veh_vec<float> accel_saturation_nm;
         veh_vec<float> brake_saturation_nm;
         float v_y_lm;
@@ -220,6 +278,13 @@ namespace core {
         float pack_voltage;
     };
 
+    struct Orientation {
+        float Qw;
+        float Qx; 
+        float Qy;
+        float Qz;
+    };
+
     /**
      * @struct Contains a wealth of data
      * representing the entire internal 
@@ -251,6 +316,10 @@ namespace core {
         float old_energy_meter_kw;
         DrivetrainData dt_data;
         AccumulatorData acc_data;
+        Orientation vehicle_orientation;
+
+        xy_vec<float> vehicle_position_map_frame;
+        xy_vec<float> vehicle_heading_map_frame_unit_vector;
     };
 
     enum class ControllerManagerStatus
@@ -311,11 +380,24 @@ namespace core {
         std::shared_ptr<const foxglove::PointCloud> lidar_cloud;
         bool lidar_is_valid;
         std::shared_ptr<const dv_msgs::Cones> cone_observations;
-        std::shared_ptr<const std::vector<xyz_vec<float>>> path;
+        std::shared_ptr<const std::vector<xy_vec<float>>> path;
 
         /* Returns the latest LiDAR point cloud in a clean struct */
         PointView points() const { return lidar_cloud ? core::points(*lidar_cloud) : PointView{}; }
         uint64_t num_points() const { return lidar_cloud ? core::num_points(*lidar_cloud) : 0; }
+    };
+
+
+    struct VehicleSimPosition {
+        float vehicle_x;
+        float vehicle_y;
+        float vehicle_z = 0;
+
+        float orientation_w;
+        float orientation_x;
+        float orientation_y;
+        float orientation_z;
+
     };
 
 
@@ -383,7 +465,7 @@ namespace core {
              *
              * @param path the planned path, map frame
              */
-            void set_dv_path(std::shared_ptr<const std::vector<xyz_vec<float>>> path);
+            void set_dv_path(std::shared_ptr<const std::vector<xy_vec<float>>> path);
 
             /**
              * Sets the latest cone observations produced by perception.
@@ -405,6 +487,15 @@ namespace core {
              * @return the teleop command, and whether it is recent enough to act on
              */
             std::pair<TeleopCommand, bool> teleop_command();
+
+            /**
+             * Sets the latest vehicle pose from the sim 
+             *
+             * @param vehicle_pose the current position and orientation of the vehicle that the sim tracks
+             */
+            void set_vehicle_sim_pose(std::shared_ptr<const hytech_msgs::pose> vehicle_pose);
+
+            VehicleSimPosition vehicle_sim_pos();
 
         private:
 
@@ -433,6 +524,9 @@ namespace core {
 
             TeleopCommand _teleop_command = { };
             std::mutex _teleop_mutex;
+
+            VehicleSimPosition _vehicle_sim_position = { };
+            std::mutex _vehicle_sim_pos_mutex;
             
             /* Private constructor called by the init method */
             StateTracker() {}; 
@@ -440,6 +534,8 @@ namespace core {
             /* Singleton move semantics */
             StateTracker(const StateTracker&) = delete; 
             StateTracker& operator=(const StateTracker&) = delete;
+
+            
 
             /* Singleton instance */
             inline static std::atomic<StateTracker*> _s_instance; 

@@ -17,6 +17,8 @@ services:
     command: sleep infinity
     restart: "no"
     ipc: "host"
+    ports:
+      - "5555:5555"
 
 volumes:
   conan-cache:

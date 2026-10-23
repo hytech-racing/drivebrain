@@ -25,6 +25,12 @@
         "dt_rate_hz": 1000.0,
         "apply_vectoring_in_regen": true
     },
+    "PurePursuitController": {
+        "lookahead_distance": 4.0,
+        "wheelbase": 1.53,
+        "lookahead_base": 4.0,
+        "lookahead_gain_s": 0.3
+    },
     "vn_driver": {
         "device_name": "/dev/ttyUSB0",
         "baud_rate": 921600, 

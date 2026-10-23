@@ -22,3 +22,9 @@ double SteeringEstimator::get_column_angle_degs() {
     std::unique_lock lk(_steering_mutex);
     return _column_angle_degs;
 }
+
+double SteeringEstimator::steering_angle_rads_to_column_angle_degs(double steering_angle_rads) const {
+    const double steering_angle_degs = steering_angle_rads * 180.0 / M_PI;
+    const double analog = steer_degs_to_analog.interpolate(steering_angle_degs);
+    return (analog - COLUMN_OFFSET) * COLUMN_SCALING;
+}

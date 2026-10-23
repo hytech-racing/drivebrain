@@ -22,6 +22,17 @@ find_package(ht_proto CONFIG REQUIRED)
 find_package(ht_can CONFIG REQUIRED)
 
 #################################
+# Upstreams needed by the custom libs below
+#################################
+FetchContent_Declare(
+    delaunator
+    GIT_REPOSITORY https://github.com/delfrrr/delaunator-cpp.git
+    GIT_TAG v0.4.0
+    SOURCE_SUBDIR  none
+)
+FetchContent_MakeAvailable(delaunator)
+
+#################################
 # Custom libs
 #################################
 add_subdirectory(drivebrain_core)
@@ -64,6 +75,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(vn_driver_lib)
 
 find_package(OusterSDK REQUIRED)
+
 
 #################################
 # Linking to main app
