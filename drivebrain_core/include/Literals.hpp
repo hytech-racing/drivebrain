@@ -5,8 +5,6 @@ using speed_m_s = float;
 using torque_nm = float;
 using velocity_rpm = float;
 
-//copied over from old literals.hpp
-
 namespace constants
 {
     constexpr long double GEARBOX_RATIO               = 11.86;
