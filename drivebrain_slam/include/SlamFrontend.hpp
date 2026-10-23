@@ -65,11 +65,9 @@ struct ObservationFrame {
 };
 
 /**
- * Data association for landmark SLAM. Each frame of cone detections is matched, in priority
- * order, against the optimized map, then against candidates the backend holds but has not
- * solved into a map yet, then against unconfirmed candidates. Unconfirmed candidates
- * accumulate detection confidence as the car moves and are promoted to landmarks at a
- * threshold; a candidate is dropped once the backend's map contains it.
+ * Data association for landmark SLAM. A cone is an unconfirmed candidate (frontend only, gathering
+ * evidence), then a candidate in the graph (promoted, not yet in a solved map), then a map landmark.
+ * Detections are matched against those three in that order of trust; leftovers start new candidates.
  */
 class SlamFrontend {
 public:
@@ -93,7 +91,7 @@ public:
     bool set_map(const MapState& state);
 
     /**
-     * Optimized landmarks plus promoted candidates the backend has not solved yet,
+     * Optimized landmarks plus the candidates in the graph the backend has not solved yet,
      * in map frame, sorted by id, with the landmark fields of each cone set.
      *
      * @return nullptr until the first map is accepted
@@ -125,8 +123,7 @@ private:
         double color_confidence;
     };
 
-    // Unconfirmed: still accumulating evidence. Promoted: sent to the backend, not yet in a solved map
-    enum class CandidateState { Unconfirmed, Promoted };
+    enum class CandidateState { Unconfirmed, InGraph };
 
     // A cone seen but not yet in the optimized map
     struct Candidate {
@@ -142,26 +139,29 @@ private:
         // Only used before promotion; afterwards evidence is keyed by landmark id
         ColorEvidence color_evidence;
 
-        CandidateState state() const { return landmark_id ? CandidateState::Promoted : CandidateState::Unconfirmed; }
+        CandidateState state() const { return landmark_id ? CandidateState::InGraph : CandidateState::Unconfirmed; }
     };
 
-    // Chi-squared gate on the Mahalanobis distance to each map landmark; emits InMap observations
+    // Mahalanobis gate against the solved map; a match emits an InMap observation
     void _match_mapped_landmarks(const std::vector<Detection>& detections, std::vector<bool>& used,
                                  ObservationFrame& out);
-
-    // Euclidean gate to candidates in the given state. Promoted candidates emit InGraph observations;
-    // unconfirmed ones gain evidence and emit a New observation when promoted
-    void _match_candidates(CandidateState state, const std::vector<Detection>& detections, std::vector<bool>& used,
-                           ObservationFrame& out);
-
-    // Every unmatched detection starts an unconfirmed candidate
+    // Euclidean gate against candidates already in the backend graph; a match emits an InGraph observation
+    void _match_graph_landmarks(const std::vector<Detection>& detections, std::vector<bool>& used,
+                                ObservationFrame& out);
+    // Euclidean gate against unconfirmed candidates; a match adds evidence and emits New once promoted
+    void _match_unconfirmed(const std::vector<Detection>& detections, std::vector<bool>& used, ObservationFrame& out);
+    // Each unmatched detection starts an unconfirmed candidate
     void _spawn_candidates(const std::vector<Detection>& detections, const std::vector<bool>& used,
-                           const ConeFrame& frame);
-
+                           const ObservationFrame& out);
     // Drops candidates unseen for longer than their state's max age
     void _prune_candidates(std::uint64_t now_ns);
 
-    // Chi-squared quantile for the map association gate, 2 degrees of freedom. Grows with the solved
+    // Euclidean-gated matching to the candidates in one state; returns (detection, candidate) index pairs
+    std::vector<std::pair<std::size_t, std::size_t>> _match_candidates(CandidateState state,
+                                                                       const std::vector<Detection>& detections,
+                                                                       std::vector<bool>& used, std::uint64_t now_ns);
+
+    // Chi-squared value for the map association gate. Grows with the solved
     // pose's covariance along a lap without map matches and closes again at the first one
     double _map_gate_chi2{};
     // Detection position noise in the innovation covariance

@@ -19,12 +19,12 @@ struct Pair {
 };
 
 /**
- * Greedy one-to-one matching of unused detections to targets, closest pairs first
+ * Greedy one-to-one matching of unused detections to targets: closest pair first, each side matched at most once
  *
  * @param distance distance(d, t) between detection d (row) and target t (column), compared against the gate
  * @return the (detection, target) pairs matched; matched detections are marked used
  */
-std::vector<std::pair<std::size_t, std::size_t>> greedy_nearest_neighbor(const Eigen::MatrixXd& distance,
+std::vector<std::pair<std::size_t, std::size_t>> nearest_neighbor(const Eigen::MatrixXd& distance,
                                                                          std::vector<bool>& used, const double gate) {
     std::vector<Pair> pairs;
     for (std::size_t d = 0; d < static_cast<std::size_t>(distance.rows()); ++d) {
@@ -56,7 +56,8 @@ std::vector<std::pair<std::size_t, std::size_t>> greedy_nearest_neighbor(const E
 }
 
 /**
- * Squared Mahalanobis distance of a detection from a map landmark in the odom frame
+ * Squared Mahalanobis distance between a detection's position and a map landmark's position, both in odom,
+ * under the innovation covariance: the car's pose covariance projected onto the landmark plus detection noise
  */
 double mahalanobis_squared(const Eigen::Vector2d& detection_odom, const Eigen::Vector2d& landmark_odom,
                            const Eigen::Vector2d& car_odom, const Eigen::Matrix3d& pose_covariance_odom,
@@ -71,7 +72,7 @@ double mahalanobis_squared(const Eigen::Vector2d& detection_odom, const Eigen::V
 
 // A candidate unseen for this long is dropped
 constexpr std::uint64_t UNCONFIRMED_MAX_AGE_NS = 3'000'000'000;
-constexpr std::uint64_t PROMOTED_MAX_AGE_NS = 1'000'000'000;
+constexpr std::uint64_t IN_GRAPH_MAX_AGE_NS = 1'000'000'000;
 
 }  // namespace
 
@@ -115,12 +116,12 @@ std::optional<ObservationFrame> SlamFrontend::process_frame(const ConeFrame& fra
 
     ObservationFrame out{frame.timestamp_ns, frame.pose_odom_from_base, {}};
 
-    // Priority order: the optimized map, then candidates the backend already holds, then unconfirmed ones
+    // Most trusted first; a detection is matched at most once
     _match_mapped_landmarks(detections, used, out);
-    _match_candidates(CandidateState::Promoted, detections, used, out);
-    _match_candidates(CandidateState::Unconfirmed, detections, used, out);
-    _spawn_candidates(detections, used, frame);
-    _prune_candidates(frame.timestamp_ns);
+    _match_graph_landmarks(detections, used, out);
+    _match_unconfirmed(detections, used, out);
+    _spawn_candidates(detections, used, out);
+    _prune_candidates(out.timestamp_ns);
 
     _debug.set_landmark_observations(out.observations.size());
     for (const LandmarkObservation& observation : out.observations) {
@@ -227,7 +228,7 @@ void SlamFrontend::_match_mapped_landmarks(const std::vector<Detection>& detecti
                                                  pose_covariance_odom, detection_covariance);
         }
     }
-    for (const auto& [d, l] : greedy_nearest_neighbor(distance, used, _map_gate_chi2)) {
+    for (const auto& [d, l] : nearest_neighbor(distance, used, _map_gate_chi2)) {
         const std::uint64_t id = _map_state->landmarks[l].landmark_id;
         out.observations.push_back({id, detections[d].position_base_m, LandmarkStatus::InMap});
         _color_by_landmark_id[id].add(detections[d].color, detections[d].color_confidence);
@@ -235,44 +236,29 @@ void SlamFrontend::_match_mapped_landmarks(const std::vector<Detection>& detecti
     }
 }
 
-void SlamFrontend::_match_candidates(const CandidateState state, const std::vector<Detection>& detections,
-                                     std::vector<bool>& used, ObservationFrame& out) {
+void SlamFrontend::_match_graph_landmarks(const std::vector<Detection>& detections, std::vector<bool>& used,
+                                          ObservationFrame& out) {
     dv_msgs::SlamFrontendDiagnostics& diag = *_debug.mutable_diagnostics();
-    std::vector<std::size_t> candidate_indices;
-    std::vector<Eigen::Vector2d> targets_odom;
-    for (std::size_t i = 0; i < _candidates.size(); ++i) {
-        if (_candidates[i].state() == state) {
-            candidate_indices.push_back(i);
-            targets_odom.push_back(_candidates[i].position_odom_m);
-        }
-    }
-
-    Eigen::MatrixXd distance(detections.size(), targets_odom.size());
-    for (std::size_t d = 0; d < detections.size(); ++d) {
-        for (std::size_t t = 0; t < targets_odom.size(); ++t) {
-            distance(d, t) = (detections[d].position_odom_m - targets_odom[t]).norm();
-        }
-    }
-    for (const auto& [d, t] : greedy_nearest_neighbor(distance, used, _candidate_gate_m)) {
+    for (const auto& [d, c] : _match_candidates(CandidateState::InGraph, detections, used, out.timestamp_ns)) {
         const Detection& detection = detections[d];
-        Candidate& candidate = _candidates[candidate_indices[t]];
+        const std::uint64_t id = *_candidates[c].landmark_id;
+        _color_by_landmark_id[id].add(detection.color, detection.color_confidence);
+        out.observations.push_back({id, detection.position_base_m, LandmarkStatus::InGraph});
+        diag.set_pending_associations(diag.pending_associations() + 1);
+    }
+}
 
-        const double n = static_cast<double>(candidate.observation_count);
-        candidate.position_odom_m = (n * candidate.position_odom_m + detection.position_odom_m) / (n + 1.0);
-        candidate.observation_count++;
-        candidate.last_seen_ns = out.timestamp_ns;
-
-        if (state == CandidateState::Promoted) {
-            _color_by_landmark_id[*candidate.landmark_id].add(detection.color, detection.color_confidence);
-            out.observations.push_back(
-                {*candidate.landmark_id, detection.position_base_m, LandmarkStatus::InGraph});
-            diag.set_pending_associations(diag.pending_associations() + 1);
-            continue;
-        }
-
+void SlamFrontend::_match_unconfirmed(const std::vector<Detection>& detections, std::vector<bool>& used,
+                                      ObservationFrame& out) {
+    dv_msgs::SlamFrontendDiagnostics& diag = *_debug.mutable_diagnostics();
+    const Eigen::Vector2d car_odom_m = out.pose_odom_from_base.translation();
+    for (const auto& [d, c] : _match_candidates(CandidateState::Unconfirmed, detections, used, out.timestamp_ns)) {
+        const Detection& detection = detections[d];
+        Candidate& candidate = _candidates[c];
         diag.set_tentative_associations(diag.tentative_associations() + 1);
         candidate.color_evidence.add(detection.color, detection.color_confidence);
-        const Eigen::Vector2d car_odom_m = out.pose_odom_from_base.translation();
+
+        // evidence only counts from a new vantage point
         if ((car_odom_m - candidate.evidence_position_odom_m).norm() >= _minimum_evidence_baseline_m) {
             candidate.evidence += detection.confidence;
             candidate.evidence_position_odom_m = car_odom_m;
@@ -286,15 +272,42 @@ void SlamFrontend::_match_candidates(const CandidateState state, const std::vect
     }
 }
 
+std::vector<std::pair<std::size_t, std::size_t>> SlamFrontend::_match_candidates(
+    const CandidateState state, const std::vector<Detection>& detections, std::vector<bool>& used,
+    const std::uint64_t now_ns) {
+    std::vector<std::size_t> candidate_indices;
+    for (std::size_t i = 0; i < _candidates.size(); ++i) {
+        if (_candidates[i].state() == state) candidate_indices.push_back(i);
+    }
+
+    Eigen::MatrixXd distance(detections.size(), candidate_indices.size());
+    for (std::size_t d = 0; d < detections.size(); ++d) {
+        for (std::size_t t = 0; t < candidate_indices.size(); ++t) {
+            distance(d, t) = (detections[d].position_odom_m - _candidates[candidate_indices[t]].position_odom_m).norm();
+        }
+    }
+
+    std::vector<std::pair<std::size_t, std::size_t>> matches;
+    for (const auto& [d, t] : nearest_neighbor(distance, used, _candidate_gate_m)) {
+        Candidate& candidate = _candidates[candidate_indices[t]];
+        const double n = static_cast<double>(candidate.observation_count);
+        candidate.position_odom_m = (n * candidate.position_odom_m + detections[d].position_odom_m) / (n + 1.0);
+        candidate.observation_count++;
+        candidate.last_seen_ns = now_ns;
+        matches.emplace_back(d, candidate_indices[t]);
+    }
+    return matches;
+}
+
 void SlamFrontend::_spawn_candidates(const std::vector<Detection>& detections, const std::vector<bool>& used,
-                                     const ConeFrame& frame) {
+                                     const ObservationFrame& out) {
     dv_msgs::SlamFrontendDiagnostics& diag = *_debug.mutable_diagnostics();
     for (std::size_t d = 0; d < detections.size(); ++d) {
         if (used[d]) {
             continue;
         }
         Candidate candidate{std::nullopt, detections[d].position_odom_m, 1, detections[d].confidence,
-                            frame.pose_odom_from_base.translation(), frame.timestamp_ns, {}};
+                            out.pose_odom_from_base.translation(), out.timestamp_ns, {}};
         candidate.color_evidence.add(detections[d].color, detections[d].color_confidence);
         _candidates.push_back(candidate);
         diag.set_tentative_tracks_created(diag.tentative_tracks_created() + 1);
@@ -305,8 +318,8 @@ void SlamFrontend::_prune_candidates(const std::uint64_t now_ns) {
     const std::size_t before = _candidates.size();
     _candidates.erase(std::remove_if(_candidates.begin(), _candidates.end(),
                                      [&](const Candidate& candidate) {
-                                         const std::uint64_t max_age_ns = candidate.state() == CandidateState::Promoted
-                                                                              ? PROMOTED_MAX_AGE_NS
+                                         const std::uint64_t max_age_ns = candidate.state() == CandidateState::InGraph
+                                                                              ? IN_GRAPH_MAX_AGE_NS
                                                                               : UNCONFIRMED_MAX_AGE_NS;
                                          return now_ns - candidate.last_seen_ns > max_age_ns;
                                      }),
