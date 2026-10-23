@@ -46,28 +46,30 @@ struct MapState {
     std::vector<MapLandmark> landmarks;
 };
 
-enum class LandmarkAssociation { ExistingMapLandmark, PendingLandmark, NewLandmark };
+/* Where the observed landmark lives: the solved map, only the backend's graph so far, or created by this observation */
+enum class LandmarkStatus { InMap, InGraph, New };
 
 struct LandmarkObservation {
     std::uint64_t landmark_id{};
     Eigen::Vector2d measurement_base_m = Eigen::Vector2d::Zero();
-    LandmarkAssociation association{};
+    LandmarkStatus status{};
 };
 
 /**
  * Frontend output and backend input: associated observations at one odometry pose
  */
-struct LandmarkFrame {
+struct ObservationFrame {
     std::uint64_t timestamp_ns{};
     Eigen::Isometry2d pose_odom_from_base = Eigen::Isometry2d::Identity();
     std::vector<LandmarkObservation> observations;
 };
 
 /**
- * Associates cone detections with the optimized map and with local tracks.
- * A track becomes a landmark once its observations have accumulated enough
- * confidence and is handed to the backend; it is dropped locally once the
- * backend's map contains it.
+ * Data association for landmark SLAM. Each frame of cone detections is matched, in priority
+ * order, against the optimized map, then against candidates the backend holds but has not
+ * solved into a map yet, then against unconfirmed candidates. Unconfirmed candidates
+ * accumulate detection confidence as the car moves and are promoted to landmarks at a
+ * threshold; a candidate is dropped once the backend's map contains it.
  */
 class SlamFrontend {
 public:
@@ -80,7 +82,7 @@ public:
      * @param frame detections in base_link plus the odometry pose they were taken at
      * @return observations for the backend, or nullopt if the frame was rejected
      */
-    std::optional<LandmarkFrame> process_frame(const ConeFrame& frame);
+    std::optional<ObservationFrame> process_frame(const ConeFrame& frame);
 
     /**
      * Replaces the optimized map used for association.
@@ -88,15 +90,15 @@ public:
      * @param state the latest backend map
      * @return false if the map was rejected and nothing changed
      */
-    bool update_map_state(const MapState& state);
+    bool set_map(const MapState& state);
 
     /**
-     * Optimized landmarks plus landmarks the backend has not acknowledged yet,
+     * Optimized landmarks plus promoted candidates the backend has not solved yet,
      * in map frame, sorted by id, with the landmark fields of each cone set.
      *
-     * @return nullptr until the first map state is accepted
+     * @return nullptr until the first map is accepted
      */
-    std::shared_ptr<dv_msgs::Cones> planner_map(std::uint64_t timestamp_ns) const;
+    std::shared_ptr<dv_msgs::Cones> cone_map(std::uint64_t timestamp_ns) const;
 
     /* Diagnostics of the most recent process_frame() */
     const dv_msgs::SlamFrontendDebug& debug() const { return _debug; }
@@ -123,8 +125,12 @@ private:
         double color_confidence;
     };
 
-    struct Track {
-        // Set once the track is promoted to a landmark
+    // Unconfirmed: still accumulating evidence. Promoted: sent to the backend, not yet in a solved map
+    enum class CandidateState { Unconfirmed, Promoted };
+
+    // A cone seen but not yet in the optimized map
+    struct Candidate {
+        // Set on promotion
         std::optional<std::uint64_t> landmark_id;
         Eigen::Vector2d position_odom_m;
         std::size_t observation_count{};
@@ -135,21 +141,33 @@ private:
         std::uint64_t last_seen_ns{};
         // Only used before promotion; afterwards evidence is keyed by landmark id
         ColorEvidence color_evidence;
+
+        CandidateState state() const { return landmark_id ? CandidateState::Promoted : CandidateState::Unconfirmed; }
     };
 
-    // Associates unused detections with pending or tentative tracks and emits
-    // observations for pending tracks and newly promoted ones
-    void associate_tracks(bool pending, const std::vector<Detection>& detections,
-                          std::vector<bool>& used, LandmarkFrame& out);
+    // Chi-squared gate on the Mahalanobis distance to each map landmark; emits InMap observations
+    void _match_mapped_landmarks(const std::vector<Detection>& detections, std::vector<bool>& used,
+                                 ObservationFrame& out);
 
-    // Chi-squared gate on the Mahalanobis distance between a detection and a map landmark, with
-    // the solved pose's covariance in the innovation, so the gate opens along a lap without map
-    // matches and closes again at the first one
-    double _map_association_chi2{};
+    // Euclidean gate to candidates in the given state. Promoted candidates emit InGraph observations;
+    // unconfirmed ones gain evidence and emit a New observation when promoted
+    void _match_candidates(CandidateState state, const std::vector<Detection>& detections, std::vector<bool>& used,
+                           ObservationFrame& out);
+
+    // Every unmatched detection starts an unconfirmed candidate
+    void _spawn_candidates(const std::vector<Detection>& detections, const std::vector<bool>& used,
+                           const ConeFrame& frame);
+
+    // Drops candidates unseen for longer than their state's max age
+    void _prune_candidates(std::uint64_t now_ns);
+
+    // Chi-squared quantile for the map association gate, 2 degrees of freedom. Grows with the solved
+    // pose's covariance along a lap without map matches and closes again at the first one
+    double _map_gate_chi2{};
     // Detection position noise in the innovation covariance
     double _measurement_std_m{};
-    double _local_track_association_gate_m{};
-    // Summed detection confidence at which a tentative track becomes a landmark
+    double _candidate_gate_m{};
+    // Summed detection confidence at which an unconfirmed candidate becomes a landmark
     double _minimum_evidence_to_confirm{};
     // An observation only adds evidence once the car has moved this far since the last one that
     // did, so a parked car cannot confirm a landmark by staring at it
@@ -157,7 +175,7 @@ private:
     double _minimum_detection_confidence{};
 
     std::optional<MapState> _map_state;
-    std::vector<Track> _tracks;
+    std::vector<Candidate> _candidates;
     std::unordered_map<std::uint64_t, ColorEvidence> _color_by_landmark_id;
     // 0 is the proto default for "no landmark", so ids start at 1
     std::uint64_t _next_landmark_id{1};

@@ -53,7 +53,7 @@ GraphSlam::GraphSlam()
     _bearing_range_noise = gtsam::noiseModel::Diagonal::Sigmas(gtsam::Vector2(bearing_std, range_std));
 }
 
-std::optional<MapState> GraphSlam::update(const LandmarkFrame& frame) {
+std::optional<MapState> GraphSlam::update(const ObservationFrame& frame) {
     _debug.set_timestamp_ns(frame.timestamp_ns);
     _debug.set_frame_index(_pose_count);
     _debug.set_core_failed(_failed);
@@ -105,7 +105,7 @@ std::optional<MapState> GraphSlam::update(const LandmarkFrame& frame) {
             }
 
             // A new landmark must not exist yet; any other association must reference one that does
-            const bool is_new = observation.association == LandmarkAssociation::NewLandmark;
+            const bool is_new = observation.status == LandmarkStatus::New;
             const bool known = _landmark_ids.count(observation.landmark_id) > 0;
             if (is_new == known) {
                 rejected.set_unconfirmed_landmark_id(rejected.unconfirmed_landmark_id() + 1);
@@ -201,10 +201,10 @@ std::shared_ptr<dv_msgs::Cones> Slam::update(const foxglove::PointCloud& cloud, 
             {p_base.head<2>(), perception::detection_confidence(range_m), dv_msgs::Cones::UNKNOWN, 0.0});
     }
 
-    const std::optional<LandmarkFrame> observations = frontend.process_frame(detections);
+    const std::optional<ObservationFrame> observations = frontend.process_frame(detections);
     if (observations) {
         if (const std::optional<MapState> solved = backend.update(*observations)) {
-            frontend.update_map_state(*solved);
+            frontend.set_map(*solved);
             map_state = *solved;
             core::publish_transform("map", "odom", scan_ns, core::geometry::to_pose3d(solved->pose_map_from_odom));
         }
@@ -212,14 +212,14 @@ std::shared_ptr<dv_msgs::Cones> Slam::update(const foxglove::PointCloud& cloud, 
     core::log(std::make_shared<dv_msgs::SlamFrontendDebug>(frontend.debug()), "slam/frontend_debug");
     core::log(std::make_shared<dv_msgs::IncrementalGraphSlamDebug>(backend.debug()), "slam/backend_debug");
 
-    const std::shared_ptr<dv_msgs::Cones> map = frontend.planner_map(scan_ns);
+    const std::shared_ptr<dv_msgs::Cones> map = frontend.cone_map(scan_ns);
     if (map && map_state) {
         render(scan_ns, observations, map);
     }
     return map;
 }
 
-void Slam::render(const std::uint64_t scan_ns, const std::optional<LandmarkFrame>& observations,
+void Slam::render(const std::uint64_t scan_ns, const std::optional<ObservationFrame>& observations,
                   const std::shared_ptr<dv_msgs::Cones>& map) {
     core::render_cones(map, "slam_landmarks");
 

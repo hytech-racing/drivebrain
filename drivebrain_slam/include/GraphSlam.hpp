@@ -33,7 +33,7 @@ public:
     GraphSlam();
 
     /**
-     * Adds a frame to the graph and re-optimizes. NewLandmark observations
+     * Adds a frame to the graph and re-optimizes. New observations
      * initialize a landmark; other observations must reference a known one.
      *
      * @param frame associated observations from the frontend
@@ -41,7 +41,7 @@ public:
      *         solved; nullopt in between, or after a failure (see failed()), after which
      *         every later call returns nullopt.
      */
-    std::optional<MapState> update(const LandmarkFrame& frame);
+    std::optional<MapState> update(const ObservationFrame& frame);
 
     bool failed() const { return _failed; }
 
@@ -98,7 +98,7 @@ struct Slam {
                                            const Eigen::Isometry3d& T_base_lidar);
 
     /* Draws the landmarks, this frame's factors and (once a second) the full pose graph */
-    void render(std::uint64_t scan_ns, const std::optional<LandmarkFrame>& observations,
+    void render(std::uint64_t scan_ns, const std::optional<ObservationFrame>& observations,
                 const std::shared_ptr<dv_msgs::Cones>& map);
 
     SlamFrontend frontend;
