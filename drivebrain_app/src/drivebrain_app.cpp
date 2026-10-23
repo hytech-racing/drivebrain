@@ -126,13 +126,18 @@ void DrivebrainApp::run() {
 #endif
 
   // Initialize controllers
-  const size_t num_controllers = 1;
+  const size_t num_controllers = 2;
     _mode1 = std::make_shared<control::LoadCellTorqueController>(); 
   if (!_mode1->init()) {
     spdlog::error("Failed to initialize mode 1");
   }
 
-  std::array<std::shared_ptr<control::Controller<core::ControllerOutput, core::VehicleState>>, num_controllers> controllers{_mode1};
+  _mode2 = std::make_shared<control::PurePursuitController>();
+  if (!_mode2->init()) {
+    spdlog::error("Failed to initialize mode 2");
+  }
+
+  std::array<std::shared_ptr<control::Controller<core::ControllerOutput, core::VehicleState>>, num_controllers> controllers{_mode1, _mode2};
   
   // Create controller manager instance
   ControllerManager<control::Controller<ControllerOutput, VehicleState>, num_controllers>::create(controllers);
@@ -266,14 +271,15 @@ void DrivebrainApp::_loop() {
     core::ControllerOutput out_struct;
     bool command_is_valid;
     if (_driving_mode == DrivingMode::DRIVERLESS) {
-      out_struct = _autonomy.command(state_and_validity.first);
+      auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, 2>::instance();
+      out_struct = controller_manager.step_active_controller(state_and_validity.first); // TODO fix this jank rn
       command_is_valid = _autonomy.is_valid();
     } else if (_driving_mode == DrivingMode::TELEOP) {
       auto teleop_and_validity = core::StateTracker::instance().teleop_command();
       out_struct = _teleop_command(teleop_and_validity.first);
       command_is_valid = teleop_and_validity.second;
     } else {
-      auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, 1>::instance();
+      auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, 2>::instance();
       out_struct = controller_manager.step_active_controller(state_and_validity.first);
       command_is_valid = state_and_validity.second;
     }

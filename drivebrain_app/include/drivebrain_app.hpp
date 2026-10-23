@@ -16,6 +16,7 @@
 
 #include "hytech_msgs.pb.h"
 #include <BlackflyComms.hpp>
+#include "PurePursuitController.hpp"
 
 enum class DrivingMode { DRIVERED, DRIVERLESS, TELEOP };
 
@@ -86,6 +87,7 @@ private:
 
   /* Controllers */
   std::shared_ptr<control::LoadCellTorqueController> _mode1;
+  std::shared_ptr<control::PurePursuitController> _mode2;
 
   /* Vectornav */
   std::unique_ptr<comms::VNDriver> _vn_driver;
@@ -105,7 +107,7 @@ private:
   core::Autonomy _autonomy;
 
 #if HOOTL_ENABLED
-  DrivingMode _driving_mode = DrivingMode::TELEOP;
+  DrivingMode _driving_mode = DrivingMode::DRIVERLESS; // TODO undo
 #else
   DrivingMode _driving_mode = DrivingMode::DRIVERLESS;
 #endif
