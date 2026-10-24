@@ -103,23 +103,30 @@ void DrivebrainApp::run() {
   // _aux_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("aux_can_device").value(), _dbc_path);
   spdlog::info("Initialized CAN drivers");
 
-  // TODO FIX HOW THIS IS AIDS IF A CAM IS NOT PLUGGED IN
 #if JETSON_ENABLED
-  // start every GigE camera aravis can find
-  constexpr unsigned int expected_cameras = 2;
-  unsigned int num_cameras = 0;
-  for (int attempt = 0; attempt < 15; ++attempt) {
-    arv_update_device_list();
-    num_cameras = arv_get_n_devices();
-    if (num_cameras >= expected_cameras) break;
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-  }
-  spdlog::info("Found {} cameras", num_cameras);
-  for (unsigned int i = 0; i < num_cameras; i++) {
-    auto camera = std::make_unique<comms::BlackflyComms>();
-    camera->start(arv_get_device_id(i), std::string("blackfly_") + arv_get_device_serial_nbr(i), "BayerRG8", 15.0);
-    _camera_drivers.push_back(std::move(camera));
-  }
+  _camera_init_thread = std::thread([this]() {
+    try {
+      // start every GigE camera aravis can find
+      constexpr unsigned int expected_cameras = 2;
+      unsigned int num_cameras = 0;
+      for (int attempt = 0; attempt < 15; ++attempt) {
+        arv_update_device_list();
+        num_cameras = arv_get_n_devices();
+        if (num_cameras >= expected_cameras) break;
+        spdlog::info("Waiting for cameras...");
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+      }
+      spdlog::info("Found {} cameras", num_cameras);
+      for (unsigned int i = 0; i < num_cameras; i++) {
+        std::unique_lock lock{_camera_drivers_mutex};
+        auto camera = std::make_unique<comms::BlackflyComms>();
+        camera->start(arv_get_device_id(i), std::string("blackfly_") + arv_get_device_serial_nbr(i), "BayerRG8", 15.0);
+        _camera_drivers.push_back(std::move(camera));
+      }
+    } catch (const std::exception& e) {
+      spdlog::error("Failed to initialize cameras: {}", e.what());
+    }
+  });
 #endif
 
   // Initialize controllers
@@ -179,6 +186,7 @@ void DrivebrainApp::run() {
   _autonomy.stop();
   _io_context.stop();
   if(_io_context_thread.joinable()) _io_context_thread.join();
+  if(_camera_init_thread.joinable()) _camera_init_thread.join();
   spdlog::info("Joined all threads");
 }
 
