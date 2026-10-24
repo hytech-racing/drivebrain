@@ -7,7 +7,7 @@
         "port": 51000
     },
     "sim_bridge": {
-        "enabled": false
+        "enabled": true
     },
     "SimpleSpeedController": {
         "max_torque": 21.0,

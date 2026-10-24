@@ -29,7 +29,7 @@ static std::shared_ptr<google::protobuf::Message> parse_by_name(const std::strin
 
 static std::string endpoint(uint16_t port) {
     const char* host = std::getenv("SIM_HOST");
-    if (!host) host = "127.0.0.1";
+    if (!host) host = "192.168.10.100";
     return "tcp://" + std::string(host) + ":" + std::to_string(port);
 }
 
