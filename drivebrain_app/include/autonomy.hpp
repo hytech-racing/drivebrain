@@ -4,7 +4,8 @@
 #include <chrono>
 #include <memory>
 #include <thread>
-
+#include "PurePursuitController.hpp"
+#include "ConeClassifier.hpp"
 #include <StateTracker.hpp>
 #include <GraphSlam.hpp>
 
@@ -48,7 +49,6 @@ public:
 private:
   // How long to wait for the next scan before re-checking that the stack is still running
   static constexpr std::chrono::milliseconds SCAN_WAIT{200};
-
   static constexpr std::chrono::milliseconds ODOM_TIMEOUT{100};
 
   // deskew -> detect -> map -> plan, once per lidar scan
@@ -57,6 +57,8 @@ private:
   std::thread _thread;
   std::atomic<bool> _running{false};
   std::unique_ptr<slam::Slam> _slam;
+  std::unique_ptr<control::PurePursuitController> _controller;
+  std::unique_ptr<perception::ConeClassifier> _cone_classifier;
 };
 
 }

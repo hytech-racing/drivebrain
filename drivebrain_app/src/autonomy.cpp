@@ -23,7 +23,8 @@ void Autonomy::start() {
     return;
   }
   _slam = std::make_unique<slam::Slam>();
-
+  _controller = std::make_unique<control::PurePursuitController>();
+  _cone_classifier = std::make_unique<perception::ConeClassifier>("intrinsics");
   _thread = std::thread(&Autonomy::_run, this);
   spdlog::info("Autonomy stack started");
 }
@@ -44,9 +45,12 @@ bool Autonomy::is_valid() {
 }
 
 ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
-
   ControllerOutput out;
-  out.out = std::monostate{};
+  if (_controller) {
+    out = _controller->step(vehicle_state);
+  } else {
+    out.out = std::monostate{};
+  }
   return out;
 }
 
@@ -73,7 +77,10 @@ void Autonomy::_run() {
     log_foxglove_only(cloud, "perception/deskewed_points");
 
     // Filter the deskewed point cloud for cones
-    const std::shared_ptr<dv_msgs::Cones> cones = perception::filter_cloud(*cloud);
+    std::shared_ptr<dv_msgs::Cones> cones = perception::filter_cloud(*cloud);
+    if (_cone_classifier) {
+      cones = _cone_classifier->classify(cones);
+    }
     render_cones(cones, "filtered_cones", "os_sensor");
 
     // Perform SLAM update with the filtered cones
@@ -84,7 +91,8 @@ void Autonomy::_run() {
     StateTracker::instance().set_cone_observations(map);
     auto path = planning::plan_path(*map);
     render_path(path, "planned_path", "map");
-    StateTracker::instance().set_dv_path(std::make_shared<const std::vector<xyz_vec<float>>>(std::move(path)));
+
+    StateTracker::instance().set_dv_path(std::make_shared<const std::vector<xyz_vec<float>>>(std::move(path))); // Used by the pure pursuit controller
   }
 }
 

@@ -100,6 +100,7 @@ if(HOOTL)
     target_compile_definitions(drivebrain PRIVATE HOOTL_ENABLED)
     target_compile_definitions(drivebrain_core PRIVATE HOOTL_ENABLED)
     target_compile_definitions(drivebrain_comms PRIVATE HOOTL_ENABLED)
+    target_compile_definitions(drivebrain_perception PRIVATE HOOTL_ENABLED)
     target_link_libraries(drivebrain PRIVATE cppzmq)
 endif()
 

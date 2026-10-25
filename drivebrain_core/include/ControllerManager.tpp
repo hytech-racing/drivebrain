@@ -138,9 +138,7 @@ template <typename ControllerType, size_t NumControllers>
 bool core::ControllerManager<ControllerType, NumControllers>::swap_active_controller(size_t new_controller_index, const core::VehicleState& input)
 {
     using status_type = core::ControllerManagerStatus;
-    static const size_t num_controllers = _controllers.size(); // size_t is unsigned, new_controller_index being less than 0 is always false. 
-    
-    if (new_controller_index >= num_controllers) {
+    if (new_controller_index >= constants::NUM_DRIVERED_CONTROLLERS) {
         _current_ctr_manager_state.current_status = status_type::ERROR_CONTROLLER_INDEX_OUT_OF_RANGE;
         spdlog::info("Switch mode failed with error code: " + std::to_string(static_cast<int>(_current_ctr_manager_state.current_status)));
         return false;

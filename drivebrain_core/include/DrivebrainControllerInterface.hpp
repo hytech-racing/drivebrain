@@ -3,6 +3,8 @@
 
 #include <spdlog/spdlog.h>
 #include <FoxgloveServer.hpp>
+#include <atomic>
+
 
 /**
 The purpose of this class is to create an interface that can be used 
@@ -12,6 +14,13 @@ just doing everything in foxglove
 */
 
 namespace core {
+
+enum DriveMode {
+    MANUAL = 0,
+    AUTONOMOUS = 1, 
+    TELEOP = 2
+};
+
 class DrivebrainControllerInterface {
 
     public: 
@@ -30,23 +39,25 @@ class DrivebrainControllerInterface {
 
         void _handle_parameter_updates(const std::unordered_map<std::string, core::DBParam> &new_params);
 
-        void _request_start_logging();
-
-        void _request_stop_logging();
-
-        void _request_current_logger_status();
-
         void _request_controller_change(int controller_index);
+
+        int get_drive_mode() const {
+            return _drive_mode.load(std::memory_order_acquire);
+        }
+
+        bool is_enabled() const {
+            return _enabled.load(std::memory_order_acquire);
+        }
 
     private: 
 
         DrivebrainControllerInterface();
-
         DrivebrainControllerInterface(const DrivebrainControllerInterface&) = delete;
         DrivebrainControllerInterface& operator=(const DrivebrainControllerInterface&) = delete;
-        
         inline static std::atomic<DrivebrainControllerInterface*> _s_instance;
         std::string _response; 
+        std::atomic<int> _drive_mode;
+        std::atomic<bool> _enabled;
 
 };
 }

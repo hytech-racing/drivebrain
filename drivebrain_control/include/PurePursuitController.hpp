@@ -11,12 +11,12 @@ using namespace core;
 namespace control
 {
 
-class PurePursuitController : public Controller<ControllerOutput, VehicleState> {
+class PurePursuitController {
 
 public:
     bool init();
-    float get_dt_sec() override { return 0.01f; }
-    ControllerOutput step_controller(const VehicleState& in) override;
+    float get_dt_sec() { return 0.01f; }
+    ControllerOutput step(const VehicleState& in);
 
 private:
     /* Front-wheel angle (rad) that arcs onto the point one lookahead past the closest path point */

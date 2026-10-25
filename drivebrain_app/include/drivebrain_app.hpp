@@ -13,7 +13,7 @@
 #include "VNComms.hpp"
 #include "OusterComms.hpp"
 #include "autonomy.hpp"
-
+#include "Literals.hpp"
 #include "hytech_msgs.pb.h"
 #include <BlackflyComms.hpp>
 #include "PurePursuitController.hpp"
@@ -105,10 +105,4 @@ private:
 
   /* Driverless autonomy stack */
   core::Autonomy _autonomy;
-
-#if HOOTL_ENABLED
-  DrivingMode _driving_mode = DrivingMode::DRIVERLESS; // TODO undo
-#else
-  DrivingMode _driving_mode = DrivingMode::DRIVERLESS;
-#endif
 };

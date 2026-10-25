@@ -8,7 +8,7 @@ bool control::PurePursuitController::init() {
     return true;
 }
 
-ControllerOutput control::PurePursuitController::step_controller(const VehicleState& in) {
+ControllerOutput control::PurePursuitController::step(const VehicleState& in) {
     const auto path = StateTracker::instance().dv_state().path;
 
     SpeedControlOut speed_out = {};
