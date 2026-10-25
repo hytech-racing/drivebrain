@@ -28,7 +28,7 @@ public:
    * @param json_params_path The path to the JSON parameters file
    * @param dbc_path The path to the DBC file
   */
-   DrivebrainApp(const std::string& json_params_path, const std::string& dbc_path);
+  DrivebrainApp(const std::string& json_params_path, const std::string& dbc_path);
   ~DrivebrainApp();
 
   DrivebrainApp& operator=(DrivebrainApp&&) = delete;
