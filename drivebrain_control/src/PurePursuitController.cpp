@@ -16,11 +16,12 @@ ControllerOutput control::PurePursuitController::step(const VehicleState& in) {
     speed_out.torque_lim_nm = {_torque_lim, _torque_lim, _torque_lim, _torque_lim};
 
     ControllerOutput out = {};
-    auto steering = path ? _steering_angle_rad(in, *path) : std::nullopt;
+    auto steering = path ? _steering(in, *path) : std::nullopt;
     if (steering) {
         const float rpm = _target_speed * constants::METERS_PER_SECOND_TO_RPM;
         speed_out.desired_rpms = {rpm, rpm, rpm, rpm};
-        out.desired_steering_deg = *steering * 180.0f / M_PI;
+        out.desired_steering_deg = steering->angle_rad * 180.0f / M_PI;
+        out.lookahead_point_map_frame = steering->target;
     } else {
         speed_out.desired_rpms = {0.0f, 0.0f, 0.0f, 0.0f};
     }
@@ -28,7 +29,7 @@ ControllerOutput control::PurePursuitController::step(const VehicleState& in) {
     return out;
 }
 
-std::optional<float> control::PurePursuitController::_steering_angle_rad(const VehicleState& in, const std::vector<xyz_vec<float>>& path) const {
+std::optional<control::PurePursuitController::Steering> control::PurePursuitController::_steering(const VehicleState& in, const std::vector<xyz_vec<float>>& path) const {
     if (path.size() < 2) {
         return std::nullopt;
     }
@@ -62,5 +63,5 @@ std::optional<float> control::PurePursuitController::_steering_angle_rad(const V
         return std::nullopt;
     }
     const float lateral = heading.x * dy - heading.y * dx;
-    return std::atan(2.0f * lateral / dist_sq * WHEELBASE_M);
+    return Steering{std::atan(2.0f * lateral / dist_sq * WHEELBASE_M), target};
 }
