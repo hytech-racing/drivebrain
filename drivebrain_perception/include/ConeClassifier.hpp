@@ -6,7 +6,6 @@
 #include <string>
 
 #include <Eigen/Geometry>
-#include <foxglove/RawImage.pb.h>
 
 #include "StateTracker.hpp"
 #include "dv_msgs.pb.h"
@@ -14,8 +13,10 @@
 namespace perception {
 
   constexpr float CONE_HEIGHT_M = 0.325f;
-  // Side of the square patch around each cone, in metres, so patches frame cones the same at any range
-  constexpr float PATCH_SIZE_M = 0.4f;
+  // A detection matches a cone when its center is within this many box heights of the projected cone center
+  constexpr float MATCH_GATE = 0.5f;
+  // and its height is within this factor of the height expected at the LiDAR range
+  constexpr float MAX_SIZE_RATIO = 2.0f;
   constexpr float MIN_PROJECTION_DEPTH_M = 0.5f;
 
   // the mr cal model
@@ -35,12 +36,14 @@ namespace perception {
       ConeClassifier(const std::string& intrinsics_dir);
 
       /**
-       * Projects each cone into every camera with a frame and logs the boxes to <camera>/cone_boxes.
+       * Colors cones by projecting them into each camera and matching them to that camera's YOLO detections.
+       * Each detection colors at most one cone; unmatched cones stay UNKNOWN.
        * @param cones The uncolored cones from the LiDAR filter, os_sensor frame
-       * @param frames The latest frame per camera, keyed by frame_id
-       * @return The cones (colors are not assigned yet)
+       * @param detections The latest detections per camera, keyed by camera name
+       * @return The cones with colors assigned
       */
-      std::shared_ptr<dv_msgs::Cones> classify(std::shared_ptr<dv_msgs::Cones> cones, const std::map<std::string, std::shared_ptr<const foxglove::RawImage>>& frames);
+      std::shared_ptr<dv_msgs::Cones> classify(std::shared_ptr<dv_msgs::Cones> cones,
+                                               const std::map<std::string, std::shared_ptr<const std::vector<core::ConeDetection>>>& detections);
 
     private:
       std::map<std::string, CameraModel> _cameras; 

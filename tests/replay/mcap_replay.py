@@ -12,7 +12,6 @@ SEND_SOCKET_PORT = 5940
 LIDAR_SOCKET_PORT = 1155
 
 BLACKLIST = {"estimator_Outports", "Cones", "SceneUpdate", "ouster/calibration"}
-BLACKLIST_SUFFIXES = ("/detections",)
 
 # Initialize the sockets
 ctx = zmq.Context()
@@ -42,7 +41,7 @@ with open(mcap_path, "rb") as f:
     for schema, channel, message in reader.iter_messages():
         if channel.message_encoding != "protobuf":
             continue
-        if channel.topic in BLACKLIST or channel.topic.endswith(BLACKLIST_SUFFIXES):
+        if channel.topic in BLACKLIST:
             continue
         if mcap_start is None:
             mcap_start = message.log_time
@@ -61,7 +60,8 @@ with open(mcap_path, "rb") as f:
             except zmq.Again:
                 pass
         else:
-            recv_sock.send_multipart([schema.name.encode(), message.data])
+            # topic lets drivebrain tell which camera a /detections message belongs to
+            recv_sock.send_multipart([schema.name.encode(), message.data, channel.topic.encode()])
 
 recv_sock.close()
 send_sock.close()

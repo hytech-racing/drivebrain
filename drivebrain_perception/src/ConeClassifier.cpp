@@ -4,11 +4,10 @@
 #include <regex>
 #include <sstream>
 #include <stdexcept>
-#include <foxglove/ImageAnnotations.pb.h>
+#include <tuple>
 #include <spdlog/spdlog.h>
 #include "FoxgloveServer.hpp"
 #include "LidarFilter.hpp"
-#include "Telemetry.hpp"
 
 namespace perception {
 namespace {
@@ -55,20 +54,6 @@ namespace {
         T_lidar_cam.linear() = R_LIDAR_FLU * R_mount * R_FLU_CAM;
         T_lidar_cam.translation() = R_LIDAR_FLU * Eigen::Vector3f(forward_m, left_m, up_m);
         return T_lidar_cam.inverse();
-    }
-
-    std::optional<std::array<float, 4>> project_cone(const CameraModel& cam, const Eigen::Isometry3f& T_cam_lidar, const hytech_msgs::xyz_vector& position) {
-        // Square of fixed metric size around the cone's mid-height, shifted (not clipped) to stay inside the image
-        const Eigen::Vector3f center(position.x(), position.y(), -SENSOR_HEIGHT_ABOVE_GROUND_M + CONE_HEIGHT_M / 2);
-        const Eigen::Vector3f p_cam = T_cam_lidar * center;
-        const auto px = cam.project(p_cam);
-        if (!px || px->x() < 0 || px->x() >= cam.width || px->y() < 0 || px->y() >= cam.height) return std::nullopt;
-
-        const float side = cam.fy * PATCH_SIZE_M / p_cam.z();
-        if (side > cam.width || side > cam.height) return std::nullopt;
-        const float x0 = std::clamp(px->x() - side / 2, 0.0f, cam.width - side);
-        const float y0 = std::clamp(px->y() - side / 2, 0.0f, cam.height - side);
-        return std::array<float, 4>{x0, y0, x0 + side, y0 + side};
     }
 
 } // END OF ANONYMOUS NAMESPACE
@@ -136,33 +121,48 @@ namespace {
         }
     }
 
-    std::shared_ptr<dv_msgs::Cones> ConeClassifier::classify(std::shared_ptr<dv_msgs::Cones> cones, const std::map<std::string, std::shared_ptr<const foxglove::RawImage>>& frames) {
-        for (const auto& [name, frame] : frames) {
+    std::shared_ptr<dv_msgs::Cones> ConeClassifier::classify(std::shared_ptr<dv_msgs::Cones> cones,
+                                                             const std::map<std::string, std::shared_ptr<const std::vector<core::ConeDetection>>>& detections) {
+        // Score of the detection that colored each cone, so the more confident camera wins when both see it
+        std::vector<float> best_score(cones->cones_size(), 0.0f);
+
+        for (const auto& [name, dets] : detections) {
             const auto cam_it = _cameras.find(name);
-            if (cam_it == _cameras.end() || !frame) continue;
+            if (cam_it == _cameras.end() || !dets) continue;
             const CameraModel& cam = cam_it->second;
             const Eigen::Isometry3f T_cam_lidar = camera_from_lidar(name);
 
-            auto annotations = std::make_shared<foxglove::ImageAnnotations>();
-            for (const auto& cone : cones->cones()) {
-                const auto box = project_cone(cam, T_cam_lidar, cone.position());
-                if (!box) continue;
-                const auto [x0, y0, x1, y1] = *box;
+            // (cost, cone, detection) for every plausible pair
+            std::vector<std::tuple<float, int, int>> pairs;
+            for (int i = 0; i < cones->cones_size(); ++i) {
+                const auto& pos = cones->cones(i).position();
+                const Eigen::Vector3f p_cam = T_cam_lidar * Eigen::Vector3f(pos.x(), pos.y(), -SENSOR_HEIGHT_ABOVE_GROUND_M + CONE_HEIGHT_M / 2);
+                const auto px = cam.project(p_cam);
+                if (!px) continue;
+                const float expected_height = cam.fy * CONE_HEIGHT_M / p_cam.z();
 
-                auto* outline = annotations->add_points();
-                *outline->mutable_timestamp() = frame->timestamp();
-                outline->set_type(foxglove::PointsAnnotation::LINE_LOOP);
-                const std::array<std::pair<float, float>, 4> corners{{{x0, y0}, {x1, y0}, {x1, y1}, {x0, y1}}};
-                for (const auto& [x, y] : corners) {
-                    auto* p = outline->add_points();
-                    p->set_x(x);
-                    p->set_y(y);
+                for (int j = 0; j < static_cast<int>(dets->size()); ++j) {
+                    const auto& d = (*dets)[j];
+                    const float height = d.y1 - d.y0;
+                    const float ratio = height / expected_height;
+                    if (height <= 0 || ratio > MAX_SIZE_RATIO || ratio < 1 / MAX_SIZE_RATIO) continue;
+                    const float cost = (Eigen::Vector2f((d.x0 + d.x1) / 2, (d.y0 + d.y1) / 2) - *px).norm() / height;
+                    if (cost < MATCH_GATE) pairs.emplace_back(cost, i, j);
                 }
-                auto* color = outline->mutable_outline_color();
-                color->set_r(1.0);  color->set_g(1.0);  color->set_b(1.0);  color->set_a(1.0);
-                outline->set_thickness(2);
             }
-            core::log(annotations, name + "/cone_boxes");
+
+            // Greedy one-to-one matching, cheapest pairs first
+            std::sort(pairs.begin(), pairs.end());
+            std::vector<bool> cone_used(cones->cones_size()), det_used(dets->size());
+            for (const auto& [cost, i, j] : pairs) {
+                if (cone_used[i] || det_used[j]) continue;
+                cone_used[i] = det_used[j] = true;
+                const auto& d = (*dets)[j];
+                if (d.score > best_score[i]) {
+                    best_score[i] = d.score;
+                    cones->mutable_cones(i)->set_color(d.color);
+                }
+            }
         }
         return cones;
     }

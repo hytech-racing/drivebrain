@@ -146,6 +146,38 @@ void BlackflyComms::_aravis_receive_loop() {
                 raw_image->set_format("jpeg");
                 raw_image->set_data(jpeg_buf.data(), jpeg_buf.size());
                 core::log_foxglove_only(raw_image, _name + "/compressed");
+
+#if JETSON_ENABLED
+                if (_detector) {
+                    // bgr is half-res and upright; detections go to perception in full-res upright pixels, and to the
+                    // MCAP in raw (upside-down) full-res pixels labelled "<color> <score>", which the replay reads back
+                    auto detections = std::make_shared<std::vector<core::ConeDetection>>();
+                    auto annotations = std::make_shared<foxglove::ImageAnnotations>();
+                    for (const auto& det : _detector->detect(bgr, 0.5f)) {
+                        const float x0 = 2.0f * det.bbox.x, y0 = 2.0f * det.bbox.y;
+                        const float x1 = 2.0f * (det.bbox.x + det.bbox.width), y1 = 2.0f * (det.bbox.y + det.bbox.height);
+                        detections->push_back({x0, y0, x1, y1, core::cone_color_from_name(_detector->cone_name(det.class_id)), det.score});
+
+                        auto* box = annotations->add_points();
+                        box->mutable_timestamp()->set_seconds(secs);
+                        box->mutable_timestamp()->set_nanos(nanos);
+                        box->set_type(foxglove::PointsAnnotation::LINE_LOOP);
+                        const float rx0 = width - x1, ry0 = height - y1, rx1 = width - x0, ry1 = height - y0;
+                        for (const auto& [x, y] : {std::pair{rx0, ry0}, std::pair{rx1, ry0}, std::pair{rx1, ry1}, std::pair{rx0, ry1}}) {
+                            auto* p = box->add_points();
+                            p->set_x(x);
+                            p->set_y(y);
+                        }
+                        auto* label = annotations->add_texts();
+                        *label->mutable_timestamp() = box->timestamp();
+                        label->mutable_position()->set_x(rx0);
+                        label->mutable_position()->set_y(ry0);
+                        label->set_text(cv::format("%s %.2f", _detector->cone_name(det.class_id), det.score));
+                    }
+                    core::StateTracker::instance().set_camera_detections(_name, detections);
+                    core::log_mcap_only(annotations, _name + "/detections");
+                }
+#endif
             } else {
                 spdlog::error("[{}] Failed to retrieve buffer from Aravis stream, status {}", _name, static_cast<int>(arv_buffer_get_status(buffer)));
             }

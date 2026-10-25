@@ -4,7 +4,6 @@
 #include <map>
 #include <optional>
 #include <foxglove/PointCloud.pb.h>
-#include <foxglove/RawImage.pb.h>
 #include <foxglove/websocket/base64.hpp>
 #include <foxglove/websocket/websocket_notls.hpp>
 #include <foxglove/websocket/websocket_server.hpp>
@@ -306,6 +305,23 @@ namespace core {
 
 
     /**
+     * A YOLO cone detection in full-res upright camera pixels, the image the camera intrinsics describe
+     */
+    struct ConeDetection {
+        float x0, y0, x1, y1;
+        dv_msgs::Cones::ConeColor color;
+        float score;
+    };
+
+    /* Maps a detector class name ("blue", "yellow", "orange", ...) to a cone color */
+    inline dv_msgs::Cones::ConeColor cone_color_from_name(const std::string& name) {
+        if (name == "blue") return dv_msgs::Cones::BLUE;
+        if (name == "yellow") return dv_msgs::Cones::YELLOW;
+        if (name == "orange") return dv_msgs::Cones::ORANGE_SMALL;
+        return dv_msgs::Cones::UNKNOWN;
+    }
+
+    /**
      * @struct Contains driverless data representing the entire internal
      * and external state of the vehicle
      */
@@ -314,7 +330,7 @@ namespace core {
         bool lidar_is_valid;
         std::shared_ptr<const dv_msgs::Cones> cone_observations;
         std::shared_ptr<const std::vector<xyz_vec<float>>> path;
-        std::map<std::string, std::shared_ptr<const foxglove::RawImage>> camera_frames; // latest frame per camera, keyed by frame_id
+        std::map<std::string, std::shared_ptr<const std::vector<ConeDetection>>> camera_detections; // latest per camera, keyed by camera name
 
         /* Returns the latest LiDAR point cloud in a clean struct */
         PointView points() const { return lidar_cloud ? core::points(*lidar_cloud) : PointView{}; }
@@ -396,11 +412,12 @@ namespace core {
             void set_cone_observations(std::shared_ptr<const dv_msgs::Cones> cones);
 
             /**
-             * Sets the latest frame from a camera, replacing the previous frame with the same frame_id.
+             * Sets the latest cone detections from a camera, replacing that camera's previous detections.
              *
-             * @param frame the camera frame
+             * @param camera the camera name, blackfly_<serial>
+             * @param detections the detections
              */
-            void set_camera_frame(std::shared_ptr<const foxglove::RawImage> frame);
+            void set_camera_detections(const std::string& camera, std::shared_ptr<const std::vector<ConeDetection>> detections);
 
             /**
              * Sets the latest teleop command received from the Foxglove teleop panel.
