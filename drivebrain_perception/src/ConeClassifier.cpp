@@ -144,12 +144,18 @@ namespace {
 #endif
 
         namespace fs = std::filesystem;
-        if (!fs::is_directory(intrinsics_dir)) {
+        fs::path dir = intrinsics_dir;
+        if (!fs::is_directory(dir) && dir.is_relative()) {
+            std::error_code ec;
+            const fs::path exe = fs::read_symlink("/proc/self/exe", ec);
+            if (!ec) dir = exe.parent_path() / intrinsics_dir;
+        }
+        if (!fs::is_directory(dir)) {
             spdlog::warn("[ConeClassifier] intrinsics directory '{}' not found, cones will not be projected", intrinsics_dir);
             return;
         }
 
-        for (const auto& entry : fs::directory_iterator(intrinsics_dir)) {
+        for (const auto& entry : fs::directory_iterator(dir)) {
             if (entry.path().extension() != ".cameramodel") continue;
             const std::string stem = entry.path().stem().string();
             const std::string name = "blackfly_" + stem.substr(0, stem.find('-'));
@@ -163,6 +169,9 @@ namespace {
     }
 
     std::shared_ptr<dv_msgs::Cones> ConeClassifier::classify(std::shared_ptr<dv_msgs::Cones> cones, const std::map<std::string, std::shared_ptr<const foxglove::RawImage>>& frames) {
+        if (frames.empty()) {
+            spdlog::warn("[ConeClassifier] no camera frames available, no cone_boxes will be published");
+        }
         for (const auto& [name, frame] : frames) {
             const auto cam_it = _cameras.find(name);
             if (cam_it == _cameras.end()) {
