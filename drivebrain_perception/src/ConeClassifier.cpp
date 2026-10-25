@@ -132,12 +132,18 @@ namespace {
 #endif
 
         namespace fs = std::filesystem;
-        if (!fs::is_directory(intrinsics_dir)) {
+        fs::path dir = intrinsics_dir;
+        if (!fs::is_directory(dir) && dir.is_relative()) {
+            std::error_code ec;
+            const fs::path exe = fs::read_symlink("/proc/self/exe", ec);
+            if (!ec) dir = exe.parent_path() / intrinsics_dir;
+        }
+        if (!fs::is_directory(dir)) {
             spdlog::warn("[ConeClassifier] intrinsics directory '{}' not found, cones will not be projected", intrinsics_dir);
             return;
         }
 
-        for (const auto& entry : fs::directory_iterator(intrinsics_dir)) {
+        for (const auto& entry : fs::directory_iterator(dir)) {
             if (entry.path().extension() != ".cameramodel") continue;
             const std::string stem = entry.path().stem().string();
             const std::string name = "blackfly_" + stem.substr(0, stem.find('-'));
@@ -151,10 +157,18 @@ namespace {
     }
 
     std::shared_ptr<dv_msgs::Cones> ConeClassifier::classify(std::shared_ptr<dv_msgs::Cones> cones, const std::map<std::string, std::shared_ptr<const foxglove::RawImage>>& frames) {
+        if (frames.empty()) {
+            spdlog::warn("[ConeClassifier] no camera frames available, no cone_boxes will be published");
+        }
         for (const auto& [name, frame] : frames) {
             const auto cam_it = _cameras.find(name);
-            if (cam_it == _cameras.end() || !frame) continue;
-            const CameraModel& cam = cam_it->second;
+            if (cam_it == _cameras.end() || !frame) {
+                // The frame's frame_id must match a loaded intrinsics key (blackfly_<serial>).
+                spdlog::warn("[ConeClassifier] no intrinsics for camera frame '{}' (loaded {} cameras), skipping",
+                             name, _cameras.size());
+                continue;
+            }
+             const CameraModel& cam = cam_it->second;
             const Eigen::Isometry3f T_cam_lidar = camera_from_lidar(name);
 
             // boxes of the cones in view, by cone index
