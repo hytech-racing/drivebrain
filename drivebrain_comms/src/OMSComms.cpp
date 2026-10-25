@@ -166,4 +166,5 @@ void OMSComms::_log_frame(const OMSFrame& frame) {
   st->set_info_bits(frame.status >> 16);
 
   core::log(msg);
+  core::StateTracker::instance().handle_receive_protobuf_message(msg);
 }

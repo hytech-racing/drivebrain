@@ -165,6 +165,9 @@ void SimComms::_veh_recv_loop() {
         }
         if (m.size() < 2) { spdlog::error("SimComms: short frame, {} parts", m.size()); continue; }
         auto type_name = m.popstr(); 
+        // an optional topic part (replayed recordings) keeps the message on its original topic
+        std::string topic;
+        if (m.size() > 1) topic = m.popstr();
         auto body = m.pop();
         // MCAP replay also sends the topic, other sims don't
         const std::string topic = m.empty() ? "" : m.popstr();
@@ -209,8 +212,9 @@ void SimComms::_veh_recv_loop() {
                 detections->push_back({W - p[2].x(), H - p[2].y(), W - p[0].x(), H - p[0].y(), core::cone_color_from_name(name), score});
             }
             core::StateTracker::instance().set_camera_detections(topic.substr(0, topic.find('/')), detections);
+            core::log(msg, topic);
         } else {
-            core::log(msg);
+            core::log(msg, topic);
             core::StateTracker::instance().handle_receive_protobuf_message(msg);
         }
     }
@@ -221,7 +225,7 @@ void SimComms::_lidar_recv_loop() {
         zmq::message_t frame;
         try {
             auto res = _lidar_socket.recv(frame);
-            std::cout << "Received lidar frame of size: " << frame.size() << std::endl;
+            // std::cout << "Received lidar frame of size: " << frame.size() << std::endl;
             if (!res) continue;
         } catch (const zmq::error_t& e) {
             if (e.num() == ETERM) break;
@@ -235,8 +239,8 @@ void SimComms::_lidar_recv_loop() {
             continue;
         }
 
+        core::log(pc, "ouster/points");
         core::StateTracker::instance().handle_receive_protobuf_message(pc);
-        core::log(pc);
     }
 }
 

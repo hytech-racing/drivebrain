@@ -1,5 +1,6 @@
 #pragma once
 
+#include <condition_variable>
 #include <cstdint>
 #include <map>
 #include <optional>
@@ -14,6 +15,7 @@
 #include <string> 
 #include <fstream> 
 #include <thread>
+#include <chrono>
 #include <spdlog/spdlog.h>
 
 #include "hytech_msgs.pb.h"
@@ -21,6 +23,7 @@
 #include "dv_msgs.pb.h"
 #include "FzEstimator.h"
 #include "SteeringEstimator.h"
+#include "Odometry.hpp"
 
 /**
  * The state tracker acts as a thread-safe translation unit
@@ -241,6 +244,8 @@ namespace core {
         float steering_column_angle_deg;
         bool received_steering_angle = false;
         bool updated_steering_estimator = false;
+        /* steady_clock time the last steering_data message arrived, used to detect stale steering feedback */
+        std::chrono::steady_clock::time_point last_steering_recv_time{};
         ControllerOutput prev_controller_output;
         TireDynamics tire_dynamics;
         veh_vec<float> driver_torque;
@@ -276,7 +281,6 @@ namespace core {
 
     struct LidarPoint { float x, y, z; };
     static_assert(sizeof(LidarPoint) == 12);
-    inline uint64_t num_points(const foxglove::PointCloud& pc) { return pc.data().size() / sizeof(LidarPoint); }
 
     struct PointView {
         const LidarPoint* ptr = nullptr;
@@ -298,7 +302,13 @@ namespace core {
         out->set_frame_id(src.frame_id());
         *out->mutable_pose() = src.pose();
         out->set_point_stride(sizeof(LidarPoint));
-        *out->mutable_fields() = src.fields();
+        const char* names[] = {"x", "y", "z"};
+        for (int i = 0; i < 3; i++) {
+            auto* field = out->add_fields();
+            field->set_name(names[i]);
+            field->set_offset(i * sizeof(float));
+            field->set_type(foxglove::PackedElementField::FLOAT32);
+        }
         out->set_data(reinterpret_cast<const char*>(pts.data()), pts.size() * sizeof(LidarPoint));
         return out;
     }
@@ -398,6 +408,15 @@ namespace core {
             DriverlessState dv_state();
 
             /**
+             * Blocks until a scan newer than `last` arrives.
+             *
+             * @param timeout how long to wait before giving up
+             * @return the new scan, or nullptr on timeout
+             */
+            std::shared_ptr<const foxglove::PointCloud> wait_for_scan(
+                const std::shared_ptr<const foxglove::PointCloud>& last, std::chrono::milliseconds timeout);
+
+            /**
              * Sets the latest planned path produced by the autonomy stack.
              *
              * @param path the planned path, map frame
@@ -412,12 +431,30 @@ namespace core {
             void set_cone_observations(std::shared_ptr<const dv_msgs::Cones> cones);
 
             /**
+<<<<<<< HEAD
              * Sets the latest cone detections from a camera, replacing that camera's previous detections.
              *
              * @param camera the camera name, blackfly_<serial>
              * @param detections the detections
              */
             void set_camera_detections(const std::string& camera, std::shared_ptr<const std::vector<ConeDetection>> detections);
+=======
+             * Pose of base_link in the odom frame at the given host timestamp, interpolated
+             * from the odometry history.
+             *
+             * @param timestamp_ns host time to look up
+             * @param timeout how long to wait for odometry to reach the timestamp
+             * @return the pose, or nullopt if the timestamp is outside the buffered history
+             */
+            std::optional<Eigen::Isometry2d> odom_pose(uint64_t timestamp_ns,
+                                                       std::chrono::nanoseconds timeout = {});
+
+            /* Latest body velocity and yaw rate from the OMS: (vx m/s, vy m/s, yaw rate rad/s) */
+            Eigen::Vector3d odom_twist();
+
+            /* Lidar mounting pose in base_link, from the static_transforms config */
+            const Eigen::Isometry3d& T_base_lidar() const { return _T_base_lidar; }
+>>>>>>> main
 
             /**
              * Sets the latest teleop command received from the Foxglove teleop panel.
@@ -457,12 +494,16 @@ namespace core {
 
             DriverlessState _dv_state = { };
             std::mutex _dv_state_mutex;
+            std::condition_variable _dv_state_cv;
 
             TeleopCommand _teleop_command = { };
             std::mutex _teleop_mutex;
             
+            estimation::Odometry _odometry;
+            Eigen::Isometry3d _T_base_lidar = Eigen::Isometry3d::Identity();
+
             /* Private constructor called by the init method */
-            StateTracker() {}; 
+            StateTracker();
             
             /* Singleton move semantics */
             StateTracker(const StateTracker&) = delete; 

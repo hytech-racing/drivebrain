@@ -10,6 +10,7 @@
 #include <boost/asio.hpp>
 #include <memory>
 #include "LoadCellTorqueController.hpp"
+#include "TeleopController.hpp"
 #include "VNComms.hpp"
 #include "OusterComms.hpp"
 #include "autonomy.hpp"
@@ -64,6 +65,7 @@ private:
   boost::asio::io_context _io_context;
 
   /* Threads */
+  std::thread _camera_init_thread;
   std::thread _loop_thread;
   std::thread _io_context_thread;
 
@@ -86,6 +88,7 @@ private:
 
   /* Controllers */
   std::shared_ptr<control::LoadCellTorqueController> _mode1;
+  std::shared_ptr<control::TeleopController> _mode2;
 
   /* Vectornav */
   std::unique_ptr<comms::VNDriver> _vn_driver;
@@ -94,6 +97,8 @@ private:
   /* Steering */
   std::unique_ptr<comms::KrakenComms> _kraken_comms;
 #endif
+
+  std::shared_mutex _camera_drivers_mutex;
 
   /* Cameras */
   std::vector<std::unique_ptr<comms::BlackflyComms>> _camera_drivers;
@@ -107,6 +112,6 @@ private:
 #if HOOTL_ENABLED
   DrivingMode _driving_mode = DrivingMode::TELEOP;
 #else
-  DrivingMode _driving_mode = DrivingMode::DRIVERLESS;
+  DrivingMode _driving_mode = DrivingMode::DRIVERED;
 #endif
 };

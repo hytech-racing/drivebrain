@@ -25,6 +25,20 @@
         "dt_rate_hz": 1000.0,
         "apply_vectoring_in_regen": true
     },
+    "TeleopController": {
+        "max_torque": 4.0,
+        "max_regen_torque": 4.0,
+        "max_steering_angle_deg": 70.0,
+        "dt_rate_hz": 1000.0,
+        "joystick_device_path": "/dev/input/js0",
+        "accel_axis": 5,
+        "brake_axis": 2,
+        "steering_axis": 0,
+        "invert_accel_axis": false,
+        "invert_brake_axis": false,
+        "invert_steering_axis": false,
+        "axis_deadzone": 0.05
+    },
     "vn_driver": {
         "device_name": "/dev/ttyUSB0",
         "baud_rate": 921600, 
@@ -50,11 +64,35 @@
     },
     "DrivebrainControllerInterface": {
         "should_log": true, 
-        "controller_index": 1
+        "controller_index": 0
     },
     "FzEstimator": {
         "Q_gain": 0.1,
         "R_gain": 0.1
+    },
+    "odometry": {
+        "oms_position_base_x_m": -1.108,
+        "oms_position_base_y_m": 0.0
+    },
+    "static_transforms": {
+        "lidar_x_m": 1.244,
+        "lidar_y_m": 0.0,
+        "lidar_z_m": 0.107,
+        "lidar_yaw_deg": 90.0
+    },
+    "slam": {
+        "map_association_gate_chi2": 9.21,
+        "measurement_std_m": 0.3,
+        "candidate_gate_m": 1.0,
+        "minimum_evidence_to_confirm": 3.0,
+        "minimum_evidence_baseline_m": 0.5,
+        "minimum_detection_confidence": 0.5,
+        "odom_noise_xy_m": 0.05,
+        "odom_noise_yaw_rad": 0.01,
+        "odom_drift_xy_m": 0.03,
+        "odom_drift_yaw_rad": 0.001,
+        "bearing_std_rad": 0.05,
+        "range_std_m": 0.5
     },
     "use_vectornav": false,
     "use_fake_vn": false,
@@ -66,21 +104,24 @@
         "canbus_name": "can1",
         "send_rate_hz": 200,
         "reduction": 31.2139,
-        "min_angle_deg": -85.0,
-        "max_angle_deg": 85.0,
-        "stator_current_limit_a": 80.0,
+        "min_angle_deg": -90.0,
+        "max_angle_deg": 90.0,
+        "stator_current_limit_a": 120.0,
+        "supply_current_limit_a": 40.0,
         "enable_timeout_ms": 100,
-        "max_disagreement_deg": 10.0,
-        "kp": 125.0,
+        "enable_output": true,
+        "steering_timeout_ms": 100,
+        "kp": 60.0,
         "ki": 0.0,
         "kd": 0.0,
         "ks": 0.44,
-        "kv": 0.0,
-        "ka": 0.0,
-        "mm_cruise_velocity_deg_s": 180.0,
-        "mm_acceleration_deg_s2": 720.0,
-        "mm_jerk_deg_s3": 0.0,
-        "test_mode": false,
+        "ks_deadband_deg": 0.5,
+        "kv": 3.8,
+        "ka": 0.1,
+        "mm_cruise_velocity_deg_s": 720.0,
+        "mm_acceleration_deg_s2": 2880.0,
+        "arm_steering": false,
+        "use_test_angle": false,
         "test_angle_deg": 0.0
     },
     "ConeClassifier": {
