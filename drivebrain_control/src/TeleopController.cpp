@@ -138,7 +138,7 @@ void control::TeleopController::_run_joystick()
             _fd = open(_config.joystick_device_path.c_str(), O_RDONLY | O_NONBLOCK);
             if (_fd < 0)
             {
-                spdlog::warn("TeleopController: couldn't open {}: {}", _config.joystick_device_path, std::strerror(errno));
+                spdlog::debug("TeleopController: couldn't open {}: {}", _config.joystick_device_path, std::strerror(errno));
                 std::this_thread::sleep_for(std::chrono::seconds(1));
                 continue;
             }

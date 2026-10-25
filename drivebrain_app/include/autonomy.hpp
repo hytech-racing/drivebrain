@@ -7,6 +7,7 @@
 
 #include <StateTracker.hpp>
 #include <GraphSlam.hpp>
+#include <ConeClassifier.hpp>
 
 namespace core {
 
@@ -57,6 +58,7 @@ private:
   std::thread _thread;
   std::atomic<bool> _running{false};
   std::unique_ptr<slam::Slam> _slam;
+  perception::ConeClassifier _classifier{"intrinsics"};
 };
 
 }

@@ -1,8 +1,9 @@
 #include "Detector.hpp"
 
-#include <opencv2/imgproc.hpp>
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <stdexcept> 
 
@@ -34,24 +35,26 @@ Detector::Detector(const std::string& engine_path) {
     if (_engine->getNbIOTensors() != 2) {
       throw std::runtime_error("Engine must have exactly one input and one output: " + engine_path);
     }
-    const char* input_name = _engine->getIOTensorName(0);
+    _input_name = _engine->getIOTensorName(0);
     const char* output_name = _engine->getIOTensorName(1);
-    _input_h = _engine->getTensorShape(input_name).d[2];
-    _input_w = _engine->getTensorShape(input_name).d[3];
+    const auto max_shape = _engine->getProfileShape(_input_name, 0, nvinfer1::OptProfileSelector::kMAX);
+    _max_batch = max_shape.d[0];
+    _input_h = max_shape.d[2];
+    _input_w = max_shape.d[3];
     const auto out_shape = _engine->getTensorShape(output_name);
-    if (_engine->getNbIOTensors() != 2 || out_shape.nbDims != 3 || out_shape.d[2] != 6) {
-        throw std::runtime_error("Engine output must be [1, N, 6] (export with nms=True): " + engine_path);
+    if (out_shape.nbDims != 2) {
+        throw std::runtime_error("Engine output must be [batch, classes]: " + engine_path);
     }
-    _num_dets = _engine->getTensorShape(output_name).d[1];
+    _num_classes = out_shape.d[1];
 
     cudaStreamCreate(&_stream);
-    cudaMalloc(&_input_dev, _input_h * _input_w * 3 * sizeof(float));
-    cudaMalloc(&_output_dev, _num_dets * 6 * sizeof(float));
+    cudaMalloc(&_input_dev, _max_batch * _input_h * _input_w * 3 * sizeof(float));
+    cudaMalloc(&_output_dev, _max_batch * _num_classes * sizeof(float));
 
-    _context->setTensorAddress(input_name, _input_dev);
+    _context->setTensorAddress(_input_name, _input_dev);
     _context->setTensorAddress(output_name, _output_dev);
 
-    spdlog::info("Loaded {} ({}x{} input)", engine_path, _input_w, _input_h);
+    spdlog::info("[Detector] loaded {} ({}x{} input, {} classes, batch up to {})", engine_path, _input_w, _input_h, _num_classes, _max_batch);
 }
 
 Detector::~Detector() {
@@ -60,35 +63,36 @@ Detector::~Detector() {
     cudaStreamDestroy(_stream);
 }
 
-std::vector<Detection> Detector::detect(const cv::Mat& bgr, float min_score) {
-    cv::Mat img;
-    cv::resize(bgr, img, cv::Size(_input_w, _input_h));
-    cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
-    img.convertTo(img, CV_32FC3, 1.0 / 255);
+std::vector<Detection> Detector::classify(const std::vector<cv::Mat>& patches) {
+    const int batch = std::min(static_cast<int>(patches.size()), _max_batch);
+    if (batch == 0) return {};
 
-    std::vector<float> input(3 * _input_h * _input_w);
-    std::vector<cv::Mat> channels;
-    for (int c = 0; c < 3; ++c) {
-        channels.emplace_back(_input_h, _input_w, CV_32F, input.data() + c * _input_h * _input_w);
+    std::vector<float> input(batch * 3 * _input_h * _input_w);
+    for (int i = 0; i < batch; ++i) {
+        cv::Mat img;
+        patches[i].convertTo(img, CV_32FC3, 1.0 / 255);
+
+        std::vector<cv::Mat> channels;
+        for (int c = 0; c < 3; ++c) {
+            channels.emplace_back(_input_h, _input_w, CV_32F, input.data() + (i * 3 + c) * _input_h * _input_w);
+        }
+        cv::split(img, channels);
     }
-    cv::split(img, channels);
 
-    std::vector<float> output(_num_dets * 6);
+    std::vector<float> output(batch * _num_classes);
+    _context->setInputShape(_input_name, nvinfer1::Dims4{batch, 3, _input_h, _input_w});
     cudaMemcpyAsync(_input_dev, input.data(), input.size() * sizeof(float), cudaMemcpyHostToDevice, _stream);
     _context->enqueueV3(_stream);
     cudaMemcpyAsync(output.data(), _output_dev, output.size() * sizeof(float), cudaMemcpyDeviceToHost, _stream);
     cudaStreamSynchronize(_stream);
 
-    const float sx = static_cast<float>(bgr.cols) / _input_w;
-    const float sy = static_cast<float>(bgr.rows) / _input_h;
-
     std::vector<Detection> detections;
-    for (int i = 0; i < _num_dets; ++i) {
-        const float* d = &output[i * 6]; // x1, y1, x2, y2, score, class
-        if (d[4] < min_score) continue;
-        cv::Rect box(cv::Point(cvRound(d[0] * sx), cvRound(d[1] * sy)),
-                    cv::Point(cvRound(d[2] * sx), cvRound(d[3] * sy)));
-        detections.push_back({box, static_cast<int>(d[5]), d[4]});
+    for (int i = 0; i < batch; ++i) {
+        const float* logits = &output[i * _num_classes]; // softmax of the most likely class
+        const int best = std::max_element(logits, logits + _num_classes) - logits;
+        float sum = 0.0f;
+        for (int c = 0; c < _num_classes; ++c) sum += std::exp(logits[c] - logits[best]);
+        detections.push_back({best, 1.0f / sum});
     }
     return detections;
 }

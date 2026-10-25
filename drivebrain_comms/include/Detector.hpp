@@ -10,7 +10,7 @@
 
 namespace comms {
 
-struct Detection { cv::Rect bbox; int class_id; float score; };
+struct Detection { int class_id; float score; };
 
 class Detector {
     public: 
@@ -24,36 +24,12 @@ class Detector {
         ~Detector();
 
         /**
-         * @brief Detect cones in the given BGR image
+         * @brief Classify the colour of each cone patch
          * 
-         * @param bgr Input image in BGR format
-         * @param min_score Minimum confidence score to consider a detection valid
-         * @return std::vector<Detection> List of detected cones
+         * @param patches RGB cone patches (CV_8UC3) at the engine's input size
+         * @return std::vector<Detection> Most likely class and its softmax probability per patch, up to the engine's max batch
          */
-        std::vector<Detection> detect(const cv::Mat& bgr, float min_score);
-
-        /**
-         * @brief Get the name of the cone class corresponding to the given class ID
-         * 
-         * @param class_id Class ID of the cone
-         * @return const char* Name of the cone class
-         */
-        inline const char* cone_name(int class_id) {
-            static const char* names[] = {"blue", "yellow", "orange", "unknown"};
-            return (class_id >= 0 && class_id < 4) ? names[class_id] : "invalid";
-        }
-
-        /**
-         * @brief Get the color of the cone class corresponding to the given class ID
-         * 
-         * @param class_id Class ID of the cone
-         * @return cv::Scalar Color of the cone class in BGR format
-         */
-        inline cv::Scalar cone_color(int class_id) { // BGR
-            static const cv::Scalar colors[] = {{255, 0, 0}, {0, 255, 255}, {0, 165, 255}, {128, 128, 128}};
-            return (class_id >= 0 && class_id < 4) ? colors[class_id] : cv::Scalar(255, 255, 255);
-        }
-
+        std::vector<Detection> classify(const std::vector<cv::Mat>& patches);
 
     private: 
         std::unique_ptr<nvinfer1::IRuntime> _runtime;
@@ -62,6 +38,7 @@ class Detector {
         cudaStream_t _stream{nullptr};
         void* _input_dev{nullptr};
         void* _output_dev{nullptr};
-        int _input_w{0}, _input_h{0}, _num_dets{0};
+        const char* _input_name{nullptr};
+        int _input_w{0}, _input_h{0}, _max_batch{0}, _num_classes{0};
 };
 } // namespace comms

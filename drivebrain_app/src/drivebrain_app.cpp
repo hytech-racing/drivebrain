@@ -154,9 +154,9 @@ void DrivebrainApp::run() {
   core::DrivebrainControllerInterface::create();
 
   spdlog::info("Constructed drivebrain controller interface");
-  if (_driving_mode == DrivingMode::DRIVERLESS || _driving_mode == DrivingMode::TELEOP) {
-    _autonomy.start();
-  }
+  // if (_driving_mode == DrivingMode::DRIVERLESS || _driving_mode == DrivingMode::TELEOP) {
+  _autonomy.start();
+  // }
 
   running = true;
 

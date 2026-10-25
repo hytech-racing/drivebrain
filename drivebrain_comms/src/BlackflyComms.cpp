@@ -2,11 +2,10 @@
 #include <ImageCompression.hpp>
 
 #include <foxglove/websocket/common.hpp>
+#include <algorithm>
 #include <memory>
 
-#if JETSON_ENABLED
-#include <foxglove/ImageAnnotations.pb.h>
-#endif
+#include "StateTracker.hpp"
 
 using namespace comms;
 
@@ -68,17 +67,6 @@ bool BlackflyComms::start(const std::string& id, const std::string& name, const 
         return false;
     }
 
-#if JETSON_ENABLED
-    try {
-        // FOLLOW UP: depending on performance we may want to run 
-        // the detector in a seperate thread and pop off of a queue
-        // but we'll see how this does.
-        _detector = std::make_unique<Detector>("/home/hytech/engines/cones.engine");
-    } catch (const std::exception& e) {
-        spdlog::error("[{}] Cone detection disabled: {}", _name, e.what());
-    }
-#endif
-
     // Start the receive thread
     _running = true;
     _blackfly_receive_thread = std::thread(&BlackflyComms::_aravis_receive_loop, this);
@@ -129,11 +117,24 @@ void BlackflyComms::_aravis_receive_loop() {
                     spdlog::error("[{}] Failed to compress camera frame", _name);
                 }
 
+                // Full resolution frame for the cone classifier, rotated 180 like the stream below (RGGB becomes BGGR)
+                auto frame = std::make_shared<foxglove::RawImage>();
+                *frame->mutable_timestamp() = mcap_image->timestamp();
+                frame->set_frame_id(_name);
+                frame->set_width(width);
+                frame->set_height(height);
+                frame->set_step(width);
+                frame->set_encoding("bayer_bggr8");
+                frame->set_data(data, width * height);
+                std::reverse(frame->mutable_data()->begin(), frame->mutable_data()->end());
+                core::StateTracker::instance().set_camera_frame(frame);
 
                 // stream compressed image over foxglove stream
                 cv::Mat bgr;
                 // no need to resize as 2x2 averaging already halves the dimensions
                 averageBayer2x2ToBgr(static_cast<const uint8_t*>(data), width, height, bgr);
+                // upright like the classifier frame, so cone_boxes line up
+                cv::rotate(bgr, bgr, cv::ROTATE_180);
 
                 std::vector<uchar> jpeg_buf;
                 cv::imencode(".jpg", bgr, jpeg_buf, {cv::IMWRITE_JPEG_QUALITY, 80});
@@ -145,57 +146,6 @@ void BlackflyComms::_aravis_receive_loop() {
                 raw_image->set_format("jpeg");
                 raw_image->set_data(jpeg_buf.data(), jpeg_buf.size());
                 core::log_foxglove_only(raw_image, _name + "/compressed");
-
-                #if JETSON_ENABLED
-                if (_detector) {
-                    const auto detections = _detector->detect(bgr, 0.5f);
-                    auto make_annotations = [&](float scale, bool unrotate) {
-                        auto annotations = std::make_shared<foxglove::ImageAnnotations>();
-                        for (const auto& det : detections) {
-                            cv::Rect r = det.bbox;
-                            if (unrotate) {
-                                r.x = bgr.cols - (r.x + r.width);
-                                r.y = bgr.rows - (r.y + r.height);
-                            }
-                            const float x0 = r.x * scale, y0 = r.y * scale;
-                            const float x1 = (r.x + r.width) * scale, y1 = (r.y + r.height) * scale;
-                            const cv::Scalar c = _detector->cone_color(det.class_id); // BGR, 0-255
-
-                            auto* box = annotations->add_points();
-                            box->mutable_timestamp()->set_seconds(secs);
-                            box->mutable_timestamp()->set_nanos(nanos);
-                            box->set_type(foxglove::PointsAnnotation::LINE_LOOP);
-                            const cv::Point2f corners[] = {{x0, y0}, {x1, y0}, {x1, y1}, {x0, y1}};
-                            for (const auto& corner : corners) {
-                                auto* p = box->add_points();
-                                p->set_x(corner.x);
-                                p->set_y(corner.y);
-                            }
-                            auto* color = box->mutable_outline_color(); // RGBA, 0-1
-                            color->set_r(c[2] / 255.0);
-                            color->set_g(c[1] / 255.0);
-                            color->set_b(c[0] / 255.0);
-                            color->set_a(1.0);
-                            box->set_thickness(2);
-
-                            auto* label = annotations->add_texts();
-                            label->mutable_timestamp()->set_seconds(secs);
-                            label->mutable_timestamp()->set_nanos(nanos);
-                            label->mutable_position()->set_x(x0);
-                            label->mutable_position()->set_y(y0);
-                            label->set_text(cv::format("%s %.2f", _detector->cone_name(det.class_id), det.score));
-                            label->set_font_size(12);
-                            *label->mutable_text_color() = *color;
-                            label->mutable_background_color()->set_a(0.5); // translucent black
-                        }
-                        return annotations;
-                    };
-
-                    core::log_mcap_only(make_annotations(2.0f, true), _name + "/detections"); // TODO check that the scaling here was actually swapped                                  // matches <name>/raw
-                    core::log_foxglove_only(make_annotations(1.0f, false), _name + "/detections"); // matches <name>/compressed
-                }
-#endif
-
             } else {
                 spdlog::error("[{}] Failed to retrieve buffer from Aravis stream, status {}", _name, static_cast<int>(arv_buffer_get_status(buffer)));
             }
