@@ -431,14 +431,12 @@ namespace core {
             void set_cone_observations(std::shared_ptr<const dv_msgs::Cones> cones);
 
             /**
-<<<<<<< HEAD
              * Sets the latest cone detections from a camera, replacing that camera's previous detections.
              *
              * @param camera the camera name, blackfly_<serial>
              * @param detections the detections
              */
             void set_camera_detections(const std::string& camera, std::shared_ptr<const std::vector<ConeDetection>> detections);
-=======
              * Pose of base_link in the odom frame at the given host timestamp, interpolated
              * from the odometry history.
              *
@@ -454,7 +452,6 @@ namespace core {
 
             /* Lidar mounting pose in base_link, from the static_transforms config */
             const Eigen::Isometry3d& T_base_lidar() const { return _T_base_lidar; }
->>>>>>> main
 
             /**
              * Sets the latest teleop command received from the Foxglove teleop panel.
