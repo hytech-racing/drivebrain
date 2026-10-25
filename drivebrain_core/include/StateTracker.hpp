@@ -197,6 +197,8 @@ namespace core {
         std::variant<SpeedControlOut, TorqueControlOut, std::monostate> out;
         // To only be set in a driverless context
         std::optional<float> desired_steering_deg;
+        // Map-frame point the steering is aiming at, for path-tracking controllers
+        std::optional<xyz_vec<float>> lookahead_point_map_frame;
     };
 
     /**
