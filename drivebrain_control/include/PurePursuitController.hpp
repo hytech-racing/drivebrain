@@ -30,7 +30,7 @@ private:
     std::optional<Steering> _steering(const VehicleState& in, const std::vector<xyz_vec<float>>& path) const;
 
     float _lookahead_dist = 2.5f;
-    float _target_speed = 3.0f; 
+    float _target_speed = 1.79f; 
     float _torque_lim = 5.0f;
 
 };

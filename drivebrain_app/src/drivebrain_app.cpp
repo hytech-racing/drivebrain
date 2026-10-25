@@ -252,7 +252,7 @@ void DrivebrainApp::_actuate(const core::ControllerOutput& out) {
     // Actuate the steering angle
 #if !HOOTL_ENABLED
     if (_kraken_comms) {
-      _kraken_comms->set_angle(*out.desired_steering_deg);
+      _kraken_comms->set_angle(*out.desired_steering_deg * (1.0/0.2428));
     }
 #endif
   }
@@ -281,18 +281,18 @@ void DrivebrainApp::_loop() {
       auto teleop_and_validity = core::StateTracker::instance().teleop_command();
       out_struct = _teleop_command(teleop_and_validity.first);
       command_is_valid = teleop_and_validity.second;
+
     } else {
       auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, constants::NUM_DRIVERED_CONTROLLERS>::instance();
       out_struct = controller_manager.step_active_controller(state_and_validity.first);
+      _autonomy.command(state_and_validity.first); 
       command_is_valid = state_and_validity.second;
     }
 
     core::StateTracker::instance().set_previous_control_output(out_struct);
 
     // Drawn every control tick so the arc tracks the command actually being sent
-    if (drive_mode == core::DriveMode::AUTONOMOUS || drive_mode == core::DriveMode::TELEOP) {
-      core::render_command(state_and_validity.first, out_struct, control::PurePursuitController::WHEELBASE_M, "steering_command");
-    }
+    core::render_command(state_and_validity.first, out_struct, control::PurePursuitController::WHEELBASE_M, "steering_command");
 
     bool enabled = core::DrivebrainControllerInterface::instance().is_enabled();
 

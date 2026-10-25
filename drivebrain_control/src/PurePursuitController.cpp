@@ -21,6 +21,7 @@ ControllerOutput control::PurePursuitController::step(const VehicleState& in) {
         const float rpm = _target_speed * constants::METERS_PER_SECOND_TO_RPM;
         speed_out.desired_rpms = {rpm, rpm, rpm, rpm};
         out.desired_steering_deg = steering->angle_rad * 180.0f / M_PI;
+        spdlog::info("steer deg: {}", out.desired_steering_deg.value());
         out.lookahead_point_map_frame = steering->target;
     } else {
         speed_out.desired_rpms = {0.0f, 0.0f, 0.0f, 0.0f};
