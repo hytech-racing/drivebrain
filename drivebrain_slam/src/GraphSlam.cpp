@@ -3,7 +3,6 @@
 #include <cmath>
 #include <exception>
 #include <string>
-#include <unordered_map>
 
 #include <spdlog/spdlog.h>
 
@@ -38,8 +37,6 @@ Eigen::Isometry2d eigen_pose(const gtsam::Pose2& pose) {
 GraphSlam::GraphSlam()
     : _isam([] {
           gtsam::ISAM2Params p;
-          p.relinearizeThreshold = 0.01;  // GTSAM defaults (0.1 / 10) degrade the map
-          p.relinearizeSkip = 1;
           p.evaluateNonlinearError = true;
           return p;
       }()) {
@@ -115,7 +112,6 @@ std::optional<MapState> GraphSlam::update(const ObservationFrame& frame) {
             factors.emplace_shared<gtsam::BearingRangeFactor<gtsam::Pose2, gtsam::Point2>>(
                 pose_key, landmark_key, gtsam::Rot2(std::atan2(measurement.y(), measurement.x())),
                 range, _bearing_range_noise);
-            _edges.push_back({_pose_count, observation.landmark_id});
             update.set_observations_admitted(update.observations_admitted() + 1);
         }
 
@@ -138,8 +134,7 @@ std::optional<MapState> GraphSlam::update(const ObservationFrame& frame) {
         const gtsam::ISAM2Result result = _isam.update(factors, values);
         factors.resize(0);
         values.clear();
-        const gtsam::Values estimate = _isam.calculateBestEstimate();
-        _previous_pose_guess = estimate.at<gtsam::Pose2>(pose_key);
+        _previous_pose_guess = _isam.calculateEstimate<gtsam::Pose2>(pose_key);
 
         const gtsam::Pose2 pose_map_from_odom = _previous_pose_guess * pose_odom_from_base.inverse();
 
@@ -159,7 +154,7 @@ std::optional<MapState> GraphSlam::update(const ObservationFrame& frame) {
         map.timestamp_ns = frame.timestamp_ns;
         map.pose_map_from_odom = eigen_pose(pose_map_from_odom);
         for (const std::uint64_t id : _landmark_ids) {
-            map.landmarks.push_back({id, estimate.at<gtsam::Point2>(L(id))});
+            map.landmarks.push_back({id, _isam.calculateEstimate<gtsam::Point2>(L(id))});
         }
         return map;
     } catch (const std::exception& error) {
@@ -231,25 +226,11 @@ void Slam::render(const std::uint64_t scan_ns, const std::optional<ObservationFr
     // Redrawn once a second
     if (scan_ns - last_graph_render_ns >= 1'000'000'000ULL) {
         last_graph_render_ns = scan_ns;
-        std::unordered_map<std::uint64_t, Eigen::Vector2d> landmark_by_id;
-        for (const MapLandmark& landmark : map_state->landmarks) {
-            landmark_by_id[landmark.landmark_id] = landmark.position_map_m;
-        }
-        const std::map<std::size_t, Eigen::Isometry2d> poses = backend.optimized_poses();
-        std::vector<core::xyz_vec<float>> chain, edges;
-        for (const auto& [index, pose] : poses) {
+        std::vector<core::xyz_vec<float>> chain;
+        for (const auto& [index, pose] : backend.optimized_poses()) {
             chain.push_back({static_cast<float>(pose.translation().x()), static_cast<float>(pose.translation().y()), 0.05f});
         }
-        for (const MeasurementEdge& edge : backend.measurement_edges()) {
-            const auto pose = poses.find(edge.pose_index);
-            const auto landmark = landmark_by_id.find(edge.landmark_id);
-            if (pose == poses.end() || landmark == landmark_by_id.end()) continue;
-            edges.push_back({static_cast<float>(pose->second.translation().x()),
-                             static_cast<float>(pose->second.translation().y()), 0.05f});
-            edges.push_back({static_cast<float>(landmark->second.x()), static_cast<float>(landmark->second.y()), 0.05f});
-        }
         core::render_path(chain, "slam_graph");
-        core::render_segments(edges, "slam_edges");
     }
 }
 
