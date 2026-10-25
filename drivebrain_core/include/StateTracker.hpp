@@ -2,6 +2,7 @@
 
 #include <condition_variable>
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <foxglove/PointCloud.pb.h>
 #include <foxglove/websocket/base64.hpp>
@@ -314,6 +315,23 @@ namespace core {
 
 
     /**
+     * A YOLO cone detection in full-res upright camera pixels, the image the camera intrinsics describe
+     */
+    struct ConeDetection {
+        float x0, y0, x1, y1;
+        dv_msgs::Cones::ConeColor color;
+        float score;
+    };
+
+    /* Maps a detector class name ("blue", "yellow", "orange", ...) to a cone color */
+    inline dv_msgs::Cones::ConeColor cone_color_from_name(const std::string& name) {
+        if (name == "blue") return dv_msgs::Cones::BLUE;
+        if (name == "yellow") return dv_msgs::Cones::YELLOW;
+        if (name == "orange") return dv_msgs::Cones::ORANGE_SMALL;
+        return dv_msgs::Cones::UNKNOWN;
+    }
+
+    /**
      * @struct Contains driverless data representing the entire internal
      * and external state of the vehicle
      */
@@ -322,6 +340,7 @@ namespace core {
         bool lidar_is_valid;
         std::shared_ptr<const dv_msgs::Cones> cone_observations;
         std::shared_ptr<const std::vector<xyz_vec<float>>> path;
+        std::map<std::string, std::shared_ptr<const std::vector<ConeDetection>>> camera_detections; // latest per camera, keyed by camera name
     };
 
 
@@ -406,6 +425,14 @@ namespace core {
              * @param cones the observed cones, vehicle frame
              */
             void set_cone_observations(std::shared_ptr<const dv_msgs::Cones> cones);
+
+            /**
+             * Sets the latest cone detections from a camera, replacing that camera's previous detections.
+             *
+             * @param camera the camera name, blackfly_<serial>
+             * @param detections the detections
+             */
+            void set_camera_detections(const std::string& camera, std::shared_ptr<const std::vector<ConeDetection>> detections);
 
             /**
              * Pose of base_link in the odom frame at the given host timestamp, interpolated

@@ -7,6 +7,8 @@
 
 #include <StateTracker.hpp>
 #include <GraphSlam.hpp>
+#include <LidarFilter.hpp>
+#include <ConeClassifier.hpp>
 
 namespace core {
 
@@ -56,6 +58,10 @@ private:
 
   std::thread _thread;
   std::atomic<bool> _running{false};
+
+  perception::ConeClassifier _classifier{"intrinsics"};
+  // Rate of OS1 LiDAR
+  static constexpr std::chrono::milliseconds _period{100}; 
   std::unique_ptr<slam::Slam> _slam;
 };
 

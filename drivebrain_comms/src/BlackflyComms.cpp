@@ -73,7 +73,7 @@ bool BlackflyComms::start(const std::string& id, const std::string& name, const 
         // FOLLOW UP: depending on performance we may want to run 
         // the detector in a seperate thread and pop off of a queue
         // but we'll see how this does.
-        _detector = std::make_unique<Detector>("/home/hytech/engines/cones.engine");
+        _detector = std::make_unique<Detector>("/home/hytech/engines/yolo/cones.engine");
     } catch (const std::exception& e) {
         spdlog::error("[{}] Cone detection disabled: {}", _name, e.what());
     }
@@ -149,6 +149,15 @@ void BlackflyComms::_aravis_receive_loop() {
                 #if JETSON_ENABLED
                 if (_detector) {
                     const auto detections = _detector->detect(bgr, 0.5f);
+                    // perception gets the boxes in full-res upright pixels
+                    auto cone_detections = std::make_shared<std::vector<core::ConeDetection>>();
+                    for (const auto& det : detections) {
+                        const cv::Rect& r = det.bbox;
+                        cone_detections->push_back({2.0f * r.x, 2.0f * r.y, 2.0f * (r.x + r.width), 2.0f * (r.y + r.height),
+                                                    core::cone_color_from_name(_detector->cone_name(det.class_id)), det.score});
+                    }
+                    core::StateTracker::instance().set_camera_detections(_name, cone_detections);
+
                     auto make_annotations = [&](float scale, bool unrotate) {
                         auto annotations = std::make_shared<foxglove::ImageAnnotations>();
                         for (const auto& det : detections) {

@@ -1,6 +1,10 @@
 #include <SimComms.hpp>
 #include <foxglove/PointCloud.pb.h>
 #include <foxglove/FrameTransform.pb.h>
+#include <foxglove/ImageAnnotations.pb.h>
+#include <foxglove/RawImage.pb.h>
+#include <algorithm>
+#include <cstdio>
 #include <memory>
 #include "StateTracker.hpp"
 #include "dv_msgs.pb.h"
@@ -79,8 +83,6 @@ bool SimComms::send_message(std::shared_ptr<google::protobuf::Message> message) 
     m.addmem(body.data(), body.size());
 
     try {
-        /* Both CAN drivers route here in HOOTL, so the sim sees each message twice.
-           Commands are latest-wins so it costs nothing but the bytes. */
         std::unique_lock lk(_send_mutex);
         return m.send(_veh_data_send_socket, static_cast<int>(zmq::send_flags::dontwait));
     } catch (const zmq::error_t& e) {
@@ -167,6 +169,8 @@ void SimComms::_veh_recv_loop() {
         std::string topic;
         if (m.size() > 1) topic = m.popstr();
         auto body = m.pop();
+        // MCAP replay also sends the topic, other sims don't
+        const std::string topic = m.empty() ? "" : m.popstr();
 
         std::shared_ptr<google::protobuf::Message> msg(parse_by_name(type_name, body.data(), body.size()));
 
@@ -185,6 +189,29 @@ void SimComms::_veh_recv_loop() {
         } else if (desc == hytech_msgs::pose::descriptor()) {
             core::render_pose(std::static_pointer_cast<hytech_msgs::pose>(msg), "ground_truth_pose");
         } else if (desc == foxglove::FrameTransform::descriptor()) {
+            core::log(msg);
+        } else if (desc == foxglove::RawImage::descriptor()) {
+            auto img = std::static_pointer_cast<foxglove::RawImage>(msg);
+            if (img->encoding() == "bayer_rggb8" && img->step() == img->width()) {
+                std::reverse(img->mutable_data()->begin(), img->mutable_data()->end());
+                img->set_encoding("bayer_bggr8");
+            }
+            // per-camera topic, otherwise every camera lands on "RawImage"
+            core::log(img, img->frame_id() + "/raw");
+        } else if (desc == foxglove::ImageAnnotations::descriptor() && topic.ends_with("/detections")) {
+            // Recorded YOLO boxes: LINE_LOOP corners in raw (upside-down) full-res pixels, labelled "<color> <score>"
+            constexpr float W = 1280, H = 1024;
+            const auto& ann = static_cast<const foxglove::ImageAnnotations&>(*msg);
+            auto detections = std::make_shared<std::vector<core::ConeDetection>>();
+            for (int i = 0; i < ann.points_size() && i < ann.texts_size(); ++i) {
+                const auto& p = ann.points(i).points();
+                if (p.size() != 4) continue;
+                char name[16] = {};
+                float score = 0;
+                std::sscanf(ann.texts(i).text().c_str(), "%15s %f", name, &score);
+                detections->push_back({W - p[2].x(), H - p[2].y(), W - p[0].x(), H - p[0].y(), core::cone_color_from_name(name), score});
+            }
+            core::StateTracker::instance().set_camera_detections(topic.substr(0, topic.find('/')), detections);
             core::log(msg, topic);
         } else {
             core::log(msg, topic);

@@ -221,12 +221,12 @@ void DrivebrainApp::_actuate(const core::ControllerOutput& out) {
     torque_limit_msg->set_drivebrain_torque_rl(speedControl->torque_lim_nm.RL);
     torque_limit_msg->set_drivebrain_torque_rr(speedControl->torque_lim_nm.RR);
 
-#if !JETSON_ENABLED
     _telem_can->send_message(desired_rpm_msg);
     _telem_can->send_message(torque_limit_msg);
-    // _aux_can->send_message(desired_rpm_msg);
-    // _aux_can->send_message(torque_limit_msg);
-#endif
+//   #if !JETSON_ENABLED
+//     _aux_can->send_message(desired_rpm_msg);
+//     _aux_can->send_message(torque_limit_msg);
+// #endif
 
     core::log(desired_rpm_msg);
     core::log(torque_limit_msg);
@@ -239,7 +239,7 @@ void DrivebrainApp::_actuate(const core::ControllerOutput& out) {
 
 #if !JETSON_ENABLED
     _telem_can->send_message(desired_torque_msg);
-    _aux_can->send_message(desired_torque_msg);
+    // _aux_can->send_message(desired_torque_msg);
 #endif
 
     core::log(desired_torque_msg);
@@ -250,7 +250,7 @@ void DrivebrainApp::_actuate(const core::ControllerOutput& out) {
 
 #if !JETSON_ENABLED
     _telem_can->send_message(steering_msg);
-    _aux_can->send_message(steering_msg);
+    // _aux_can->send_message(steering_msg);
 #endif
 
     core::log(steering_msg);
