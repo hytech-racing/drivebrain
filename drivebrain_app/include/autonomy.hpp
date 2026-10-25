@@ -6,7 +6,7 @@
 #include <thread>
 
 #include <StateTracker.hpp>
-#include <GraphSLAM.hpp>
+#include <GraphSlam.hpp>
 #include <LidarFilter.hpp>
 #include <ConeClassifier.hpp>
 

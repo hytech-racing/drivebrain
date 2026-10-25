@@ -77,7 +77,7 @@ void Autonomy::_run() {
     log_foxglove_only(cloud, "perception/deskewed_points");
 
     std::shared_ptr<dv_msgs::Cones> cones = perception::filter_cloud(*cloud);
-    cones = _classifier.classify(cones, dv.camera_detections, last_scan->frame_id());
+    cones = _classifier.classify(cones, StateTracker::instance().dv_state().camera_detections, last_scan->frame_id());
     render_cones(cones, "filtered_cones", "os_sensor");
 
     const auto map = _slam->update(*cones, scan_ns, *pose, T_base_lidar);

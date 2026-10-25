@@ -341,10 +341,6 @@ namespace core {
         std::shared_ptr<const dv_msgs::Cones> cone_observations;
         std::shared_ptr<const std::vector<xyz_vec<float>>> path;
         std::map<std::string, std::shared_ptr<const std::vector<ConeDetection>>> camera_detections; // latest per camera, keyed by camera name
-
-        /* Returns the latest LiDAR point cloud in a clean struct */
-        PointView points() const { return lidar_cloud ? core::points(*lidar_cloud) : PointView{}; }
-        uint64_t num_points() const { return lidar_cloud ? core::num_points(*lidar_cloud) : 0; }
     };
 
 
@@ -437,6 +433,8 @@ namespace core {
              * @param detections the detections
              */
             void set_camera_detections(const std::string& camera, std::shared_ptr<const std::vector<ConeDetection>> detections);
+
+            /**
              * Pose of base_link in the odom frame at the given host timestamp, interpolated
              * from the odometry history.
              *

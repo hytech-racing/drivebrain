@@ -234,6 +234,7 @@ namespace {
                 if (placed[j].score > best_score[i]) {
                     best_score[i] = placed[j].score;
                     cones->mutable_cones(i)->set_color(placed[j].color);
+                    cones->mutable_cones(i)->set_color_confidence(placed[j].score);
                 }
             }
         }
