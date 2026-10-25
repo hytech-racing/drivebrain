@@ -142,11 +142,6 @@ namespace comms
         talon_config.CurrentLimits.SupplyCurrentLimit = units::current::ampere_t{_config.supply_current_limit_a};
         talon_config.CurrentLimits.SupplyCurrentLimitEnable = true;
 
-        talon_config.SoftwareLimitSwitch.ForwardSoftLimitEnable = true;
-        talon_config.SoftwareLimitSwitch.ForwardSoftLimitThreshold = _deg_to_turns(_config.max_angle_deg);
-        talon_config.SoftwareLimitSwitch.ReverseSoftLimitEnable = true;
-        talon_config.SoftwareLimitSwitch.ReverseSoftLimitThreshold = _deg_to_turns(_config.min_angle_deg);
-
         auto status = _kraken->GetConfigurator().Apply(talon_config);
         if (!status.IsOK())
         {
