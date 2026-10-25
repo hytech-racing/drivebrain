@@ -111,7 +111,7 @@
         "enable_timeout_ms": 100,
         "enable_output": true,
         "steering_timeout_ms": 100,
-        "kp": 60.0,
+        "kp": 90.0,
         "ki": 0.0,
         "kd": 0.0,
         "ks": 0.44,
