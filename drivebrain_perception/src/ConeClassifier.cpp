@@ -1,10 +1,13 @@
 #include "ConeClassifier.hpp"
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <regex>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <foxglove/ImageAnnotations.pb.h>
+#include <spdlog/fmt/fmt.h>
 #include <spdlog/spdlog.h>
 #if JETSON_ENABLED
 #include <opencv2/imgproc.hpp>
@@ -18,6 +21,14 @@ namespace {
 
     constexpr std::array<dv_msgs::Cones::ConeColor, 4> CLASS_COLORS{
         dv_msgs::Cones::BLUE, dv_msgs::Cones::YELLOW, dv_msgs::Cones::ORANGE_SMALL, dv_msgs::Cones::UNKNOWN};
+
+#if JETSON_ENABLED
+    // cone_boxes are drawn on the live <camera>/compressed stream, the half resolution 2x2 Bayer average
+    constexpr float STREAM_SCALE = 0.5f;
+#else
+    // cone_boxes are drawn on the replayed full resolution <camera>/raw
+    constexpr float STREAM_SCALE = 1.0f;
+#endif
 
     const Eigen::Matrix3f R_LIDAR_FLU = (Eigen::Matrix3f() <<
          0, 1, 0,
@@ -125,7 +136,8 @@ namespace {
     ConeClassifier::ConeClassifier(const std::string& intrinsics_dir) {
 #if JETSON_ENABLED
         try {
-            _detector = std::make_unique<comms::Detector>("/home/hytech/engines/cone_color.engine");
+            _detector = std::make_unique<comms::Detector>("/home/hytech/engines/cones.engine");
+            spdlog::info("[ConeClassifier] cone color model loaded, class 0..3 = BLUE, YELLOW, ORANGE_SMALL, UNKNOWN");
         } catch (const std::exception& e) {
             spdlog::error("[ConeClassifier] cone coloring disabled: {}", e.what());
         }
@@ -153,7 +165,12 @@ namespace {
     std::shared_ptr<dv_msgs::Cones> ConeClassifier::classify(std::shared_ptr<dv_msgs::Cones> cones, const std::map<std::string, std::shared_ptr<const foxglove::RawImage>>& frames) {
         for (const auto& [name, frame] : frames) {
             const auto cam_it = _cameras.find(name);
-            if (cam_it == _cameras.end() || !frame) continue;
+            if (cam_it == _cameras.end()) {
+                static std::set<std::string> warned;
+                if (warned.insert(name).second) spdlog::warn("[ConeClassifier] no intrinsics for camera {}, its frames are ignored", name);
+                continue;
+            }
+            if (!frame) continue;
             const CameraModel& cam = cam_it->second;
             const Eigen::Isometry3f T_cam_lidar = camera_from_lidar(name);
 
@@ -162,6 +179,8 @@ namespace {
             for (int i = 0; i < cones->cones_size(); ++i) {
                 if (const auto box = project_cone(cam, T_cam_lidar, cones->cones(i).position())) boxes.emplace_back(i, *box);
             }
+            // model class and score per box, in box order; shorter than boxes if the model didn't run on some
+            std::vector<std::pair<int, float>> detections;
 
 #if JETSON_ENABLED
             if (_detector && !boxes.empty() && frame->encoding() == "bayer_bggr8") {
@@ -177,20 +196,60 @@ namespace {
                     patches.push_back(patch);
                 }
 
-                const auto detections = _detector->classify(patches);
-                for (std::size_t k = 0; k < detections.size(); ++k) {
-                    auto* cone = cones->mutable_cones(boxes[k].first);
-                    if (detections[k].score > cone->color_confidence()) {
-                        cone->set_color(CLASS_COLORS.at(detections[k].class_id));
-                        cone->set_color_confidence(detections[k].score);
+                // the exact model input, tiled left to right in box order
+                cv::Mat mosaic;
+                cv::hconcat(patches, mosaic);
+                auto patch_image = std::make_shared<foxglove::RawImage>();
+                *patch_image->mutable_timestamp() = frame->timestamp();
+                patch_image->set_frame_id(name);
+                patch_image->set_width(mosaic.cols);
+                patch_image->set_height(mosaic.rows);
+                patch_image->set_step(mosaic.cols * 3);
+                patch_image->set_encoding("rgb8");
+                patch_image->set_data(mosaic.data, mosaic.total() * mosaic.elemSize());
+                core::log(patch_image, name + "/cone_patches");
+
+                for (const auto& d : _detector->classify(patches)) {
+                    auto* cone = cones->mutable_cones(boxes[detections.size()].first);
+                    if (d.score > cone->color_confidence()) {
+                        cone->set_color(CLASS_COLORS.at(d.class_id));
+                        cone->set_color_confidence(d.score);
                     }
+                    detections.emplace_back(d.class_id, d.score);
                 }
             }
 #endif
 
+            // once a second per camera
+            static std::map<std::string, std::chrono::steady_clock::time_point> last_summary;
+            if (const auto now = std::chrono::steady_clock::now(); now - last_summary[name] > std::chrono::seconds(1)) {
+                last_summary[name] = now;
+                spdlog::info("[ConeClassifier] {}: {} cones, {} in view, {} classified", name, cones->cones_size(), boxes.size(), detections.size());
+            }
+
             auto annotations = std::make_shared<foxglove::ImageAnnotations>();
-            for (const auto& [i, box] : boxes) {
-                const auto [x0, y0, x1, y1] = box;
+            for (std::size_t k = 0; k < boxes.size(); ++k) {
+                const auto [bx0, by0, bx1, by1] = boxes[k].second;
+                const float x0 = bx0 * STREAM_SCALE, y0 = by0 * STREAM_SCALE, x1 = bx1 * STREAM_SCALE, y1 = by1 * STREAM_SCALE;
+
+                // outline in the model's color, white when the model didn't run on this box
+                float r = 1.0f, g = 1.0f, b = 1.0f;
+                if (k < detections.size()) {
+                    switch (CLASS_COLORS.at(detections[k].first)) {
+                        case dv_msgs::Cones::BLUE:         r = 0.0f; g = 0.3f;  b = 1.0f; break;
+                        case dv_msgs::Cones::YELLOW:       r = 1.0f; g = 0.85f; b = 0.0f; break;
+                        case dv_msgs::Cones::ORANGE_SMALL: r = 1.0f; g = 0.45f; b = 0.0f; break;
+                        default: break;
+                    }
+                    auto* text = annotations->add_texts();
+                    *text->mutable_timestamp() = frame->timestamp();
+                    text->mutable_position()->set_x(x0);
+                    text->mutable_position()->set_y(y0);
+                    text->set_text(fmt::format("{} {:.2f}", dv_msgs::Cones::ConeColor_Name(CLASS_COLORS.at(detections[k].first)), detections[k].second));
+                    text->set_font_size(14);
+                    auto* text_color = text->mutable_text_color();
+                    text_color->set_r(r);  text_color->set_g(g);  text_color->set_b(b);  text_color->set_a(1.0);
+                }
 
                 auto* outline = annotations->add_points();
                 *outline->mutable_timestamp() = frame->timestamp();
@@ -202,7 +261,7 @@ namespace {
                     p->set_y(y);
                 }
                 auto* color = outline->mutable_outline_color();
-                color->set_r(1.0);  color->set_g(1.0);  color->set_b(1.0);  color->set_a(1.0);
+                color->set_r(r);  color->set_g(g);  color->set_b(b);  color->set_a(1.0);
                 outline->set_thickness(2);
             }
             core::log(annotations, name + "/cone_boxes");

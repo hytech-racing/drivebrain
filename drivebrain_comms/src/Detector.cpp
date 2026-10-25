@@ -54,7 +54,7 @@ Detector::Detector(const std::string& engine_path) {
     _context->setTensorAddress(_input_name, _input_dev);
     _context->setTensorAddress(output_name, _output_dev);
 
-    spdlog::info("Loaded {} ({}x{} input, batch up to {})", engine_path, _input_w, _input_h, _max_batch);
+    spdlog::info("[Detector] loaded {} ({}x{} input, {} classes, batch up to {})", engine_path, _input_w, _input_h, _num_classes, _max_batch);
 }
 
 Detector::~Detector() {
