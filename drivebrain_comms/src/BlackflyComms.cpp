@@ -134,6 +134,7 @@ void BlackflyComms::_aravis_receive_loop() {
                 cv::Mat bgr;
                 // no need to resize as 2x2 averaging already halves the dimensions
                 averageBayer2x2ToBgr(static_cast<const uint8_t*>(data), width, height, bgr);
+                cv::rotate(bgr, bgr, cv::ROTATE_180);
 
                 std::vector<uchar> jpeg_buf;
                 cv::imencode(".jpg", bgr, jpeg_buf, {cv::IMWRITE_JPEG_QUALITY, 80});

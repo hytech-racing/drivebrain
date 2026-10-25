@@ -1,5 +1,6 @@
 #include "autonomy.hpp"
 
+#include <cmath>
 #include <memory>
 #include <variant>
 #include <vector>
@@ -83,6 +84,19 @@ void Autonomy::_run() {
     // Perform SLAM update with the filtered cones
     const auto map = _slam->update(*cones, scan_ns, *pose, T_base_lidar);
     if (!map) continue;
+
+    if (_slam->map_state) {
+      const Eigen::Isometry2d pose_map = _slam->map_state->pose_map_from_odom * *pose;
+      const double yaw = std::atan2(pose_map.linear()(1, 0), pose_map.linear()(0, 0));
+      auto map_pose = std::make_shared<hytech_msgs::pose>();
+      map_pose->mutable_position()->set_x(pose_map.translation().x());
+      map_pose->mutable_position()->set_y(pose_map.translation().y());
+      map_pose->mutable_orientation()->set_w(std::cos(yaw / 2));
+      map_pose->mutable_orientation()->set_z(std::sin(yaw / 2));
+      log(map_pose, "slam/vehicle_pose");                                  // MCAP + Foxglove
+      render_pose(map_pose, "vehicle_pose_map");                           // box in the 3D panel, map frame
+      StateTracker::instance().handle_receive_protobuf_message(map_pose);  // planner + pure pursuit
+    }
 
     // Update the state tracker with the new cone observations and plan a path
     StateTracker::instance().set_cone_observations(map);
