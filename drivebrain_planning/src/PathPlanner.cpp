@@ -45,7 +45,7 @@ namespace planning {
       }
 
       if (coords.size() < 6) { // Each cone has an x and y
-        spdlog::error("not enough cones");
+        spdlog::debug("not enough cones");
         return midpoints; // Min 3 points required to do triangulation
       }
 
