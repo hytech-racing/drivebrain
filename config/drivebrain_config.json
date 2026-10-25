@@ -28,7 +28,6 @@
     "TeleopController": {
         "max_torque": 4.0,
         "max_regen_torque": 4.0,
-        "max_steering_angle_deg": 70.0,
         "dt_rate_hz": 1000.0,
         "joystick_device_path": "/dev/input/js0",
         "accel_axis": 5,
@@ -105,7 +104,7 @@
         "canbus_name": "can1",
         "send_rate_hz": 200,
         "reduction": 31.2139,
-        "min_angle_deg": -90.0,
+        "min_angle_deg": -82.0,
         "max_angle_deg": 90.0,
         "stator_current_limit_a": 120.0,
         "supply_current_limit_a": 40.0,
