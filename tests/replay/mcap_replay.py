@@ -61,7 +61,7 @@ with open(mcap_path, "rb") as f:
                 pass
         else:
             # topic lets drivebrain tell which camera a /detections message belongs to
-            recv_sock.send_multipart([schema.name.encode(), message.data, channel.topic.encode()])
+            recv_sock.send_multipart([schema.name.encode(), channel.topic.encode(), message.data])
 
 recv_sock.close()
 send_sock.close()

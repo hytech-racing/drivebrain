@@ -19,7 +19,6 @@
 #include <filesystem>
 #include <stdexcept>
 
-
 std::atomic<bool> running{true};
 
 void sig_handler(int signal) {
@@ -97,8 +96,6 @@ void DrivebrainApp::run() {
   }
 #endif
 
-
-  // CAN device names are defined in the drivebrain JSON config
   _telem_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("telem_can_device").value(), _dbc_path);
   // _aux_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("aux_can_device").value(), _dbc_path);
   spdlog::info("Initialized CAN drivers");
@@ -129,23 +126,16 @@ void DrivebrainApp::run() {
   });
 #endif
 
-  // Initialize controllers
-  const size_t num_controllers = 2;
-  _mode1 = std::make_shared<control::LoadCellTorqueController>();
+  _mode1 = std::make_shared<control::LoadCellTorqueController>(); 
   if (!_mode1->init()) {
     spdlog::error("Failed to initialize mode 1");
   }
 
-  _mode2 = std::make_shared<control::TeleopController>();
-  if (!_mode2->init()) {
-    spdlog::error("Failed to initialize mode 2");
-  }
-
-  std::array<std::shared_ptr<control::Controller<core::ControllerOutput, core::VehicleState>>, num_controllers> controllers{_mode1, _mode2};
-
+  std::array<std::shared_ptr<control::Controller<core::ControllerOutput, core::VehicleState>>, constants::NUM_DRIVERED_CONTROLLERS> controllers{_mode1};
+  
   // Create controller manager instance
-  ControllerManager<control::Controller<core::ControllerOutput, core::VehicleState>, num_controllers>::create(controllers);
-  if(!ControllerManager<control::Controller<core::ControllerOutput, core::VehicleState>, num_controllers>::instance().init()) {
+  ControllerManager<control::Controller<ControllerOutput, VehicleState>, constants::NUM_DRIVERED_CONTROLLERS>::create(controllers);
+  if(!ControllerManager<control::Controller<ControllerOutput, VehicleState>, constants::NUM_DRIVERED_CONTROLLERS>::instance().init()) {
     throw std::runtime_error("Failed to initialize controller manager");
   }
 
@@ -154,7 +144,10 @@ void DrivebrainApp::run() {
   core::DrivebrainControllerInterface::create();
 
   spdlog::info("Constructed drivebrain controller interface");
-  if (_driving_mode == DrivingMode::DRIVERLESS || _driving_mode == DrivingMode::TELEOP) {
+
+  core::DriveMode drive_mode = static_cast<core::DriveMode>(core::DrivebrainControllerInterface::instance().get_drive_mode());
+
+  if (drive_mode == core::DriveMode::AUTONOMOUS || drive_mode == core::DriveMode::TELEOP) {
     _autonomy.start();
   }
 
@@ -246,14 +239,17 @@ void DrivebrainApp::_actuate(const core::ControllerOutput& out) {
   }
 
   if (out.desired_steering_deg) {
+    // Send the steering message over CAN for logging
     steering_msg->set_drivebrain_steering(*out.desired_steering_deg);
-
-#if !JETSON_ENABLED
     _telem_can->send_message(steering_msg);
-    // _aux_can->send_message(steering_msg);
-#endif
-
     core::log(steering_msg);
+
+    // Actuate the steering angle
+#if !HOOTL_ENABLED
+    if (_kraken_comms) {
+      _kraken_comms->set_angle(*out.desired_steering_deg);
+    }
+#endif
   }
 }
 
@@ -266,44 +262,42 @@ void DrivebrainApp::_loop() {
 
     next_tick += loop_time_ms;
 
-    // spdlog::info("tick: get_state");
-
     auto state_and_validity = core::StateTracker::instance().vehicle_state();
-
     core::ControllerOutput out_struct;
     bool command_is_valid;
-    if (_driving_mode == DrivingMode::DRIVERLESS) {
-      out_struct = _autonomy.command(state_and_validity.first);
+
+    core::DriveMode drive_mode = static_cast<core::DriveMode>(core::DrivebrainControllerInterface::instance().get_drive_mode());
+
+    if (drive_mode == core::DriveMode::AUTONOMOUS) {
+      _autonomy.start(); // Fine to do this cuz start() is idempotent and won't restart an already running stack
+      out_struct = _autonomy.command(state_and_validity.first); 
       command_is_valid = _autonomy.is_valid();
-    } else if (_driving_mode == DrivingMode::TELEOP) {
+    } else if (drive_mode == core::DriveMode::TELEOP) {
       auto teleop_and_validity = core::StateTracker::instance().teleop_command();
       out_struct = _teleop_command(teleop_and_validity.first);
       command_is_valid = teleop_and_validity.second;
     } else {
-      constexpr size_t num_controllers = 2;
-      auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, num_controllers>::instance();
+      auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, constants::NUM_DRIVERED_CONTROLLERS>::instance();
       out_struct = controller_manager.step_active_controller(state_and_validity.first);
       command_is_valid = state_and_validity.second;
-
-#if !HOOTL_ENABLED
-      if (_kraken_comms && controller_manager.get_active_controller_index() == 1) _kraken_comms->set_angle(_mode2->steering_command_deg);
-#endif
     }
 
     core::StateTracker::instance().set_previous_control_output(out_struct);
 
-    if (command_is_valid) {
+    bool enabled = core::DrivebrainControllerInterface::instance().is_enabled();
+
+    if (command_is_valid && enabled) {
       _actuate(out_struct);
     }
 
+    // Log MCAP Info
     std::tuple<std::string, bool> mcap_status = core::MCAPLogger::instance().status();
     std::string logile_name = std::get<0>(mcap_status);
-
     std::shared_ptr<hytech_msgs::McapInfo> mcap_info = std::make_shared<hytech_msgs::McapInfo>();
     mcap_info->set_current_mcap(logile_name);
-
     core::log(mcap_info);
 
+    // Check for loop overruns
     auto now = std::chrono::steady_clock::now();
     if(now > next_tick) {
       spdlog::warn("Loop overrun by {}", now-next_tick);
@@ -311,8 +305,6 @@ void DrivebrainApp::_loop() {
     }
 
     std::this_thread::sleep_until(next_tick);
-
-    // spdlog::info("tick: stop");
   }
 
 }

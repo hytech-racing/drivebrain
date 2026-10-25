@@ -257,6 +257,9 @@ namespace core {
         float old_energy_meter_kw;
         DrivetrainData dt_data;
         AccumulatorData acc_data;
+
+        xyz_vec<float> vehicle_position_map_frame;
+        xyz_vec<float> vehicle_heading_map_frame_unit_vector;
     };
 
     enum class ControllerManagerStatus
@@ -339,6 +342,8 @@ namespace core {
         std::shared_ptr<const foxglove::PointCloud> lidar_cloud;
         bool lidar_is_valid;
         std::shared_ptr<const dv_msgs::Cones> cone_observations;
+        // Full colored track map from the sim, map frame. Only set in HOOTL
+        std::shared_ptr<const dv_msgs::Cones> ground_truth_cones;
         std::shared_ptr<const std::vector<xyz_vec<float>>> path;
         std::map<std::string, std::shared_ptr<const std::vector<ConeDetection>>> camera_detections; // latest per camera, keyed by camera name
     };
@@ -425,6 +430,13 @@ namespace core {
              * @param cones the observed cones, vehicle frame
              */
             void set_cone_observations(std::shared_ptr<const dv_msgs::Cones> cones);
+
+            /**
+             * Sets the ground-truth track map sent by the sim.
+             *
+             * @param cones every cone on the track with its true color, map frame
+             */
+            void set_ground_truth_cones(std::shared_ptr<const dv_msgs::Cones> cones);
 
             /**
              * Sets the latest cone detections from a camera, replacing that camera's previous detections.

@@ -184,7 +184,7 @@ std::shared_ptr<dv_msgs::Cones> Slam::update(const dv_msgs::Cones& cones, const 
         const Eigen::Vector3d p_base = T_base_lidar * p_lidar;
         const float range_m = static_cast<float>(std::hypot(p_lidar.x(), p_lidar.y()));
         frame.detections.push_back(
-            {p_base.head<2>(), perception::detection_confidence(range_m), cone.color(), 0.0});
+            {p_base.head<2>(), perception::detection_confidence(range_m), cone.color(), cone.color_confidence()});
     }
 
     const std::optional<ObservationFrame> observations = frontend.process_frame(frame);

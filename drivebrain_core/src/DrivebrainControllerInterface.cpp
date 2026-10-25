@@ -30,6 +30,21 @@ void core::DrivebrainControllerInterface::destroy() {
 }
 
 core::DrivebrainControllerInterface::DrivebrainControllerInterface() {
+    auto drive_mode = FoxgloveServer::instance().get_param<int>("drivebraincontrollerinterface/drive_mode"); 
+    auto enabled = FoxgloveServer::instance().get_param<bool>("drivebraincontrollerinterface/enabled");
+    if (!enabled) {
+        spdlog::warn("Drivebrain Controller Interface is not enabled");
+        _enabled = false;
+    } else {
+        _enabled = *enabled;
+    }
+    
+    if (!drive_mode) {
+        spdlog::warn("Drive mode parameter not found, defaulting to MANUAL");
+        _drive_mode = static_cast<int>(core::DriveMode::MANUAL);
+    } else {
+        _drive_mode = *drive_mode;
+    }
     core::FoxgloveServer::instance().register_param_callback(std::bind(&core::DrivebrainControllerInterface::_handle_parameter_updates, this, std::placeholders::_1));
 }
 
@@ -38,39 +53,29 @@ void core::DrivebrainControllerInterface::_handle_parameter_updates(const std::u
 
     spdlog::info("Entering drivebrain controller interface parameter updates.");
     
-    if (auto should_log = process_param_update<bool>(new_params, "drivebraincontrollerinterface/should_log")) {
-        *should_log ? _request_start_logging() : _request_stop_logging();
-    }
-
     if (auto controller_index = process_param_update<int>(new_params, "drivebraincontrollerinterface/controller_index")) {
         _request_controller_change(*controller_index);
     }
 
+    if (auto drive_mode = process_param_update<int>(new_params, "drivebraincontrollerinterface/drive_mode")) {
+        spdlog::info("Drive mode updated to: {}", *drive_mode);
+        if (*drive_mode < static_cast<int>(core::DriveMode::MANUAL) || *drive_mode > static_cast<int>(core::DriveMode::TELEOP)) {
+            spdlog::warn("Invalid drive mode: {}", *drive_mode);
+        } else {
+            _drive_mode = *drive_mode;
+        }
+    }
+
+    if (auto enabled = process_param_update<bool>(new_params, "drivebraincontrollerinterface/enabled")) {
+        spdlog::info("Enabled updated to: {}", *enabled);
+        _enabled = *enabled;
+    }
+
     spdlog::info("Exiting drivebrain controller interface parameter updates.");
-
-}
-
-void core::DrivebrainControllerInterface::_request_start_logging() {
-    std::tuple<std::string, bool> mcap_status = core::MCAPLogger::instance().status();
-    bool is_logging = std::get<1>(mcap_status);
-    if (!is_logging) {
-        core::MCAPLogger::instance().open_new_mcap(); 
-        core::MCAPLogger::instance().init_logging();
-    }
-}
-
-void core::DrivebrainControllerInterface::_request_stop_logging() {
-    std::tuple<std::string, bool> mcap_status = core::MCAPLogger::instance().status();
-    bool is_logging = std::get<1>(mcap_status);
-    if (is_logging) {
-        core::MCAPLogger::instance().stop_logging();
-        core::MCAPLogger::instance().close_active_mcap(); 
-    }
 }
 
 void core::DrivebrainControllerInterface::_request_controller_change(int controller_index) {
-    const size_t num_controllers = 2;
-    auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, num_controllers>::instance();
+    auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, constants::NUM_DRIVERED_CONTROLLERS>::instance();
 
     if (controller_index == controller_manager.get_active_controller_index()) {
         return;

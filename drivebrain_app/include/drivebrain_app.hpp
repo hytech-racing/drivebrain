@@ -14,9 +14,10 @@
 #include "VNComms.hpp"
 #include "OusterComms.hpp"
 #include "autonomy.hpp"
-
+#include "Literals.hpp"
 #include "hytech_msgs.pb.h"
 #include <BlackflyComms.hpp>
+#include "PurePursuitController.hpp"
 
 enum class DrivingMode { DRIVERED, DRIVERLESS, TELEOP };
 
@@ -28,7 +29,7 @@ public:
    * @param json_params_path The path to the JSON parameters file
    * @param dbc_path The path to the DBC file
   */
-   DrivebrainApp(const std::string& json_params_path, const std::string& dbc_path);
+  DrivebrainApp(const std::string& json_params_path, const std::string& dbc_path);
   ~DrivebrainApp();
 
   DrivebrainApp& operator=(DrivebrainApp&&) = delete;
@@ -88,7 +89,7 @@ private:
 
   /* Controllers */
   std::shared_ptr<control::LoadCellTorqueController> _mode1;
-  std::shared_ptr<control::TeleopController> _mode2;
+  std::shared_ptr<control::PurePursuitController> _mode2;
 
   /* Vectornav */
   std::unique_ptr<comms::VNDriver> _vn_driver;
@@ -108,10 +109,4 @@ private:
 
   /* Driverless autonomy stack */
   core::Autonomy _autonomy;
-
-#if HOOTL_ENABLED
-  DrivingMode _driving_mode = DrivingMode::TELEOP;
-#else
-  DrivingMode _driving_mode = DrivingMode::DRIVERED;
-#endif
 };

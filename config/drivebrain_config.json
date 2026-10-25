@@ -63,8 +63,9 @@
         "port_name": "/dev/ttyUSB0"
     },
     "DrivebrainControllerInterface": {
-        "should_log": true, 
-        "controller_index": 0
+        "controller_index": 0,
+        "drive_mode": 1, 
+        "enabled": false
     },
     "FzEstimator": {
         "Q_gain": 0.1,

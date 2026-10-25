@@ -169,8 +169,6 @@ void SimComms::_veh_recv_loop() {
         std::string topic;
         if (m.size() > 1) topic = m.popstr();
         auto body = m.pop();
-        // MCAP replay also sends the topic, other sims don't
-        const std::string topic = m.empty() ? "" : m.popstr();
 
         std::shared_ptr<google::protobuf::Message> msg(parse_by_name(type_name, body.data(), body.size()));
 
@@ -184,10 +182,11 @@ void SimComms::_veh_recv_loop() {
         auto desc = msg->GetDescriptor();
         if (desc == dv_msgs::Cones::descriptor()) {
             // core::render_cones(std::static_pointer_cast<dv_msgs::Cones>(msg), "ground_truth_cones");
-            // Right now for testing purposes, we assume that all cones of the track are visible
-            core::StateTracker::instance().set_cone_observations(std::static_pointer_cast<dv_msgs::Cones>(msg));
+            // Kept in its own slot so the autonomy stack's map doesn't overwrite it
+            core::StateTracker::instance().set_ground_truth_cones(std::static_pointer_cast<dv_msgs::Cones>(msg));
         } else if (desc == hytech_msgs::pose::descriptor()) {
             core::render_pose(std::static_pointer_cast<hytech_msgs::pose>(msg), "ground_truth_pose");
+            core::StateTracker::instance().handle_receive_protobuf_message(msg);
         } else if (desc == foxglove::FrameTransform::descriptor()) {
             core::log(msg);
         } else if (desc == foxglove::RawImage::descriptor()) {

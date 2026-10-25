@@ -4,6 +4,7 @@ add_library(drivebrain_perception
     src/LidarFilter.cpp
     src/ConeClassifier.cpp
     src/PointCloudDeskew.cpp
+    src/ConeClassifier.cpp
 )
 
 target_include_directories(drivebrain_perception PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
