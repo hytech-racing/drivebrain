@@ -201,7 +201,7 @@ void BlackflyComms::_aravis_receive_loop() {
                         return annotations;
                     };
 
-                    core::log_mcap_only(make_annotations(2.0f, true), _name + "/detections"); // TODO check that the scaling here was actually swapped                                  // matches <name>/raw
+                    core::log_mcap_only(make_annotations(2.0f, true), _name + "/detections");   // matches <name>/raw: full-res, sensor orientation
                     core::log_foxglove_only(make_annotations(1.0f, false), _name + "/detections"); // matches <name>/compressed
                 }
 #endif

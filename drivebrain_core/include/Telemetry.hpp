@@ -1,6 +1,9 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
+#include <cmath>
+#include <variant>
 
 #include "StateTracker.hpp"
 #include <MCAPLogger.hpp>
@@ -246,6 +249,92 @@ inline void render_segments(const std::vector<xyz_vec<float>>& points, std::stri
     color->set_g(0.55);
     color->set_b(0.55);
     color->set_a(0.35);
+
+    log(scene);
+}
+
+/**
+ * Renders the controller command in Foxglove's 3D panel as the arc the car would follow,
+ * ending on the lookahead point (drawn as a sphere) when the controller reports one
+ *
+ * @param state the vehicle state holding the map-frame pose
+ * @param command the controller output to draw
+ * @param wheelbase_m the wheelbase that turns the steering angle into a curvature
+ * @param id The identifier of the command line
+ * @param frame_id The frame the pose is expressed in.
+ */
+inline void render_command(const VehicleState& state, const ControllerOutput& command, float wheelbase_m, std::string id, std::string frame_id = "map") {
+    auto scene = std::make_shared<foxglove::SceneUpdate>();
+    auto* entity = scene->add_entities();
+    entity->set_frame_id(frame_id);
+    entity->set_id(id);
+    auto now = std::chrono::system_clock::now().time_since_epoch();
+    entity->mutable_timestamp()->set_seconds(std::chrono::duration_cast<std::chrono::seconds>(now).count());
+    entity->mutable_timestamp()->set_nanos(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count() % 1000000000);
+    entity->set_frame_locked(true);
+
+    // Without a steering command the entity is published empty so the previous arc clears
+    if (!command.desired_steering_deg) {
+        log(scene);
+        return;
+    }
+
+    const float curvature = std::tan(*command.desired_steering_deg * M_PI / 180.0f) / wheelbase_m;
+    const auto& pos = state.vehicle_position_map_frame;
+    const auto& heading = state.vehicle_heading_map_frame_unit_vector;
+
+    float length = 0.0f;
+    if (const auto& target = command.lookahead_point_map_frame) {
+        // The arc ends on the lookahead point: arc length for a chord of this length at this curvature
+        const float chord = std::hypot(target->x - pos.x, target->y - pos.y);
+        const float k = std::abs(curvature);
+        length = k < 1e-4f ? chord : 2.0f * std::asin(std::min(1.0f, k * chord / 2.0f)) / k;
+
+        auto* sphere = entity->add_spheres();
+        sphere->mutable_pose()->mutable_position()->set_x(target->x);
+        sphere->mutable_pose()->mutable_position()->set_y(target->y);
+        sphere->mutable_pose()->mutable_position()->set_z(pos.z + 0.1);
+        sphere->mutable_pose()->mutable_orientation()->set_w(1.0);
+        sphere->mutable_size()->set_x(0.3);
+        sphere->mutable_size()->set_y(0.3);
+        sphere->mutable_size()->set_z(0.3);
+        sphere->mutable_color()->set_g(1.0);
+        sphere->mutable_color()->set_b(1.0);
+        sphere->mutable_color()->set_a(1.0);
+    } else {
+        // Without a target, line length is the requested torque at 1 m per Nm, capped at 10 m
+        float torque_nm = 0.0f;
+        if (const auto* speed = std::get_if<SpeedControlOut>(&command.out)) {
+            const auto& t = speed->torque_lim_nm;
+            torque_nm = std::max({t.FL, t.FR, t.RL, t.RR});
+        } else if (const auto* torque = std::get_if<TorqueControlOut>(&command.out)) {
+            const auto& t = torque->desired_torques_nm;
+            torque_nm = std::max({t.FL, t.FR, t.RL, t.RR});
+        }
+        length = std::min(torque_nm, 10.0f);
+    }
+
+    auto* line = entity->add_lines();
+    line->set_type(foxglove::LinePrimitive::LINE_STRIP);
+    line->mutable_pose()->mutable_orientation()->set_w(1.0);
+    line->set_thickness(0.1);
+    constexpr int SEGMENTS = 20;
+    for (int i = 0; i <= SEGMENTS; ++i) {
+        const float s = length * i / SEGMENTS;
+        const bool straight = std::abs(curvature) < 1e-4f;
+        const float forward = straight ? s : std::sin(curvature * s) / curvature;
+        const float left = straight ? 0.0f : (1.0f - std::cos(curvature * s)) / curvature;
+        auto* p = line->add_points();
+        p->set_x(pos.x + forward * heading.x - left * heading.y);
+        p->set_y(pos.y + forward * heading.y + left * heading.x);
+        p->set_z(pos.z + 0.1);
+    }
+    // cyan, apart from the magenta path and the green trail
+    auto* color = line->mutable_color();
+    color->set_r(0.0);
+    color->set_g(1.0);
+    color->set_b(1.0);
+    color->set_a(1.0);
 
     log(scene);
 }
