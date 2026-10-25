@@ -242,8 +242,8 @@ ControllerOutput control::TeleopController::step_controller(const VehicleState &
         speed_out.torque_lim_nm.RR = requested_torque;
 
         const float steering_range_deg = std::max(-cur_config.min_steering_angle_deg, cur_config.max_steering_angle_deg);
-        steering_command_deg = std::clamp(steering * steering_range_deg,
-                                          cur_config.min_steering_angle_deg, cur_config.max_steering_angle_deg);
+        cmd_out.desired_steering_deg = std::clamp(steering * steering_range_deg,
+                                                  cur_config.min_steering_angle_deg, cur_config.max_steering_angle_deg);
     } else {
         speed_out.desired_rpms = {0.0f, 0.0f, 0.0f, 0.0f};
         speed_out.torque_lim_nm = {0.0f, 0.0f, 0.0f, 0.0f};

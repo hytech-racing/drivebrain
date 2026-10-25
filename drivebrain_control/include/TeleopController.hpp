@@ -51,8 +51,6 @@ namespace control
 
         core::ControllerOutput step_controller(const VehicleState &in) override;
 
-        std::atomic<float> steering_command_deg{0.0f};
-
     private:
 
         void _handle_param_updates(const std::unordered_map<std::string, DBParam> &new_param_map);
