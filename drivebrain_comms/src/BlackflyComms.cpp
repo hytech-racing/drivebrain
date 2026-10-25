@@ -147,56 +147,65 @@ void BlackflyComms::_aravis_receive_loop() {
                 raw_image->set_data(jpeg_buf.data(), jpeg_buf.size());
                 core::log_foxglove_only(raw_image, _name + "/compressed");
 
-#if JETSON_ENABLED
+                #if JETSON_ENABLED
                 if (_detector) {
-                    // bgr is half-res and upright; detections go to perception in full-res upright pixels, and to the
-                    // MCAP in raw (upside-down) full-res pixels labelled "<color> <score>", which the replay reads back.
-                    // Foxglove live gets them in bgr's half-res upright pixels so they overlay the /compressed stream
-                    const auto add_box = [&](foxglove::ImageAnnotations& annotations, float x0, float y0, float x1, float y1,
-                                             const std::string& text, const cv::Scalar& c) { // c is BGR, 0-255
-                        auto* box = annotations.add_points();
-                        box->mutable_timestamp()->set_seconds(secs);
-                        box->mutable_timestamp()->set_nanos(nanos);
-                        box->set_type(foxglove::PointsAnnotation::LINE_LOOP);
-                        for (const auto& [x, y] : {std::pair{x0, y0}, std::pair{x1, y0}, std::pair{x1, y1}, std::pair{x0, y1}}) {
-                            auto* p = box->add_points();
-                            p->set_x(x);
-                            p->set_y(y);
+                    const auto detections = _detector->detect(bgr, 0.5f);
+                    // perception gets the boxes in full-res upright pixels
+                    auto cone_detections = std::make_shared<std::vector<core::ConeDetection>>();
+                    for (const auto& det : detections) {
+                        const cv::Rect& r = det.bbox;
+                        cone_detections->push_back({2.0f * r.x, 2.0f * r.y, 2.0f * (r.x + r.width), 2.0f * (r.y + r.height),
+                                                    core::cone_color_from_name(_detector->cone_name(det.class_id)), det.score});
+                    }
+                    core::StateTracker::instance().set_camera_detections(_name, cone_detections);
+
+                    auto make_annotations = [&](float scale, bool unrotate) {
+                        auto annotations = std::make_shared<foxglove::ImageAnnotations>();
+                        for (const auto& det : detections) {
+                            cv::Rect r = det.bbox;
+                            if (unrotate) {
+                                r.x = bgr.cols - (r.x + r.width);
+                                r.y = bgr.rows - (r.y + r.height);
+                            }
+                            const float x0 = r.x * scale, y0 = r.y * scale;
+                            const float x1 = (r.x + r.width) * scale, y1 = (r.y + r.height) * scale;
+                            const cv::Scalar c = _detector->cone_color(det.class_id); // BGR, 0-255
+
+                            auto* box = annotations->add_points();
+                            box->mutable_timestamp()->set_seconds(secs);
+                            box->mutable_timestamp()->set_nanos(nanos);
+                            box->set_type(foxglove::PointsAnnotation::LINE_LOOP);
+                            const cv::Point2f corners[] = {{x0, y0}, {x1, y0}, {x1, y1}, {x0, y1}};
+                            for (const auto& corner : corners) {
+                                auto* p = box->add_points();
+                                p->set_x(corner.x);
+                                p->set_y(corner.y);
+                            }
+                            auto* color = box->mutable_outline_color(); // RGBA, 0-1
+                            color->set_r(c[2] / 255.0);
+                            color->set_g(c[1] / 255.0);
+                            color->set_b(c[0] / 255.0);
+                            color->set_a(1.0);
+                            box->set_thickness(2);
+
+                            auto* label = annotations->add_texts();
+                            label->mutable_timestamp()->set_seconds(secs);
+                            label->mutable_timestamp()->set_nanos(nanos);
+                            label->mutable_position()->set_x(x0);
+                            label->mutable_position()->set_y(y0);
+                            label->set_text(cv::format("%s %.2f", _detector->cone_name(det.class_id), det.score));
+                            label->set_font_size(12);
+                            *label->mutable_text_color() = *color;
+                            label->mutable_background_color()->set_a(0.5); // translucent black
                         }
-                        auto* color = box->mutable_outline_color(); // RGBA, 0-1
-                        color->set_r(c[2] / 255.0);
-                        color->set_g(c[1] / 255.0);
-                        color->set_b(c[0] / 255.0);
-                        color->set_a(1.0);
-                        box->set_thickness(2);
-                        auto* label = annotations.add_texts();
-                        *label->mutable_timestamp() = box->timestamp();
-                        label->mutable_position()->set_x(x0);
-                        label->mutable_position()->set_y(y0);
-                        label->set_text(text);
-                        label->set_font_size(12);
-                        *label->mutable_text_color() = *color;
-                        label->mutable_background_color()->set_a(0.5); // translucent black
+                        return annotations;
                     };
 
-                    auto detections = std::make_shared<std::vector<core::ConeDetection>>();
-                    auto annotations = std::make_shared<foxglove::ImageAnnotations>();
-                    auto live_annotations = std::make_shared<foxglove::ImageAnnotations>();
-                    for (const auto& det : _detector->detect(bgr, 0.5f)) {
-                        const float x0 = 2.0f * det.bbox.x, y0 = 2.0f * det.bbox.y;
-                        const float x1 = 2.0f * (det.bbox.x + det.bbox.width), y1 = 2.0f * (det.bbox.y + det.bbox.height);
-                        detections->push_back({x0, y0, x1, y1, core::cone_color_from_name(_detector->cone_name(det.class_id)), det.score});
-
-                        const std::string text = cv::format("%s %.2f", _detector->cone_name(det.class_id), det.score);
-                        const cv::Scalar color = _detector->cone_color(det.class_id);
-                        add_box(*annotations, width - x1, height - y1, width - x0, height - y0, text, color);
-                        add_box(*live_annotations, det.bbox.x, det.bbox.y, det.bbox.x + det.bbox.width, det.bbox.y + det.bbox.height, text, color);
-                    }
-                    core::StateTracker::instance().set_camera_detections(_name, detections);
-                    core::log_mcap_only(annotations, _name + "/detections");
-                    core::log_foxglove_only(live_annotations, _name + "/detections");
+                    core::log_mcap_only(make_annotations(2.0f, true), _name + "/detections"); // TODO check that the scaling here was actually swapped                                  // matches <name>/raw
+                    core::log_foxglove_only(make_annotations(1.0f, false), _name + "/detections"); // matches <name>/compressed
                 }
 #endif
+
             } else {
                 spdlog::error("[{}] Failed to retrieve buffer from Aravis stream, status {}", _name, static_cast<int>(arv_buffer_get_status(buffer)));
             }

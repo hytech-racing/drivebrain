@@ -83,8 +83,6 @@ bool SimComms::send_message(std::shared_ptr<google::protobuf::Message> message) 
     m.addmem(body.data(), body.size());
 
     try {
-        /* Both CAN drivers route here in HOOTL, so the sim sees each message twice.
-           Commands are latest-wins so it costs nothing but the bytes. */
         std::unique_lock lk(_send_mutex);
         return m.send(_veh_data_send_socket, static_cast<int>(zmq::send_flags::dontwait));
     } catch (const zmq::error_t& e) {
@@ -190,9 +188,6 @@ void SimComms::_veh_recv_loop() {
         } else if (desc == foxglove::FrameTransform::descriptor()) {
             core::log(msg);
         } else if (desc == foxglove::RawImage::descriptor()) {
-            // The blackflys are mounted upside down and the recorded raw frames are unrotated. Rotate 180 so
-            // frames are upright like BlackflyComms' live stream; on an 8 bit image with no row padding that is
-            // reversing the buffer, and it turns the RGGB mosaic into BGGR.
             auto img = std::static_pointer_cast<foxglove::RawImage>(msg);
             if (img->encoding() == "bayer_rggb8" && img->step() == img->width()) {
                 std::reverse(img->mutable_data()->begin(), img->mutable_data()->end());
