@@ -62,5 +62,5 @@ std::optional<float> control::PurePursuitController::_steering_angle_rad(const V
         return std::nullopt;
     }
     const float lateral = heading.x * dy - heading.y * dx;
-    return std::atan(2.0f * lateral / dist_sq * _wheelbase);
+    return std::atan(2.0f * lateral / dist_sq * WHEELBASE_M);
 }
