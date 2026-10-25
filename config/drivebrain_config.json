@@ -28,6 +28,7 @@
     "TeleopController": {
         "max_torque": 4.0,
         "max_regen_torque": 4.0,
+        "max_rpm": 500.0,
         "dt_rate_hz": 1000.0,
         "joystick_device_path": "/dev/input/js0",
         "accel_axis": 5,
