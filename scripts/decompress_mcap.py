@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Convert Drivebrain's compressed camera and Ouster MCAP payloads.
 
-Camera <name>/raw messages become ordinary foxglove.RawImage Bayer RGGB8
-messages. Ouster range images become foxglove.PointCloud messages on
-ouster/points. When a recording has no Ouster calibration message, the
-metadata captured in 235.mcap is used. All other messages, plus attachments
-and metadata, are copied.
+Camera <name>/raw messages become ordinary foxglove.RawImage Bayer BGGR8
+messages. Ouster range images and their column timestamps become x, y, z, t
+foxglove.PointCloud messages on ouster/points, matching the cloud OusterComms
+builds. When a recording has no Ouster calibration message, the metadata
+captured in 235.mcap is used. All other messages, plus attachments and
+metadata, are copied.
 
 Install Python dependencies with:
     python3 -m pip install -r requirements.txt
@@ -36,10 +37,11 @@ from ouster.sdk import core
 import zstandard as zstd
 
 
-CAMERA_ENCODING = "bayer_rggb8"
+CAMERA_ENCODING = "bayer_bggr8"
 CALIBRATION_TOPIC = "ouster/calibration"
 FALLBACK_CALIBRATION = Path(__file__).with_name("ouster_calibration.json")
 RANGE_TOPIC = "ouster/range"
+COLUMN_TS_TOPIC = "ouster/column_timestamps"
 POINTS_TOPIC = "ouster/points"
 MAX_FRAME_BYTES = 512 * 1024 * 1024
 
@@ -74,6 +76,14 @@ def decode_ranges(data: bytes, width: int, height: int) -> np.ndarray:
         decompressed_bytes(data, width * height * 4), dtype="<u4"
     )
     return np.cumsum(differences, dtype=np.uint32).reshape(height, width)
+
+
+def column_times(stamps: np.ndarray) -> np.ndarray:
+    """Seconds of each column before the last valid column (0 for missing columns), as in OusterComms."""
+    end = np.int64(stamps.max())
+    times = ((stamps.astype(np.int64) - end).astype(np.float64) * 1e-9).astype(np.float32)
+    times[stamps == 0] = 0.0
+    return times
 
 
 def decode_proto(factory: DecoderFactory, schema, channel, data: bytes):
@@ -117,6 +127,7 @@ def convert(input_path: Path, output_path: Path) -> dict[str, int]:
 
             schema_ids: dict[int, int] = {} # 
             channel_ids: dict[int, int] = {} # link topic to a schema
+            column_stamps: dict[tuple[int, int], np.ndarray] = {} # column timestamps by frame stamp
             embedded_calibration = next(reader.iter_messages(topics=[CALIBRATION_TOPIC]), None)
             if embedded_calibration is None:
                 lut = calibration_lut(FALLBACK_CALIBRATION.read_text(encoding="utf-8"))
@@ -181,6 +192,14 @@ def convert(input_path: Path, output_path: Path) -> dict[str, int]:
                                 payload = image.SerializeToString()
                                 counts["cameras"] += 1
 
+                        elif topic == COLUMN_TS_TOPIC:
+                            stamps = decode_proto(decoder_factory, schema, channel, payload)
+                            if stamps.encoding != "uint64_ns":
+                                raise ValueError(f"unexpected column timestamp encoding {stamps.encoding!r}")
+                            column_stamps[(stamps.timestamp.seconds, stamps.timestamp.nanos)] = np.frombuffer(
+                                stamps.data, dtype="<u8"
+                            )
+
                         elif topic == RANGE_TOPIC:
                             image = decode_proto(decoder_factory, schema, channel, payload)
                             if image.encoding:
@@ -190,17 +209,22 @@ def convert(input_path: Path, output_path: Path) -> dict[str, int]:
                                     f"range size {image.width}x{image.height} differs "
                                     f"from calibration {lut.w}x{lut.h}"
                                 )
+                            stamps = column_stamps.pop((image.timestamp.seconds, image.timestamp.nanos), None)
+                            if stamps is None or stamps.size != image.width:
+                                raise ValueError("no matching column timestamps")
                             ranges = decode_ranges(image.data, image.width, image.height)
-                            xyz = lut(ranges)
                             # A zero range means no return. Keep every real return.
-                            points = np.ascontiguousarray(xyz[ranges != 0], dtype="<f4")
+                            returns = ranges != 0
+                            xyz = lut(ranges)[returns]
+                            times = np.broadcast_to(column_times(stamps), ranges.shape)[returns]
+                            points = np.ascontiguousarray(np.column_stack((xyz, times)), dtype="<f4")
                             cloud = PointCloud()
                             cloud.timestamp.seconds = image.timestamp.seconds
                             cloud.timestamp.nanos = image.timestamp.nanos
                             cloud.frame_id = image.frame_id or "os_sensor"
                             cloud.pose.orientation.w = 1.0
-                            cloud.point_stride = 12
-                            for offset, name in enumerate(("x", "y", "z")):
+                            cloud.point_stride = 16
+                            for offset, name in enumerate(("x", "y", "z", "t")):
                                 field = cloud.fields.add()
                                 field.name = name
                                 field.offset = offset * 4

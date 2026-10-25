@@ -5,6 +5,8 @@
 #include "hytech_msgs.pb.h"
 #include "dv_msgs.pb.h"
 
+#include <foxglove/RawImage.pb.h>
+
 #include <ouster/core/sensor_info.h>
 #include <ouster/sensor/client.h> 
 #include <ouster/core/chanfield.h>
@@ -58,6 +60,10 @@ namespace comms {
 
             // Use the lookup table to convert range measurements into xyz coordinates
             std::vector<ouster::sdk::core::XYZLutT<float>> _lut;
+
+            // sensor metadata json, logged once into every mcap so each file can be decompressed on its own
+            std::shared_ptr<const foxglove::RawImage> _calibration;
+            std::string _calibration_mcap;
 
             std::thread _thread;
             std::atomic<bool> _running{true};

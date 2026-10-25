@@ -2,8 +2,10 @@
 
 #include <condition_variable>
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <foxglove/PointCloud.pb.h>
+#include <foxglove/RawImage.pb.h>
 #include <foxglove/websocket/base64.hpp>
 #include <foxglove/websocket/websocket_notls.hpp>
 #include <foxglove/websocket/websocket_server.hpp>
@@ -322,6 +324,7 @@ namespace core {
         bool lidar_is_valid;
         std::shared_ptr<const dv_msgs::Cones> cone_observations;
         std::shared_ptr<const std::vector<xyz_vec<float>>> path;
+        std::map<std::string, std::shared_ptr<const foxglove::RawImage>> camera_frames; // latest frame per camera, keyed by frame_id
     };
 
 
@@ -423,6 +426,13 @@ namespace core {
 
             /* Lidar mounting pose in base_link, from the static_transforms config */
             const Eigen::Isometry3d& T_base_lidar() const { return _T_base_lidar; }
+
+            /**
+             * Sets the latest frame from a camera, replacing the previous frame with the same frame_id.
+             *
+             * @param frame the camera frame
+             */
+            void set_camera_frame(std::shared_ptr<const foxglove::RawImage> frame);
 
             /**
              * Sets the latest teleop command received from the Foxglove teleop panel.

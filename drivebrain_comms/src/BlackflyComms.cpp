@@ -4,6 +4,8 @@
 #include <foxglove/websocket/common.hpp>
 #include <memory>
 
+#include "StateTracker.hpp"
+
 #if JETSON_ENABLED
 #include <foxglove/ImageAnnotations.pb.h>
 #endif
@@ -112,9 +114,13 @@ void BlackflyComms::_aravis_receive_loop() {
                 const auto secs = timestamp_ns / 1000000000ULL;
                 const auto nanos = timestamp_ns % 1000000000ULL;
 
+                // cameras are mounted upside down; rotating 180° turns the RGGB mosaic into BGGR
+                cv::Mat bayer;
+                cv::rotate(cv::Mat(height, width, CV_8UC1, const_cast<void*>(data)), bayer, cv::ROTATE_180);
+
                 // Log full compressed image to mcap
                 std::size_t compressed_size = 0;
-                std::unique_ptr<uint8_t[]> compressed_buffer = compressBayerImage(static_cast<const uint8_t*>(data), width, height, compressed_size);
+                std::unique_ptr<uint8_t[]> compressed_buffer = compressBayerImage(bayer.data, width, height, compressed_size);
 
                 auto mcap_image = std::make_shared<foxglove::RawImage>();
                 mcap_image->mutable_timestamp()->set_seconds(secs);
@@ -129,11 +135,23 @@ void BlackflyComms::_aravis_receive_loop() {
                     spdlog::error("[{}] Failed to compress camera frame", _name);
                 }
 
+                // Full resolution frame for the cone classifier
+                auto frame = std::make_shared<foxglove::RawImage>();
+                *frame->mutable_timestamp() = mcap_image->timestamp();
+                frame->set_frame_id(_name);
+                frame->set_width(width);
+                frame->set_height(height);
+                frame->set_step(width);
+                frame->set_encoding("bayer_bggr8");
+                frame->set_data(bayer.data, width * height);
+                core::StateTracker::instance().set_camera_frame(frame);
+
 
                 // stream compressed image over foxglove stream
                 cv::Mat bgr;
                 // no need to resize as 2x2 averaging already halves the dimensions
                 averageBayer2x2ToBgr(static_cast<const uint8_t*>(data), width, height, bgr);
+                cv::rotate(bgr, bgr, cv::ROTATE_180); // TODO apply this in camera settings
 
                 std::vector<uchar> jpeg_buf;
                 cv::imencode(".jpg", bgr, jpeg_buf, {cv::IMWRITE_JPEG_QUALITY, 80});
@@ -191,7 +209,7 @@ void BlackflyComms::_aravis_receive_loop() {
                         return annotations;
                     };
 
-                    core::log_mcap_only(make_annotations(2.0f, true), _name + "/detections"); // TODO check that the scaling here was actually swapped                                  // matches <name>/raw
+                    core::log_mcap_only(make_annotations(2.0f, false), _name + "/detections"); // TODO check that the scaling here was actually swapped                                  // matches <name>/raw
                     core::log_foxglove_only(make_annotations(1.0f, false), _name + "/detections"); // matches <name>/compressed
                 }
 #endif

@@ -23,7 +23,7 @@ comms::OusterComms::OusterComms() {
     // Initialize the Ouster interface
     _thread = std::thread([this]() {
           while (_running && _init() < 0) {
-              spdlog::warn("Retrying Ouster initialization");
+              spdlog::debug("Retrying Ouster initialization");
               std::this_thread::sleep_for(std::chrono::seconds(2));
           }
           if (_running) _loop();
@@ -75,7 +75,7 @@ int comms::OusterComms::_init() {
         calibration->mutable_timestamp()->set_nanos(nanos);
         calibration->set_encoding("ouster_sensor_metadata_json");
         calibration->set_data(metadata_json.data(), metadata_json.size());
-        core::log_mcap_only(calibration, "ouster/calibration");
+        _calibration = calibration;
     } catch (const std::exception& error) {
         spdlog::error("Failed to prepare Ouster calibration: {}", error.what());
         return -1;
@@ -94,6 +94,11 @@ void comms::OusterComms::_loop() {
         int index = result.first;
         if (!result.second) continue; // check that you actually received a lidar frame before dereferencing it
         auto& frame = *result.second;
+
+        const auto [mcap_name, mcap_logging] = core::MCAPLogger::instance().status();
+        if (mcap_logging && mcap_name != _calibration_mcap && core::MCAPLogger::instance().log_msg(_calibration, "ouster/calibration") == 0) {
+            _calibration_mcap = mcap_name;
+        }
  
         /* IMU Data */
         // auto packet_event = _packet->get_packet(1.0); // timeout is 1 second (wait up to 1 second for a packet)
@@ -173,13 +178,19 @@ void comms::OusterComms::_loop() {
             static_cast<std::size_t>(range.rows()), compressed_size);
 
         if (compressed_ranges) {
-            auto recorded_range = std::make_shared<foxglove::RawImage>();
-            const auto now = std::chrono::system_clock::now().time_since_epoch();
-            const auto secs = std::chrono::duration_cast<std::chrono::seconds>(now).count();
-            const auto nanos = std::chrono::duration_cast<std::chrono::nanoseconds>(now).count() % 1000000000;
+            // raw per-column sensor timestamps, stamped like the range image so the decompressor can pair them
+            auto recorded_column_ts = std::make_shared<foxglove::RawImage>();
+            *recorded_column_ts->mutable_timestamp() = pc->timestamp();
+            recorded_column_ts->set_frame_id("os_sensor");
+            recorded_column_ts->set_width(static_cast<uint32_t>(w));
+            recorded_column_ts->set_height(1);
+            recorded_column_ts->set_encoding("uint64_ns");
+            recorded_column_ts->set_step(static_cast<uint32_t>(w * sizeof(uint64_t)));
+            recorded_column_ts->set_data(column_ts.data(), static_cast<size_t>(w) * sizeof(uint64_t));
+            core::log_mcap_only(recorded_column_ts, "ouster/column_timestamps");
 
-            recorded_range->mutable_timestamp()->set_seconds(secs);
-            recorded_range->mutable_timestamp()->set_nanos(nanos);
+            auto recorded_range = std::make_shared<foxglove::RawImage>();
+            *recorded_range->mutable_timestamp() = pc->timestamp();
             recorded_range->set_frame_id("os_sensor");
             recorded_range->set_width(static_cast<uint32_t>(range.cols()));
             recorded_range->set_height(static_cast<uint32_t>(range.rows()));
@@ -190,8 +201,7 @@ void comms::OusterComms::_loop() {
             spdlog::error("Failed to compress Ouster range frame");
         }
 
-        // full resolution to the mcap and the autonomy stack
-        core::MCAPLogger::instance().log_msg(pc);
+        core::log_mcap_only(pc, "PointCloud");
         core::StateTracker::instance().handle_receive_protobuf_message(pc);
 
         // stream just every Nth point

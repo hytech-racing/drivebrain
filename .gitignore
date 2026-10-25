@@ -23,3 +23,5 @@ CMakeUserPresets.json
 
 tests/replay/mcap/*.mcap
 .agents/
+
+__pycache__/
