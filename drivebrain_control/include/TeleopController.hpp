@@ -23,6 +23,7 @@ namespace control
         {
             torque_nm max_torque;
             torque_nm max_regen_torque;
+            float desired_rpm;
             float min_steering_angle_deg;
             float max_steering_angle_deg;
             int dt_rate_hz;
