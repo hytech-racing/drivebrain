@@ -108,6 +108,11 @@ Eigen::Vector3d Odometry::twist() const {
     return _twist;
 }
 
+Eigen::Isometry2d Odometry::latest_pose() const {
+    std::scoped_lock lock(_mutex);
+    return _pose;
+}
+
 std::uint64_t Odometry::_host_time_ns(const float sample_time_s, const std::uint64_t receive_ns) {
     const std::int64_t sample_ns = static_cast<std::int64_t>(static_cast<double>(sample_time_s) * 1e9);
     const std::int64_t offset_ns = static_cast<std::int64_t>(receive_ns) - sample_ns;

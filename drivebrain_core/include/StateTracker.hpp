@@ -460,6 +460,9 @@ namespace core {
             /* Latest body velocity and yaw rate from the OMS: (vx m/s, vy m/s, yaw rate rad/s) */
             Eigen::Vector3d odom_twist();
 
+            /* SLAM's map <- odom correction; vehicle_state() applies it to the latest odometry so the map pose moves at odom rate */
+            void set_pose_map_from_odom(const Eigen::Isometry2d& pose_map_from_odom);
+
             /* Lidar mounting pose in base_link, from the static_transforms config */
             const Eigen::Isometry3d& T_base_lidar() const { return _T_base_lidar; }
 
@@ -507,6 +510,7 @@ namespace core {
             std::mutex _teleop_mutex;
             
             estimation::Odometry _odometry;
+            std::optional<Eigen::Isometry2d> _pose_map_from_odom;
             Eigen::Isometry3d _T_base_lidar = Eigen::Isometry3d::Identity();
 
             /* Private constructor called by the init method */
