@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+
 #include "StateTracker.hpp"
 #include <MCAPLogger.hpp>
 #include <FoxgloveServer.hpp>
@@ -177,7 +179,8 @@ inline void render_pose(std::shared_ptr<hytech_msgs::pose> pose, std::string id,
  * @param id The identifier of the path (used to distinguish e.g. a midline from a raceline)
  * @param frame_id The frame the path points are expressed in.
  */
-inline void render_path(const std::vector<xyz_vec<float>>& path, std::string id, std::string frame_id = "map") {
+inline void render_path(const std::vector<xyz_vec<float>>& path, std::string id, std::string frame_id = "map",
+                        std::array<double, 4> rgba = {0.0, 0.9, 0.5, 1.0}) {
     auto scene = std::make_shared<foxglove::SceneUpdate>();
     auto* entity = scene->add_entities();
     entity->set_frame_id(frame_id);
@@ -202,10 +205,10 @@ inline void render_path(const std::vector<xyz_vec<float>>& path, std::string id,
         p->set_z(point.z);
     }
     auto* color = line->mutable_color();
-    color->set_r(0.0);
-    color->set_g(0.9);
-    color->set_b(0.5);
-    color->set_a(1.0);
+    color->set_r(rgba[0]);
+    color->set_g(rgba[1]);
+    color->set_b(rgba[2]);
+    color->set_a(rgba[3]);
 
     log(scene);
 }

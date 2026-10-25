@@ -33,8 +33,7 @@ bool Odometry::update(const hytech_msgs::OMSData& sample, const std::uint64_t re
             return false;
         }
 
-        // TODO: sensoric is configured to face properly now so we should invert this after merge
-        Eigen::Vector3d twist(-sample.motion().vel_x_kmh() / 3.6, -sample.motion().vel_y_kmh() / 3.6,
+        Eigen::Vector3d twist(sample.motion().vel_x_kmh() / 3.6, sample.motion().vel_y_kmh() / 3.6,
                               sample.rate_hor_deg_s().z() * M_PI / 180.0);
         // velocity at the sensor -> base_link: v_base = v_sensor - w x r
         twist.x() += twist.z() * _position_base_m.y();

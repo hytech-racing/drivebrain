@@ -101,7 +101,7 @@ void Autonomy::_run() {
     // Update the state tracker with the new cone observations and plan a path
     StateTracker::instance().set_cone_observations(map);
     auto path = planning::plan_path(*map);
-    render_path(path, "planned_path", "map");
+    render_path(path, "planned_path", "map", {1.0, 0.0, 1.0, 1.0}); // magenta, apart from the green trails
 
     StateTracker::instance().set_dv_path(std::make_shared<const std::vector<xyz_vec<float>>>(std::move(path))); // Used by the pure pursuit controller
   }
