@@ -70,7 +70,7 @@ void Autonomy::_run() {
 
       std::cout << "Filtered cones: " << cones->cones_size() << std::endl;
 
-      cones = _classifier.classify(cones, dv.camera_detections);
+      cones = _classifier.classify(cones, dv.camera_detections, last_scan->frame_id());
 
       core::render_cones(cones, "filtered_cones", last_scan->frame_id());
 

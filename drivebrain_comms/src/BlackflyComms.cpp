@@ -73,7 +73,7 @@ bool BlackflyComms::start(const std::string& id, const std::string& name, const 
         // FOLLOW UP: depending on performance we may want to run 
         // the detector in a seperate thread and pop off of a queue
         // but we'll see how this does.
-        _detector = std::make_unique<Detector>("/home/hytech/engines/cones.engine");
+        _detector = std::make_unique<Detector>("/home/hytech/engines/yolo/cones.engine");
     } catch (const std::exception& e) {
         spdlog::error("[{}] Cone detection disabled: {}", _name, e.what());
     }
@@ -150,32 +150,51 @@ void BlackflyComms::_aravis_receive_loop() {
 #if JETSON_ENABLED
                 if (_detector) {
                     // bgr is half-res and upright; detections go to perception in full-res upright pixels, and to the
-                    // MCAP in raw (upside-down) full-res pixels labelled "<color> <score>", which the replay reads back
+                    // MCAP in raw (upside-down) full-res pixels labelled "<color> <score>", which the replay reads back.
+                    // Foxglove live gets them in bgr's half-res upright pixels so they overlay the /compressed stream
+                    const auto add_box = [&](foxglove::ImageAnnotations& annotations, float x0, float y0, float x1, float y1,
+                                             const std::string& text, const cv::Scalar& c) { // c is BGR, 0-255
+                        auto* box = annotations.add_points();
+                        box->mutable_timestamp()->set_seconds(secs);
+                        box->mutable_timestamp()->set_nanos(nanos);
+                        box->set_type(foxglove::PointsAnnotation::LINE_LOOP);
+                        for (const auto& [x, y] : {std::pair{x0, y0}, std::pair{x1, y0}, std::pair{x1, y1}, std::pair{x0, y1}}) {
+                            auto* p = box->add_points();
+                            p->set_x(x);
+                            p->set_y(y);
+                        }
+                        auto* color = box->mutable_outline_color(); // RGBA, 0-1
+                        color->set_r(c[2] / 255.0);
+                        color->set_g(c[1] / 255.0);
+                        color->set_b(c[0] / 255.0);
+                        color->set_a(1.0);
+                        box->set_thickness(2);
+                        auto* label = annotations.add_texts();
+                        *label->mutable_timestamp() = box->timestamp();
+                        label->mutable_position()->set_x(x0);
+                        label->mutable_position()->set_y(y0);
+                        label->set_text(text);
+                        label->set_font_size(12);
+                        *label->mutable_text_color() = *color;
+                        label->mutable_background_color()->set_a(0.5); // translucent black
+                    };
+
                     auto detections = std::make_shared<std::vector<core::ConeDetection>>();
                     auto annotations = std::make_shared<foxglove::ImageAnnotations>();
+                    auto live_annotations = std::make_shared<foxglove::ImageAnnotations>();
                     for (const auto& det : _detector->detect(bgr, 0.5f)) {
                         const float x0 = 2.0f * det.bbox.x, y0 = 2.0f * det.bbox.y;
                         const float x1 = 2.0f * (det.bbox.x + det.bbox.width), y1 = 2.0f * (det.bbox.y + det.bbox.height);
                         detections->push_back({x0, y0, x1, y1, core::cone_color_from_name(_detector->cone_name(det.class_id)), det.score});
 
-                        auto* box = annotations->add_points();
-                        box->mutable_timestamp()->set_seconds(secs);
-                        box->mutable_timestamp()->set_nanos(nanos);
-                        box->set_type(foxglove::PointsAnnotation::LINE_LOOP);
-                        const float rx0 = width - x1, ry0 = height - y1, rx1 = width - x0, ry1 = height - y0;
-                        for (const auto& [x, y] : {std::pair{rx0, ry0}, std::pair{rx1, ry0}, std::pair{rx1, ry1}, std::pair{rx0, ry1}}) {
-                            auto* p = box->add_points();
-                            p->set_x(x);
-                            p->set_y(y);
-                        }
-                        auto* label = annotations->add_texts();
-                        *label->mutable_timestamp() = box->timestamp();
-                        label->mutable_position()->set_x(rx0);
-                        label->mutable_position()->set_y(ry0);
-                        label->set_text(cv::format("%s %.2f", _detector->cone_name(det.class_id), det.score));
+                        const std::string text = cv::format("%s %.2f", _detector->cone_name(det.class_id), det.score);
+                        const cv::Scalar color = _detector->cone_color(det.class_id);
+                        add_box(*annotations, width - x1, height - y1, width - x0, height - y0, text, color);
+                        add_box(*live_annotations, det.bbox.x, det.bbox.y, det.bbox.x + det.bbox.width, det.bbox.y + det.bbox.height, text, color);
                     }
                     core::StateTracker::instance().set_camera_detections(_name, detections);
                     core::log_mcap_only(annotations, _name + "/detections");
+                    core::log_foxglove_only(live_annotations, _name + "/detections");
                 }
 #endif
             } else {

@@ -8,6 +8,7 @@
 #include <spdlog/spdlog.h>
 #include "FoxgloveServer.hpp"
 #include "LidarFilter.hpp"
+#include "Telemetry.hpp"
 
 namespace perception {
 namespace {
@@ -56,22 +57,103 @@ namespace {
         return T_lidar_cam.inverse();
     }
 
+    /* Same colors as core::render_cones, gray for UNKNOWN */
+    void set_cone_color(foxglove::Color& color, dv_msgs::Cones::ConeColor cone_color, double alpha) {
+        color.set_a(alpha);
+        switch (cone_color) {
+            case dv_msgs::Cones::BLUE:         color.set_r(0.0); color.set_g(0.3);  color.set_b(1.0); break;
+            case dv_msgs::Cones::YELLOW:       color.set_r(1.0); color.set_g(0.85); color.set_b(0.0); break;
+            case dv_msgs::Cones::ORANGE_SMALL: color.set_r(1.0); color.set_g(0.45); color.set_b(0.0); break;
+            case dv_msgs::Cones::ORANGE_BIG:   color.set_r(1.0); color.set_g(0.25); color.set_b(0.0); break;
+            default:                           color.set_r(0.5); color.set_g(0.5);  color.set_b(0.5); break;
+        }
+    }
+
+    // A detection placed on the ground plane, in the LiDAR frame
+    struct CameraCone {
+        Eigen::Vector2f xy;
+        dv_msgs::Cones::ConeColor color;
+        float score;
+    };
+
+    /**
+     * Places each detection by casting a ray through the bottom center of its box (where the cone meets the ground)
+     * and intersecting it with the ground plane. Detections that don't hit the ground within MAX_DETECTION_RANGE_M
+     * are dropped.
+     */
+    std::vector<CameraCone> place_detections(const CameraModel& cam, const Eigen::Isometry3f& T_cam_lidar,
+                                             const std::vector<core::ConeDetection>& dets) {
+        const Eigen::Isometry3f T_lidar_cam = T_cam_lidar.inverse();
+        const Eigen::Vector3f origin = T_lidar_cam.translation();
+        const float ground_z = -SENSOR_HEIGHT_ABOVE_GROUND_M;
+
+        std::vector<CameraCone> placed;
+        for (const auto& d : dets) {
+            const Eigen::Vector2f xy = cam.unproject(Eigen::Vector2f((d.x0 + d.x1) / 2, d.y1));
+            const Eigen::Vector3f dir = T_lidar_cam.linear() * Eigen::Vector3f(xy.x(), xy.y(), 1.0f);
+            if (dir.z() >= 0) continue; // at or above the horizon, never reaches the ground
+            const Eigen::Vector3f ground = origin + (ground_z - origin.z()) / dir.z() * dir;
+            if (std::hypot(ground.x(), ground.y()) > MAX_DETECTION_RANGE_M) continue;
+            placed.push_back({ground.head<2>(), d.color, d.score});
+        }
+        return placed;
+    }
+
+    /**
+     * Logs the camera-placed cones as dv_msgs::Cones on <camera>/cones and draws them translucent in the 3D panel
+     * as entity <camera>_cones, to compare against where the LiDAR found the cones.
+     */
+    void render_camera_cones(const std::string& camera, const std::vector<CameraCone>& placed, uint64_t timestamp_us, const std::string& frame_id) {
+        auto cones = std::make_shared<dv_msgs::Cones>();
+        cones->set_timestamp_us(timestamp_us);
+        for (const auto& p : placed) {
+            auto* cone = cones->add_cones();
+            cone->set_color(p.color);
+            cone->mutable_position()->set_x(p.xy.x());
+            cone->mutable_position()->set_y(p.xy.y());
+            cone->mutable_position()->set_z(-SENSOR_HEIGHT_ABOVE_GROUND_M + CONE_HEIGHT_M / 2);
+        }
+        core::log(cones, camera + "/cones");
+
+        auto scene = std::make_shared<foxglove::SceneUpdate>();
+        auto* entity = scene->add_entities();
+        entity->set_frame_id(frame_id);
+        entity->set_id(camera + "_cones");
+        entity->mutable_timestamp()->set_seconds(static_cast<int64_t>(timestamp_us / 1000000));
+        entity->mutable_timestamp()->set_nanos(static_cast<int32_t>((timestamp_us % 1000000) * 1000));
+        for (const auto& cone : cones->cones()) {
+            auto* cyl = entity->add_cylinders();
+            auto* pos = cyl->mutable_pose()->mutable_position();
+            pos->set_x(cone.position().x());
+            pos->set_y(cone.position().y());
+            pos->set_z(cone.position().z());
+            cyl->mutable_pose()->mutable_orientation()->set_w(1.0);
+            cyl->mutable_size()->set_x(CONE_WIDTH_M);
+            cyl->mutable_size()->set_y(CONE_WIDTH_M);
+            cyl->mutable_size()->set_z(CONE_HEIGHT_M);
+            cyl->set_bottom_scale(1.0);
+            cyl->set_top_scale(0.25);
+            set_cone_color(*cyl->mutable_color(), cone.color(), 0.5);
+        }
+        core::log(scene);
+    }
+
 } // END OF ANONYMOUS NAMESPACE
 
-    std::optional<Eigen::Vector2f> CameraModel::project(const Eigen::Vector3f& p_cam) const {
-        if (p_cam.z() < MIN_PROJECTION_DEPTH_M) return std::nullopt;
-        const float x = p_cam.x() / p_cam.z();
-        const float y = p_cam.y() / p_cam.z();
-
-        const float u = fx * x + cx, v = fy * y + cy;
-        if (u < -0.5f * width || u > 1.5f * width || v < -0.5f * height || v > 1.5f * height) return std::nullopt;
-
+    Eigen::Vector2f CameraModel::unproject(const Eigen::Vector2f& px) const {
+        // Fixed-point inversion of the OpenCV8 rational distortion, as in OpenCV's undistortPoints
         const auto [k1, k2, p1, p2, k3, k4, k5, k6] = dist;
-        const float r2 = x * x + y * y, r4 = r2 * r2, r6 = r4 * r2;
-        const float radial = (1 + k1 * r2 + k2 * r4 + k3 * r6) / (1 + k4 * r2 + k5 * r4 + k6 * r6);
-        const float xd = x * radial + 2 * p1 * x * y + p2 * (r2 + 2 * x * x);
-        const float yd = y * radial + p1 * (r2 + 2 * y * y) + 2 * p2 * x * y;
-        return Eigen::Vector2f(fx * xd + cx, fy * yd + cy);
+        const float xd = (px.x() - cx) / fx, yd = (px.y() - cy) / fy;
+        float x = xd, y = yd;
+        for (int iter = 0; iter < 20; ++iter) {
+            const float r2 = x * x + y * y, r4 = r2 * r2, r6 = r4 * r2;
+            const float inv_radial = (1 + k4 * r2 + k5 * r4 + k6 * r6) / (1 + k1 * r2 + k2 * r4 + k3 * r6);
+            const float dx = 2 * p1 * x * y + p2 * (r2 + 2 * x * x);
+            const float dy = p1 * (r2 + 2 * y * y) + 2 * p2 * x * y;
+            x = (xd - dx) * inv_radial;
+            y = (yd - dy) * inv_radial;
+        }
+        return Eigen::Vector2f(x, y);
     }
 
     CameraModel load_camera_model(const std::string& path) {
@@ -122,48 +204,40 @@ namespace {
     }
 
     std::shared_ptr<dv_msgs::Cones> ConeClassifier::classify(std::shared_ptr<dv_msgs::Cones> cones,
-                                                             const std::map<std::string, std::shared_ptr<const std::vector<core::ConeDetection>>>& detections) {
+                                                             const std::map<std::string, std::shared_ptr<const std::vector<core::ConeDetection>>>& detections,
+                                                             const std::string& frame_id) {
         // Score of the detection that colored each cone, so the more confident camera wins when both see it
         std::vector<float> best_score(cones->cones_size(), 0.0f);
 
         for (const auto& [name, dets] : detections) {
             const auto cam_it = _cameras.find(name);
             if (cam_it == _cameras.end() || !dets) continue;
-            const CameraModel& cam = cam_it->second;
-            const Eigen::Isometry3f T_cam_lidar = camera_from_lidar(name);
+            const std::vector<CameraCone> placed = place_detections(cam_it->second, camera_from_lidar(name), *dets);
+            render_camera_cones(name, placed, cones->timestamp_us(), frame_id);
 
-            // (cost, cone, detection) for every plausible pair
+            // (distance, cone, detection) for every pair within the match distance
             std::vector<std::tuple<float, int, int>> pairs;
             for (int i = 0; i < cones->cones_size(); ++i) {
                 const auto& pos = cones->cones(i).position();
-                const Eigen::Vector3f p_cam = T_cam_lidar * Eigen::Vector3f(pos.x(), pos.y(), -SENSOR_HEIGHT_ABOVE_GROUND_M + CONE_HEIGHT_M / 2);
-                const auto px = cam.project(p_cam);
-                if (!px) continue;
-                const float expected_height = cam.fy * CONE_HEIGHT_M / p_cam.z();
-
-                for (int j = 0; j < static_cast<int>(dets->size()); ++j) {
-                    const auto& d = (*dets)[j];
-                    const float height = d.y1 - d.y0;
-                    const float ratio = height / expected_height;
-                    if (height <= 0 || ratio > MAX_SIZE_RATIO || ratio < 1 / MAX_SIZE_RATIO) continue;
-                    const float cost = (Eigen::Vector2f((d.x0 + d.x1) / 2, (d.y0 + d.y1) / 2) - *px).norm() / height;
-                    if (cost < MATCH_GATE) pairs.emplace_back(cost, i, j);
+                for (int j = 0; j < static_cast<int>(placed.size()); ++j) {
+                    const float dist = (placed[j].xy - Eigen::Vector2f(pos.x(), pos.y())).norm();
+                    if (dist < MATCH_DISTANCE_M) pairs.emplace_back(dist, i, j);
                 }
             }
 
-            // Greedy one-to-one matching, cheapest pairs first
+            // Greedy one-to-one matching, closest pairs first
             std::sort(pairs.begin(), pairs.end());
-            std::vector<bool> cone_used(cones->cones_size()), det_used(dets->size());
-            for (const auto& [cost, i, j] : pairs) {
+            std::vector<bool> cone_used(cones->cones_size()), det_used(placed.size());
+            for (const auto& [dist, i, j] : pairs) {
                 if (cone_used[i] || det_used[j]) continue;
                 cone_used[i] = det_used[j] = true;
-                const auto& d = (*dets)[j];
-                if (d.score > best_score[i]) {
-                    best_score[i] = d.score;
-                    cones->mutable_cones(i)->set_color(d.color);
+                if (placed[j].score > best_score[i]) {
+                    best_score[i] = placed[j].score;
+                    cones->mutable_cones(i)->set_color(placed[j].color);
                 }
             }
         }
+
         return cones;
     }
 
