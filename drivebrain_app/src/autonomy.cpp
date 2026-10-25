@@ -76,11 +76,8 @@ void Autonomy::_run() {
     const auto cloud = perception::deskew_cloud(*last_scan, StateTracker::instance().odom_twist(), T_base_lidar);
     log_foxglove_only(cloud, "perception/deskewed_points");
 
-    // Filter the deskewed point cloud for cones
     std::shared_ptr<dv_msgs::Cones> cones = perception::filter_cloud(*cloud);
-    if (_cone_classifier) {
-      cones = _cone_classifier->classify(cones);
-    }
+    cones = _classifier.classify(cones, StateTracker::instance().dv_state().camera_detections, last_scan->frame_id());
     render_cones(cones, "filtered_cones", "os_sensor");
 
     // Perform SLAM update with the filtered cones

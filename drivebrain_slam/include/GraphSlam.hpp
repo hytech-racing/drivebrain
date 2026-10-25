@@ -18,12 +18,6 @@
 
 namespace slam {
 
-/* One bearing-range factor: pose index -> landmark id */
-struct MeasurementEdge {
-    std::size_t pose_index{};
-    std::uint64_t landmark_id{};
-};
-
 /**
  * Factor graph SLAM. One pose per frame, odom bewteen adjacaent poses, and bearing-range factors for cones.
  */
@@ -50,9 +44,6 @@ public:
     /* Optimized pose of every frame in the graph, map frame, by frame index */
     std::map<std::size_t, Eigen::Isometry2d> optimized_poses() const;
 
-    /* Every bearing-range factor added so far */
-    const std::vector<MeasurementEdge>& measurement_edges() const { return _edges; }
-
 private:
     // Graph solve rate
     static constexpr std::size_t SOLVE_PER_FRAME = 5;
@@ -72,8 +63,6 @@ private:
     gtsam::Values _pending_values;
     std::size_t _frames_since_solve{};
     std::set<std::uint64_t> _landmark_ids;
-    // For the pose-graph viz (~16 B per observation, for the whole session)
-    std::vector<MeasurementEdge> _edges;
     dv_msgs::IncrementalGraphSlamDebug _debug;
 };
 

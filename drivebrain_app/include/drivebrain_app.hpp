@@ -10,6 +10,7 @@
 #include <boost/asio.hpp>
 #include <memory>
 #include "LoadCellTorqueController.hpp"
+#include "TeleopController.hpp"
 #include "VNComms.hpp"
 #include "OusterComms.hpp"
 #include "autonomy.hpp"
@@ -65,6 +66,7 @@ private:
   boost::asio::io_context _io_context;
 
   /* Threads */
+  std::thread _camera_init_thread;
   std::thread _loop_thread;
   std::thread _io_context_thread;
 
@@ -96,6 +98,8 @@ private:
   /* Steering */
   std::unique_ptr<comms::KrakenComms> _kraken_comms;
 #endif
+
+  std::shared_mutex _camera_drivers_mutex;
 
   /* Cameras */
   std::vector<std::unique_ptr<comms::BlackflyComms>> _camera_drivers;

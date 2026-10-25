@@ -53,10 +53,6 @@ void DrivebrainApp::run() {
 
   spdlog::info("Constructed logging singletons");
 
-  core::DrivebrainControllerInterface::create(); 
-
-  spdlog::info("Constructed drivebrain controller interface");
-
   _acu_core_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::ACUCoreData>>(_io_context, 7777);
   _acu_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::ACUAllData>>(_io_context, 7766);
   _vcr_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::VCRData_s>>(_io_context, 9999);
@@ -101,25 +97,33 @@ void DrivebrainApp::run() {
 #endif
 
   _telem_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("telem_can_device").value(), _dbc_path);
-  _aux_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("aux_can_device").value(), _dbc_path);
+  // _aux_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("aux_can_device").value(), _dbc_path);
   spdlog::info("Initialized CAN drivers");
 
 #if JETSON_ENABLED
-  // start every GigE camera aravis can find
-  constexpr unsigned int expected_cameras = 2;
-  unsigned int num_cameras = 0;
-  for (int attempt = 0; attempt < 15; ++attempt) {
-    arv_update_device_list();
-    num_cameras = arv_get_n_devices();
-    if (num_cameras >= expected_cameras) break;
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-  }
-  spdlog::info("Found {} cameras", num_cameras);
-  for (unsigned int i = 0; i < num_cameras; i++) {
-    auto camera = std::make_unique<comms::BlackflyComms>();
-    camera->start(arv_get_device_id(i), std::string("blackfly_") + arv_get_device_serial_nbr(i), "BayerRG8", 15.0);
-    _camera_drivers.push_back(std::move(camera));
-  }
+  _camera_init_thread = std::thread([this]() {
+    try {
+      // start every GigE camera aravis can find
+      constexpr unsigned int expected_cameras = 2;
+      unsigned int num_cameras = 0;
+      for (int attempt = 0; attempt < 15; ++attempt) {
+        arv_update_device_list();
+        num_cameras = arv_get_n_devices();
+        if (num_cameras >= expected_cameras) break;
+        spdlog::info("Waiting for cameras...");
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+      }
+      spdlog::info("Found {} cameras", num_cameras);
+      for (unsigned int i = 0; i < num_cameras; i++) {
+        std::unique_lock lock{_camera_drivers_mutex};
+        auto camera = std::make_unique<comms::BlackflyComms>();
+        camera->start(arv_get_device_id(i), std::string("blackfly_") + arv_get_device_serial_nbr(i), "BayerRG8", 15.0);
+        _camera_drivers.push_back(std::move(camera));
+      }
+    } catch (const std::exception& e) {
+      spdlog::error("Failed to initialize cameras: {}", e.what());
+    }
+  });
 #endif
 
   _mode1 = std::make_shared<control::LoadCellTorqueController>(); 
@@ -136,6 +140,10 @@ void DrivebrainApp::run() {
   }
 
   spdlog::info("Constructed controller manager");
+
+  core::DrivebrainControllerInterface::create();
+
+  spdlog::info("Constructed drivebrain controller interface");
 
   core::DriveMode drive_mode = static_cast<core::DriveMode>(core::DrivebrainControllerInterface::instance().get_drive_mode());
 
@@ -171,6 +179,7 @@ void DrivebrainApp::run() {
   _autonomy.stop();
   _io_context.stop();
   if(_io_context_thread.joinable()) _io_context_thread.join();
+  if(_camera_init_thread.joinable()) _camera_init_thread.join();
   spdlog::info("Joined all threads");
 }
 
@@ -205,12 +214,12 @@ void DrivebrainApp::_actuate(const core::ControllerOutput& out) {
     torque_limit_msg->set_drivebrain_torque_rl(speedControl->torque_lim_nm.RL);
     torque_limit_msg->set_drivebrain_torque_rr(speedControl->torque_lim_nm.RR);
 
-#if !JETSON_ENABLED
     _telem_can->send_message(desired_rpm_msg);
     _telem_can->send_message(torque_limit_msg);
-    _aux_can->send_message(desired_rpm_msg);
-    _aux_can->send_message(torque_limit_msg);
-#endif
+//   #if !JETSON_ENABLED
+//     _aux_can->send_message(desired_rpm_msg);
+//     _aux_can->send_message(torque_limit_msg);
+// #endif
 
     core::log(desired_rpm_msg);
     core::log(torque_limit_msg);
@@ -223,7 +232,7 @@ void DrivebrainApp::_actuate(const core::ControllerOutput& out) {
 
 #if !JETSON_ENABLED
     _telem_can->send_message(desired_torque_msg);
-    _aux_can->send_message(desired_torque_msg);
+    // _aux_can->send_message(desired_torque_msg);
 #endif
 
     core::log(desired_torque_msg);
@@ -234,9 +243,6 @@ void DrivebrainApp::_actuate(const core::ControllerOutput& out) {
     steering_msg->set_drivebrain_steering(*out.desired_steering_deg);
     _telem_can->send_message(steering_msg);
     core::log(steering_msg);
-#if !JETSON_ENABLED
-    _aux_can->send_message(steering_msg);
-#endif
 
     // Actuate the steering angle
 #if !HOOTL_ENABLED

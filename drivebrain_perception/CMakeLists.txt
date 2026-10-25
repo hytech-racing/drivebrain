@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 
 add_library(drivebrain_perception
     src/LidarFilter.cpp
+    src/ConeClassifier.cpp
     src/PointCloudDeskew.cpp
     src/ConeClassifier.cpp
 )

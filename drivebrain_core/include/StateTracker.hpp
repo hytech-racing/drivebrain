@@ -2,6 +2,7 @@
 
 #include <condition_variable>
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <foxglove/PointCloud.pb.h>
 #include <foxglove/websocket/base64.hpp>
@@ -14,6 +15,7 @@
 #include <string> 
 #include <fstream> 
 #include <thread>
+#include <chrono>
 #include <spdlog/spdlog.h>
 
 #include "hytech_msgs.pb.h"
@@ -242,6 +244,8 @@ namespace core {
         float steering_column_angle_deg;
         bool received_steering_angle = false;
         bool updated_steering_estimator = false;
+        /* steady_clock time the last steering_data message arrived, used to detect stale steering feedback */
+        std::chrono::steady_clock::time_point last_steering_recv_time{};
         ControllerOutput prev_controller_output;
         TireDynamics tire_dynamics;
         veh_vec<float> driver_torque;
@@ -314,6 +318,23 @@ namespace core {
 
 
     /**
+     * A YOLO cone detection in full-res upright camera pixels, the image the camera intrinsics describe
+     */
+    struct ConeDetection {
+        float x0, y0, x1, y1;
+        dv_msgs::Cones::ConeColor color;
+        float score;
+    };
+
+    /* Maps a detector class name ("blue", "yellow", "orange", ...) to a cone color */
+    inline dv_msgs::Cones::ConeColor cone_color_from_name(const std::string& name) {
+        if (name == "blue") return dv_msgs::Cones::BLUE;
+        if (name == "yellow") return dv_msgs::Cones::YELLOW;
+        if (name == "orange") return dv_msgs::Cones::ORANGE_SMALL;
+        return dv_msgs::Cones::UNKNOWN;
+    }
+
+    /**
      * @struct Contains driverless data representing the entire internal
      * and external state of the vehicle
      */
@@ -324,6 +345,7 @@ namespace core {
         // Full colored track map from the sim, map frame. Only set in HOOTL
         std::shared_ptr<const dv_msgs::Cones> ground_truth_cones;
         std::shared_ptr<const std::vector<xyz_vec<float>>> path;
+        std::map<std::string, std::shared_ptr<const std::vector<ConeDetection>>> camera_detections; // latest per camera, keyed by camera name
     };
 
 
@@ -415,6 +437,14 @@ namespace core {
              * @param cones every cone on the track with its true color, map frame
              */
             void set_ground_truth_cones(std::shared_ptr<const dv_msgs::Cones> cones);
+
+            /**
+             * Sets the latest cone detections from a camera, replacing that camera's previous detections.
+             *
+             * @param camera the camera name, blackfly_<serial>
+             * @param detections the detections
+             */
+            void set_camera_detections(const std::string& camera, std::shared_ptr<const std::vector<ConeDetection>> detections);
 
             /**
              * Pose of base_link in the odom frame at the given host timestamp, interpolated

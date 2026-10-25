@@ -186,6 +186,11 @@ void StateTracker::set_ground_truth_cones(std::shared_ptr<const dv_msgs::Cones> 
     _dv_state.ground_truth_cones = std::move(cones);
 }
 
+void StateTracker::set_camera_detections(const std::string& camera, std::shared_ptr<const std::vector<ConeDetection>> detections) {
+    std::unique_lock lk(_dv_state_mutex);
+    _dv_state.camera_detections[camera] = std::move(detections);
+}
+
 static constexpr std::chrono::milliseconds TELEOP_TIMEOUT(500);
 
 void StateTracker::set_teleop_command(const TeleopCommand& command) {
@@ -278,6 +283,7 @@ void StateTracker::_receive_low_level_state(std::shared_ptr<google::protobuf::Me
             _raw_input_data.raw_steering_analog = in_msg->steering_analog_raw();
             _raw_input_data.raw_steering_digital = in_msg->steering_digital_raw();
             _vehicle_state.received_steering_angle = true;
+            _vehicle_state.last_steering_recv_time = std::chrono::steady_clock::now();
         }
     } else if (msg->GetDescriptor() == hytech::em_measurement::descriptor()) {
         auto in_msg = std::static_pointer_cast<hytech::em_measurement>(msg);
