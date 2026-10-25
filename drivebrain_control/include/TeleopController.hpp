@@ -23,6 +23,7 @@ namespace control
         {
             torque_nm max_torque;
             torque_nm max_regen_torque;
+            float max_rpm;
             float min_steering_angle_deg;
             float max_steering_angle_deg;
             int dt_rate_hz;
@@ -50,8 +51,6 @@ namespace control
         bool init();
 
         core::ControllerOutput step_controller(const VehicleState &in) override;
-
-        std::atomic<float> steering_command_deg{0.0f};
 
     private:
 

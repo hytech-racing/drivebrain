@@ -7,7 +7,7 @@ using velocity_rpm = float;
 
 namespace constants
 {
-    constexpr size_t NUM_DRIVERED_CONTROLLERS = 1;
+    constexpr size_t NUM_DRIVERED_CONTROLLERS = 2;
 
     constexpr long double GEARBOX_RATIO               = 11.86;
     constexpr long double WHEEL_DIAMETER              = 0.4064; // meters
