@@ -39,6 +39,11 @@ void control::TeleopController::_handle_param_updates(const std::unordered_map<s
         _config.max_regen_torque = *v;
     }
 
+    if (auto v = process_param_update<float>(new_param_map, "teleopcontroller/max_rpm")) {
+        std::unique_lock lk(_config_mutex);
+        _config.max_rpm = *v;
+    }
+
     if (auto v = process_param_update<float>(new_param_map, "teleopcontroller/dt_rate_hz")) {
         std::unique_lock lk(_config_mutex);
         _config.dt_rate_hz = *v;
@@ -53,6 +58,7 @@ bool control::TeleopController::init()
 
     auto opt_max_torque             = foxglove.get_param<float>("teleopcontroller/max_torque");
     auto opt_max_regen_torque       = foxglove.get_param<float>("teleopcontroller/max_regen_torque");
+    auto opt_max_rpm                = foxglove.get_param<float>("teleopcontroller/max_rpm");
     auto opt_min_steering_angle_deg = foxglove.get_param<float>("kraken_comms/min_angle_deg");
     auto opt_max_steering_angle_deg = foxglove.get_param<float>("kraken_comms/max_angle_deg");
     auto opt_dt_rate_hz             = foxglove.get_param<float>("teleopcontroller/dt_rate_hz");
@@ -60,6 +66,7 @@ bool control::TeleopController::init()
     bool all_loaded = true;
     if (!opt_max_torque)             { spdlog::error("Missing param: teleopcontroller/max_torque");             all_loaded = false; }
     if (!opt_max_regen_torque)       { spdlog::error("Missing param: teleopcontroller/max_regen_torque");       all_loaded = false; }
+    if (!opt_max_rpm)                { spdlog::error("Missing param: teleopcontroller/max_rpm");                all_loaded = false; }
     if (!opt_min_steering_angle_deg) { spdlog::error("Missing param: kraken_comms/min_angle_deg");             all_loaded = false; }
     if (!opt_max_steering_angle_deg) { spdlog::error("Missing param: kraken_comms/max_angle_deg");             all_loaded = false; }
     if (!opt_dt_rate_hz)             { spdlog::error("Missing param: teleopcontroller/dt_rate_hz");             all_loaded = false; }
@@ -71,6 +78,7 @@ bool control::TeleopController::init()
 
     _config.max_torque             = opt_max_torque.value();
     _config.max_regen_torque       = opt_max_regen_torque.value();
+    _config.max_rpm                = opt_max_rpm.value();
     _config.min_steering_angle_deg = opt_min_steering_angle_deg.value();
     _config.max_steering_angle_deg = opt_max_steering_angle_deg.value();
     _config.dt_rate_hz             = opt_dt_rate_hz.value();
@@ -226,12 +234,11 @@ ControllerOutput control::TeleopController::step_controller(const VehicleState &
         const torque_nm requested_torque = std::clamp((accel * cur_config.max_torque) - (brake * cur_config.max_regen_torque),
                                                       -cur_config.max_regen_torque, cur_config.max_torque);
 
-        
         if (requested_torque > 0.0) {
-            speed_out.desired_rpms.FL = 500;
-            speed_out.desired_rpms.FR = 500;
-            speed_out.desired_rpms.RL = 500;
-            speed_out.desired_rpms.RR = 500;
+            speed_out.desired_rpms.FL = cur_config.max_rpm;
+            speed_out.desired_rpms.FR = cur_config.max_rpm;
+            speed_out.desired_rpms.RL = cur_config.max_rpm;
+            speed_out.desired_rpms.RR = cur_config.max_rpm;
         } else {
             speed_out.desired_rpms = {0.0f, 0.0f, 0.0f, 0.0f};
         }
@@ -242,8 +249,8 @@ ControllerOutput control::TeleopController::step_controller(const VehicleState &
         speed_out.torque_lim_nm.RR = requested_torque;
 
         const float steering_range_deg = std::max(-cur_config.min_steering_angle_deg, cur_config.max_steering_angle_deg);
-        steering_command_deg = std::clamp(steering * steering_range_deg,
-                                          cur_config.min_steering_angle_deg, cur_config.max_steering_angle_deg);
+        cmd_out.desired_steering_deg = std::clamp(steering * steering_range_deg,
+                                                  cur_config.min_steering_angle_deg, cur_config.max_steering_angle_deg);
     } else {
         speed_out.desired_rpms = {0.0f, 0.0f, 0.0f, 0.0f};
         speed_out.torque_lim_nm = {0.0f, 0.0f, 0.0f, 0.0f};

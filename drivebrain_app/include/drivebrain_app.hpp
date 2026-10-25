@@ -89,7 +89,8 @@ private:
 
   /* Controllers */
   std::shared_ptr<control::LoadCellTorqueController> _mode1;
-  std::shared_ptr<control::PurePursuitController> _mode2;
+  std::shared_ptr<control::TeleopController> _mode2;
+  std::shared_ptr<control::PurePursuitController> _dv_controller;
 
   /* Vectornav */
   std::unique_ptr<comms::VNDriver> _vn_driver;
