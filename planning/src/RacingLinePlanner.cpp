@@ -35,7 +35,7 @@ std::optional<std::vector<core::xyz_vec<float>>> RacingLinePlanner::plan(const d
     if (_last_reported_ok != _line.has_value() || repeat_unavailable) {
       _last_report_ns = scan_ns;
       if (_line) {
-        spdlog::info("Racing line: track is closed, following a {}-point minimum-curvature line ({} blue, {} yellow cones)", _line->size(),
+        spdlog::info("Racing line: track is closed, built a {}-point minimum-curvature line ({} blue, {} yellow cones)", _line->size(),
                      blue.size(), yellow.size());
       } else {
         spdlog::info("Racing line: not available, using the midline planner ({}; map has {} blue, {} yellow cones)", error, blue.size(), yellow.size());
@@ -48,6 +48,19 @@ std::optional<std::vector<core::xyz_vec<float>>> RacingLinePlanner::plan(const d
   const auto vehicle_state = core::StateTracker::instance().vehicle_state().first;
   const racing_line::Vec2 position(vehicle_state.vehicle_position_map_frame.x, vehicle_state.vehicle_position_map_frame.y);
   const racing_line::Vec2 heading(vehicle_state.vehicle_heading_map_frame_unit_vector.x, vehicle_state.vehicle_heading_map_frame_unit_vector.y);
+
+  // Hold the midline for the first laps after closure so it can be compared with the racing line on the same map
+  if (!_racing_started) {
+    if (_last_position) _distance_since_closure_m += (position - *_last_position).norm();
+    _last_position = position;
+    double length = 0.0;
+    for (std::size_t i = 0; i < _line->size(); ++i) length += ((*_line)[(i + 1) % _line->size()] - (*_line)[i]).norm();
+    const double hold_m = _config.midline_laps_after_closure * length;
+    if (_distance_since_closure_m < hold_m) return std::nullopt;
+    _racing_started = true;
+    spdlog::info("Racing line: {} midline lap(s) driven since the track closed, switching to the racing line", _config.midline_laps_after_closure);
+  }
+
   const auto ahead = racing_line::window_ahead(*_line, position, heading, _config.window_points);
   if (!ahead) return std::nullopt;
 

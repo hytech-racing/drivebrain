@@ -69,6 +69,7 @@ void Autonomy::start() {
   if (const auto v = params.get_param<float>("racing_line/gate_spacing_m")) racing_line.line.gate_spacing_m = *v;
   if (const auto v = params.get_param<float>("racing_line/max_cone_gap_m")) racing_line.line.max_cone_gap_m = *v;
   if (const auto v = params.get_param<float>("racing_line/replan_period_s")) racing_line.replan_period_s = *v;
+  if (const auto v = params.get_param<int>("racing_line/midline_laps_after_closure")) racing_line.midline_laps_after_closure = std::max(*v, 0);
   if (const auto v = params.get_param<int>("racing_line/window_points")) racing_line.window_points = static_cast<std::size_t>(std::max(*v, 2));
   _racing_line = planning::RacingLinePlanner(racing_line);
   spdlog::info("Racing line planner {}", racing_line.enabled ? "enabled" : "disabled");

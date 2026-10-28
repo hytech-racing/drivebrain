@@ -103,6 +103,7 @@
         "gate_spacing_m": 1.0,
         "max_cone_gap_m": 11.0,
         "replan_period_s": 1.0,
+        "midline_laps_after_closure": 1,
         "window_points": 30
     },
     "use_vectornav": false,
