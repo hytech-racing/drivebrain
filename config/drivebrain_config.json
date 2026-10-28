@@ -96,7 +96,7 @@
         "range_std_m": 0.5
     },
     "racing_line": {
-        "enabled": false,
+        "enabled": true,
         "car_half_width_m": 0.70,
         "cone_radius_m": 0.114,
         "clearance_m": 0.30,
