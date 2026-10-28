@@ -4,6 +4,7 @@
 #include <foxglove/ImageAnnotations.pb.h>
 #include <foxglove/RawImage.pb.h>
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <memory>
 #include "StateTracker.hpp"
@@ -186,6 +187,13 @@ void SimComms::_veh_recv_loop() {
             core::StateTracker::instance().set_ground_truth_cones(std::static_pointer_cast<dv_msgs::Cones>(msg));
         } else if (desc == hytech_msgs::pose::descriptor()) {
             core::render_pose(std::static_pointer_cast<hytech_msgs::pose>(msg), "ground_truth_pose");
+            {
+                const auto& gt = static_cast<const hytech_msgs::pose&>(*msg);
+                const auto& q = gt.orientation();
+                core::StateTracker::instance().set_ground_truth_pose(
+                    gt.position().x(), gt.position().y(),
+                    std::atan2(2.0 * (q.w() * q.z() + q.x() * q.y()), 1.0 - 2.0 * (q.y() * q.y() + q.z() * q.z())));
+            }
             core::StateTracker::instance().handle_receive_protobuf_message(msg);
         } else if (desc == foxglove::FrameTransform::descriptor()) {
             core::log(msg);
