@@ -147,3 +147,10 @@ docker build -t kkittur/drivebrain_cross_compile .   # once
 docker compose run dev
 ./scripts/build_script.sh
 ```
+
+# Deploying Code
+
+To deploy the code to the drivebrain, connect to the jetson through the `ht11` wifi, through an ethernet cable,
+or through an ubiquiti AC bullet. Then, run `./scripts/deploy_script.sh` outside of the drivebrain container.
+
+If you get a `zsh: permission denied` message, simply run `chmod + x ./scripts/deploy_script.sh`.
