@@ -139,7 +139,7 @@ void Odometry::_publish(const std::uint64_t timestamp_ns, const Eigen::Isometry2
         std::vector<core::xyz_vec<float>> path;
         path.reserve(_trail.size());
         for (const Eigen::Vector2f& p : _trail) path.push_back({p.x(), p.y(), 0.0f});
-        core::render_path(path, "odom_trail", "odom");
+        core::render_path(path, "odom_trail", "odom", {0.0, 0.9, 0.5, 1.0}, "scene/odom_trail");
     }
 
     auto estimate = std::make_shared<dv_msgs::DriverlessStateEstimate>();
