@@ -95,6 +95,16 @@
         "bearing_std_rad": 0.05,
         "range_std_m": 0.5
     },
+    "racing_line": {
+        "enabled": false,
+        "car_half_width_m": 0.70,
+        "cone_radius_m": 0.114,
+        "clearance_m": 0.30,
+        "gate_spacing_m": 1.0,
+        "max_cone_gap_m": 11.0,
+        "replan_period_s": 1.0,
+        "window_points": 30
+    },
     "use_vectornav": false,
     "use_fake_vn": false,
     "use_surrey_aero": false,

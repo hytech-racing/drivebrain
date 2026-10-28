@@ -1,5 +1,6 @@
 #include "autonomy.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <variant>
@@ -8,6 +9,7 @@
 #include <google/protobuf/util/time_util.h>
 #include <spdlog/spdlog.h>
 
+#include <FoxgloveServer.hpp>
 #include <Telemetry.hpp>
 #include <LidarFilter.hpp>
 #include <PointCloudDeskew.hpp>
@@ -57,6 +59,19 @@ void Autonomy::start() {
   _slam = std::make_unique<slam::Slam>();
   _controller = std::make_unique<control::PurePursuitController>();
   _cone_classifier = std::make_unique<perception::ConeClassifier>("intrinsics");
+
+  auto& params = FoxgloveServer::instance();
+  planning::RacingLinePlanner::Config racing_line;
+  racing_line.enabled = params.get_param<bool>("racing_line/enabled").value_or(false);
+  if (const auto v = params.get_param<float>("racing_line/car_half_width_m")) racing_line.line.car_half_width_m = *v;
+  if (const auto v = params.get_param<float>("racing_line/cone_radius_m")) racing_line.line.cone_radius_m = *v;
+  if (const auto v = params.get_param<float>("racing_line/clearance_m")) racing_line.line.clearance_m = *v;
+  if (const auto v = params.get_param<float>("racing_line/gate_spacing_m")) racing_line.line.gate_spacing_m = *v;
+  if (const auto v = params.get_param<float>("racing_line/max_cone_gap_m")) racing_line.line.max_cone_gap_m = *v;
+  if (const auto v = params.get_param<float>("racing_line/replan_period_s")) racing_line.replan_period_s = *v;
+  if (const auto v = params.get_param<int>("racing_line/window_points")) racing_line.window_points = static_cast<std::size_t>(std::max(*v, 2));
+  _racing_line = planning::RacingLinePlanner(racing_line);
+  spdlog::info("Racing line planner {}", racing_line.enabled ? "enabled" : "disabled");
   _thread = std::thread(&Autonomy::_run, this);
   spdlog::info("Autonomy stack started");
 }
@@ -133,10 +148,14 @@ void Autonomy::_run() {
 
     // Update the state tracker with the new cone observations and plan a path
     StateTracker::instance().set_cone_observations(map);
-    auto path = planning::plan_path(*map);
-    render_path(path, "planned_path", "map", {1.0, 0.0, 1.0, 1.0}); // magenta, apart from the green trails
+    const auto midline = planning::plan_path(*map);
+    render_path(midline, "midline_path", "map", {1.0, 0.5, 0.0, 1.0}, "scene/midline_path"); // orange
+    const auto racing_path = _racing_line.plan(*map, scan_ns);
+    if (racing_path) render_path(*racing_path, "racing_line_path", "map", {0.2, 1.0, 0.1, 1.0}, "scene/racing_line_path"); // green
+    const auto& path = racing_path ? *racing_path : midline;
+    render_path(path, "planned_path", "map", {1.0, 0.0, 1.0, 1.0}, "scene/planned_path"); // magenta: what the controller follows, apart from the green trails
 
-    StateTracker::instance().set_dv_path(std::make_shared<const std::vector<xyz_vec<float>>>(std::move(path))); // Used by the pure pursuit controller
+    StateTracker::instance().set_dv_path(std::make_shared<const std::vector<xyz_vec<float>>>(path)); // Used by the pure pursuit controller
   }
 }
 
