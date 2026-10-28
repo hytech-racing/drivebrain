@@ -246,7 +246,8 @@ void SimComms::_lidar_recv_loop() {
             continue;
         }
 
-        core::log(pc, "ouster/points");
+        // live in Foxglove only: the full cloud is about 3 MB/s and fills the disk in a few minutes of MCAP
+        core::log_foxglove_only(pc, "ouster/points");
         core::StateTracker::instance().handle_receive_protobuf_message(pc);
     }
 }
