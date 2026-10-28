@@ -20,6 +20,7 @@ compile_commands.json
 
 CMakeUserPresets.json
 *.mcap
+recordings/
 
 tests/replay/mcap/*.mcap
 .agents/
