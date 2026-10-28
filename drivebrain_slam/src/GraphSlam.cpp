@@ -208,7 +208,7 @@ std::shared_ptr<dv_msgs::Cones> Slam::update(const dv_msgs::Cones& cones, const 
 
 void Slam::render(const std::uint64_t scan_ns, const std::optional<ObservationFrame>& observations,
                   const std::shared_ptr<dv_msgs::Cones>& map) {
-    core::render_cones(map, "slam_landmarks");
+    core::render_cones(map, "slam_landmarks", "map", "scene/slam_landmarks");
 
     // this frame's observation factors: car pose -> observed landmark
     if (observations) {
@@ -220,7 +220,7 @@ void Slam::render(const std::uint64_t scan_ns, const std::optional<ObservationFr
             factors.push_back({static_cast<float>(car.x()), static_cast<float>(car.y()), 0.1f});
             factors.push_back({static_cast<float>(measured.x()), static_cast<float>(measured.y()), 0.1f});
         }
-        core::render_segments(factors, "slam_factors");
+        core::render_segments(factors, "slam_factors", "map", "scene/slam_factors");
     }
 
     // Redrawn once a second
@@ -230,7 +230,7 @@ void Slam::render(const std::uint64_t scan_ns, const std::optional<ObservationFr
         for (const auto& [index, pose] : backend.optimized_poses()) {
             chain.push_back({static_cast<float>(pose.translation().x()), static_cast<float>(pose.translation().y()), 0.05f});
         }
-        core::render_path(chain, "slam_graph");
+        core::render_path(chain, "slam_graph", "map", {0.0, 0.9, 0.5, 1.0}, "scene/slam_graph");
     }
 }
 

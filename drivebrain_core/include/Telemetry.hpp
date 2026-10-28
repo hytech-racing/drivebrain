@@ -84,8 +84,9 @@ inline void publish_transform(const std::string& parent_frame_id, const std::str
  * @param cones the cones to log
  * @param id The identifier of the cone map (used to distinguish between ground truth and estimated cone maps)
  * @param frame_id The frame the cone positions are expressed in.
+ * @param scene_topic Topic the drawn scene goes to, so it can be toggled on its own in Foxglove. Default: the shared SceneUpdate topic.
  */
-inline void render_cones(std::shared_ptr<dv_msgs::Cones> cones, std::string id, std::string frame_id = "map") {
+inline void render_cones(std::shared_ptr<dv_msgs::Cones> cones, std::string id, std::string frame_id = "map", std::string scene_topic = {}) {
     log(cones, id);
 
     auto scene = std::make_shared<foxglove::SceneUpdate>();
@@ -137,7 +138,7 @@ inline void render_cones(std::shared_ptr<dv_msgs::Cones> cones, std::string id, 
         }
     }
 
-    log(scene);
+    log(scene, scene_topic);
 }
 
 /**
@@ -181,9 +182,10 @@ inline void render_pose(std::shared_ptr<hytech_msgs::pose> pose, std::string id,
  * @param path the path points to render, in order
  * @param id The identifier of the path (used to distinguish e.g. a midline from a raceline)
  * @param frame_id The frame the path points are expressed in.
+ * @param scene_topic Topic the drawn scene goes to, so it can be toggled on its own in Foxglove. Default: the shared SceneUpdate topic.
  */
 inline void render_path(const std::vector<xyz_vec<float>>& path, std::string id, std::string frame_id = "map",
-                        std::array<double, 4> rgba = {0.0, 0.9, 0.5, 1.0}) {
+                        std::array<double, 4> rgba = {0.0, 0.9, 0.5, 1.0}, std::string scene_topic = {}) {
     auto scene = std::make_shared<foxglove::SceneUpdate>();
     auto* entity = scene->add_entities();
     entity->set_frame_id(frame_id);
@@ -213,7 +215,7 @@ inline void render_path(const std::vector<xyz_vec<float>>& path, std::string id,
     color->set_b(rgba[2]);
     color->set_a(rgba[3]);
 
-    log(scene);
+    log(scene, scene_topic);
 }
 
 /**
@@ -223,7 +225,7 @@ inline void render_path(const std::vector<xyz_vec<float>>& path, std::string id,
  * @param id The identifier of the segment set (e.g. "slam_factors")
  * @param frame_id The frame the points are expressed in.
  */
-inline void render_segments(const std::vector<xyz_vec<float>>& points, std::string id, std::string frame_id = "map") {
+inline void render_segments(const std::vector<xyz_vec<float>>& points, std::string id, std::string frame_id = "map", std::string scene_topic = {}) {
     auto scene = std::make_shared<foxglove::SceneUpdate>();
     auto* entity = scene->add_entities();
     entity->set_frame_id(frame_id);
@@ -250,7 +252,7 @@ inline void render_segments(const std::vector<xyz_vec<float>>& points, std::stri
     color->set_b(0.55);
     color->set_a(0.35);
 
-    log(scene);
+    log(scene, scene_topic);
 }
 
 /**
