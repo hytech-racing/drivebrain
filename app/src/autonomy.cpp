@@ -18,8 +18,9 @@
 
 namespace core {
 namespace {
-// Distance from the sim's car reference point (CG) to its lidar, along the car. Matches MOUNT_FWD in xcel sim/scene.py
-constexpr double SIM_LIDAR_FORWARD_M = 0.75;
+// Distance from the sim's car reference point (base_link) to its lidar, along the car. Matches MOUNT_FWD in xcel sim/scene.py
+// and static_transforms/lidar_x_m in the config
+constexpr double SIM_LIDAR_FORWARD_M = 1.244;
 constexpr double SIM_COLOR_MATCH_M = 0.6;
 
 // HOOTL only: the sim has no cameras, so no cone ever gets a colour. Copy the colour of the nearest true cone instead.
@@ -181,7 +182,7 @@ void Autonomy::_run() {
     const auto midline = planning::plan_path(*map);
     render_path(midline, "midline_path", "map", {1.0, 0.5, 0.0, 1.0}, "scene/midline_path"); // orange
     const auto racing_path = _racing_line.plan(*map, scan_ns);
-    _controller->set_track_closed(_racing_line.track_closed());  // the speed profile starts once the discovery lap is over
+    _controller->set_track_closed(_racing_line.track_closed());  // before this the profile can only slow the car below the discovery speed
     _controller->set_finished(_racing_line.finished());          // all laps done: stop the car
     if (_racing_line.finished() && !_end_requested) {
       // Once the car has stopped, shut drivebrain down the way Ctrl+C does, so the MCAP is closed and indexed

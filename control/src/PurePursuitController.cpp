@@ -22,15 +22,15 @@ ControllerOutput control::PurePursuitController::step(const VehicleState& in) {
     if (steering) {
         float speed = _constant_speed;
         const auto now = std::chrono::steady_clock::now();
-        if (_speed_profile && _track_closed) {
+        if (_speed_profile) {
             const auto profile = speed_profile(*path, *_speed_profile);
-            const float target = profile[steering->closest];
+            float target = profile[steering->closest];
+            // Before the track closes the map is incomplete, so the profile may only slow the car below the discovery speed
+            if (!_track_closed) target = std::min(target, _constant_speed);
             // Braking follows the profile at once (it already slows down ahead of corners); speeding up is rate-limited
             const float dt = std::min(std::chrono::duration<float>(now - _last_step_time).count(), 0.1f);
             _commanded_speed = target > _commanded_speed ? std::min(target, _commanded_speed + _speed_profile->max_accel_mps2 * dt) : target;
             speed = _commanded_speed;
-        } else {
-            _commanded_speed = _constant_speed;  // the profile starts from the constant speed the car was already holding
         }
         _last_step_time = now;
         if (_finished) speed = 0.0f;
