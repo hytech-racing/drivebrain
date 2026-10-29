@@ -10,6 +10,7 @@ Reads (all written by drivebrain's autonomy stack):
     slam/vehicle_pose        car pose in the SLAM map frame -> the driven path, split into laps
     scene/midline_path       midline planner output, every scan
     scene/racing_line_path   racing line window ahead of the car, only while the track is closed
+    scene/planned_path       what the controller followed (the cross-track error is measured against this)
     slam_landmarks           SLAM cone map (the last one is used as the track)
 
 A lap ends when the car comes back within LAP_RADIUS_M of where it started, after leaving by LEAVE_RADIUS_M.
@@ -37,6 +38,8 @@ Metrics, per lap and then averaged per planner:
     body gap             gap between the car's rectangular outline and the nearest cone's edge, using the pose heading
                          (so the corners count). `body hits` counts separate visits with a negative gap. The outline is
                          an assumption: --car-half-width, --car-front and --car-rear measured from the pose reference point
+    cross-track error    sideways distance from the car to the line the controller was following (scene/planned_path),
+                         mean and 95th percentile: how closely it tracked its path
 """
 import argparse
 import csv
@@ -220,6 +223,18 @@ def speed_limited_time(kappa, a_lat, a_long, a_brake, v_max):
     return float(np.sum(GRID_M / np.maximum(v, 0.5))), v
 
 
+def dist_to_polyline(p, pts):
+    """Sideways distance from p to a path. The path may start ahead of the car (the midline planner starts at the first
+    midpoint in front of it), so the first segment is treated as extending backwards without limit: what is measured is
+    how far to the side of the line the car is, not how far it is from the start of the path."""
+    a, b = pts[:-1], pts[1:]
+    ab = b - a
+    t = np.einsum("ij,ij->i", p - a, ab) / np.maximum(np.einsum("ij,ij->i", ab, ab), 1e-9)
+    t[1:] = np.clip(t[1:], 0.0, 1.0)
+    t[0] = min(t[0], 1.0)
+    return float(np.min(np.hypot(*(a + t[:, None] * ab - p).T)))
+
+
 def count_events(mask):
     return int(np.sum(mask[1:] & ~mask[:-1]) + (1 if mask[0] else 0)) if len(mask) else 0
 
@@ -249,6 +264,9 @@ def main():
     if not laps:
         sys.exit("no complete lap in this file (the car never came back to its start)")
     cone_xy = np.array([(x, y) for x, y, _ in cones]) if cones else np.zeros((0, 2))
+
+    planned = lines[PLANNED] or lines[MIDLINE]
+    planned_t = np.array([t for t, _ in planned])
 
     for k, lap in enumerate(laps, 1):
         lap["n"] = k
@@ -296,6 +314,13 @@ def main():
             lap["clear"], lap["clear_min"], lap["contacts"] = np.full(len(xy), np.nan), float("nan"), 0
             lap["body_gap"], lap["body_min"], lap["body_hits"] = np.full(len(xy), np.nan), float("nan"), 0
 
+        # tracking: how far to the side of the line the controller was following (planned_path) the car was, at each scan
+        cte = []
+        for (tp, pts) in planned[np.searchsorted(planned_t, lap["start"]):np.searchsorted(planned_t, lap["end"])]:
+            cte.append(dist_to_polyline(np.array([np.interp(tp, t, xy[:, 0]), np.interp(tp, t, xy[:, 1])]), pts))
+        lap["cte_mean"] = float(np.mean(cte)) if cte else float("nan")
+        lap["cte_p95"] = float(np.percentile(cte, 95)) if cte else float("nan")
+
 
     out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
     stem = Path(args.mcap).stem
@@ -303,6 +328,7 @@ def main():
             ("curv mean", "{:9.3f}", "kappa_mean"), ("curv p95", "{:8.3f}", "kappa_p95"), ("rate mean", "{:9.4f}", "rate_mean"), ("rate p95", "{:8.4f}", "rate_p95"), ("est. s", "{:6.1f}", "est_time"),
             ("clear min", "{:9.2f}", "clear_min"), ("contacts", "{:8d}", "contacts"),
             ("body gap", "{:8.2f}", "body_min"), ("body hits", "{:9d}", "body_hits"),
+            ("cte mean", "{:8.2f}", "cte_mean"), ("cte p95", "{:7.2f}", "cte_p95"),
             ("racing %", "{:8.0f}", "racing_pct")]
     print("\n" + " ".join(f"{c[0]:>{len(c[1].format(*([0] if 'd' in c[1] else [0.0] if 'f' in c[1] else ['x'])))}}" for c in cols))
     for lap in laps:
@@ -374,9 +400,9 @@ def main():
     a1.legend(handles=[plt.Line2D([], [], color=C_DISCOVERY, label="discovery lap"), plt.Line2D([], [], color=C_MIDLINE, label="midline laps"), plt.Line2D([], [], color=C_RACING, label="racing-line laps")], loc="upper right")
     at = fig.add_subplot(gs[3, 1])  # lap table: what was actually driven
     at.axis("off")
-    rows = [[str(l["n"]), l["planner"], f"{l['lap_time']:.1f} s", f"{l['distance']:.0f} m"] for l in laps]
-    tbl = at.table(cellText=rows, colLabels=["Lap", "Planner", "Time", "Distance"], cellLoc="left", colLoc="left", loc="center",
-                   colWidths=[0.12, 0.34, 0.27, 0.27])
+    rows = [[str(l["n"]), l["planner"], f"{l['lap_time']:.1f} s", f"{l['distance']:.0f} m", f"{l['cte_mean']:.2f} / {l['cte_p95']:.2f} m"] for l in laps]
+    tbl = at.table(cellText=rows, colLabels=["Lap", "Planner", "Time", "Distance", "Cross-track (mean / p95)"], cellLoc="left", colLoc="left",
+                   loc="center", colWidths=[0.08, 0.2, 0.16, 0.18, 0.38])
     tbl.auto_set_font_size(False); tbl.set_fontsize(10); tbl.scale(1, 1.8)
     for (r, _), cell in tbl.get_celld().items():
         cell.set_edgecolor("#d1d5db")

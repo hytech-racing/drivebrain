@@ -2,6 +2,7 @@
 
 #include <string>
 
+#include <algorithm>
 #include <spdlog/spdlog.h>
 
 namespace planning {
@@ -11,8 +12,6 @@ RacingLinePlanner::RacingLinePlanner() = default;
 RacingLinePlanner::RacingLinePlanner(Config config) : _config(std::move(config)) {}
 
 std::optional<std::vector<core::xyz_vec<float>>> RacingLinePlanner::plan(const dv_msgs::Cones& cones, std::uint64_t scan_ns) {
-  if (!_config.enabled) return std::nullopt;
-
   const auto period_ns = static_cast<std::uint64_t>(_config.replan_period_s * 1e9);
   if (!_has_computed || scan_ns < _last_compute_ns || scan_ns - _last_compute_ns >= period_ns) {
     std::vector<racing_line::Vec2> blue, yellow;
@@ -43,22 +42,41 @@ std::optional<std::vector<core::xyz_vec<float>>> RacingLinePlanner::plan(const d
       _last_reported_ok = _line.has_value();
     }
   }
-  if (!_line) return std::nullopt;
+  if (_line) _ever_closed = true;
 
   const auto vehicle_state = core::StateTracker::instance().vehicle_state().first;
   const racing_line::Vec2 position(vehicle_state.vehicle_position_map_frame.x, vehicle_state.vehicle_position_map_frame.y);
   const racing_line::Vec2 heading(vehicle_state.vehicle_heading_map_frame_unit_vector.x, vehicle_state.vehicle_heading_map_frame_unit_vector.y);
 
-  // Hold the midline for the first laps after closure so it can be compared with the racing line on the same map
+  // Count laps (also while the line is not available yet: lap 1 is when the track is discovered)
+  constexpr double LEAVE_START_M = 15.0;  // must first get this far from the start
+  constexpr double LAP_DONE_M = 4.0;      // back within this of the start = lap done
+  if (!_start_position) {
+    _start_position = position;
+  } else {
+    const double from_start = (position - *_start_position).norm();
+    if (from_start > LEAVE_START_M) _left_start = true;
+    if (_left_start && from_start < LAP_DONE_M) {
+      _left_start = false;
+      ++_laps_completed;
+      spdlog::info("Racing line: lap {} complete", _laps_completed);
+    }
+  }
+  const int discovery_laps = 1;
+  const int last_lap = discovery_laps + std::max(_config.midline_laps_after_closure, 0) + std::max(_config.racing_laps, 1);
+  if (_config.enabled && _laps_completed >= last_lap && !_finished) {
+    _finished = true;
+    spdlog::info("Racing line: all {} laps complete (1 discovery, {} midline, {} racing line)", last_lap, _config.midline_laps_after_closure,
+                 _config.racing_laps);
+  }
+
+  if (!_line || !_config.enabled) return std::nullopt;
+
+  // Hold the midline until the discovery lap and the midline laps are done, so the racing line starts on the same closed map
   if (!_racing_started) {
-    if (_last_position) _distance_since_closure_m += (position - *_last_position).norm();
-    _last_position = position;
-    double length = 0.0;
-    for (std::size_t i = 0; i < _line->size(); ++i) length += ((*_line)[(i + 1) % _line->size()] - (*_line)[i]).norm();
-    const double hold_m = _config.midline_laps_after_closure * length;
-    if (_distance_since_closure_m < hold_m) return std::nullopt;
+    if (_laps_completed < discovery_laps + std::max(_config.midline_laps_after_closure, 0)) return std::nullopt;
     _racing_started = true;
-    spdlog::info("Racing line: {} midline lap(s) driven since the track closed, switching to the racing line", _config.midline_laps_after_closure);
+    spdlog::info("Racing line: {} lap(s) complete, switching to the racing line", _laps_completed);
   }
 
   const auto ahead = racing_line::window_ahead(*_line, position, heading, _config.window_points);

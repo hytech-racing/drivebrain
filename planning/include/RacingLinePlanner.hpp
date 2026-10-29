@@ -25,9 +25,13 @@ public:
     racing_line::Params line;
     std::size_t window_points = 30;  // points handed to the controller, one per gate_spacing_m
     double replan_period_s = 1.0;    // the line is rebuilt from the map at most this often
-    // Laps to keep following the midline after the track closes, before switching to the racing line. 1 gives a
-    // midline lap and a racing-line lap on the same closed map to compare; 0 switches as soon as the line exists.
+    // Lap 1 is the discovery lap (midline planner, the map is still being built). Then the midline planner is kept for
+    // this many laps on the closed map, then the racing line is followed for racing_laps laps. 1 and 1 give one lap of
+    // each on the same map to compare; 0 midline laps switches to the racing line as soon as the lap is over.
     int midline_laps_after_closure = 1;
+    int racing_laps = 1;
+    // When all of those laps are done, finished() turns true so the caller can stop the car and end the run
+    bool end_run_when_done = false;
   };
 
   RacingLinePlanner();
@@ -41,14 +45,24 @@ public:
    */
   std::optional<std::vector<core::xyz_vec<float>>> plan(const dv_msgs::Cones& cones, std::uint64_t scan_ns);
 
+  /// True from the moment the map first forms a closed track (the discovery lap is over), whether or not the racing line is enabled
+  bool track_closed() const { return _ever_closed; }
+
+  /// True once the discovery lap, the midline laps and the racing-line laps are all complete (and end_run_when_done is set)
+  bool finished() const { return _config.enabled && _config.end_run_when_done && _finished; }
+
 private:
   Config _config;
   std::optional<std::vector<racing_line::Vec2>> _line;  // closed, in driving direction
   bool _has_computed = false;
   std::uint64_t _last_compute_ns = 0;
-  double _distance_since_closure_m = 0.0;  // driven while the track has been closed; the midline is held until this reaches the laps
-  std::optional<racing_line::Vec2> _last_position;
+  // Laps are counted from where the car started: one is done when it comes back near the start after having been far from it
+  std::optional<racing_line::Vec2> _start_position;
+  bool _left_start = false;
+  int _laps_completed = 0;
   bool _racing_started = false;
+  bool _finished = false;
+  bool _ever_closed = false;
   std::optional<bool> _last_reported_ok;
   std::uint64_t _last_report_ns = 0;  // while unavailable, the reason is repeated every few seconds so it is not lost in a busy log
 };

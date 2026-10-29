@@ -2,6 +2,7 @@ conan
 foxglove-schemas-protobuf
 mcap
 mcap-protobuf-support
+matplotlib
 numpy
 ouster-sdk
 zmq
