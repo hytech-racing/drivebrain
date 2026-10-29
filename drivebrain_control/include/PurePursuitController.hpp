@@ -23,7 +23,7 @@ public:
     float get_dt_sec() { return 0.01f; }
     ControllerOutput step(const VehicleState& in);
 
-    /* Constant speed held until the track is closed (the discovery lap), and for the whole run if there is no speed profile */
+    /* Speed cap until the track is closed (the discovery lap), and the speed held for the whole run if there is no speed profile */
     void set_constant_speed(float speed_mps) { _constant_speed = speed_mps; }
 
     /* Corner-dependent target speed (see SpeedProfile.hpp); nullopt keeps the constant speed */
@@ -32,7 +32,7 @@ public:
     /* Once the run is over the car is told to stop (zero speed); the steering still follows the path */
     void set_finished(bool finished) { _finished = finished; }
 
-    /* The speed profile is only used once the track is closed; until then (the discovery lap) the car holds the constant speed */
+    /* Until the track is closed (the discovery lap) the speed profile can only slow the car below the constant speed; after that it sets the speed */
     void set_track_closed(bool closed) { _track_closed = closed; }
 
 private:
@@ -46,7 +46,7 @@ private:
     std::optional<Steering> _steering(const VehicleState& in, const std::vector<xyz_vec<float>>& path) const;
 
     float _lookahead_dist = 2.5f;
-    float _constant_speed = 0.0f;  // m/s, from the config; held on the discovery lap and whenever there is no speed profile
+    float _constant_speed = 0.0f;  // m/s, from the config; the cap on the discovery lap, and the speed whenever there is no speed profile
     std::optional<SpeedProfileParams> _speed_profile;
     float _commanded_speed = 0.0f;                          // what the speed profile has ramped up to; only touched by step()
     std::chrono::steady_clock::time_point _last_step_time{};

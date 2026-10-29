@@ -70,13 +70,18 @@ namespace planning {
 
       for (std::size_t i = 0; i < delaunay.triangles.size(); i++) {
 
-        // If the edge is a boundary (-1) or a twin edge already iterated over, skip it
-        if (delaunay.halfedges[i] == invalid_index || delaunay.halfedges[i] < i) {
+        // An edge shared by two triangles is visited once, from its lower half edge. An edge on the outside of the triangulation (-1) has
+        // no twin and is visited once too, but only blue-yellow ones are kept below: with few cones in view (the start of a run) the
+        // gate edges across the track are on the outside, and the only shared edge is a diagonal
+        const bool on_boundary = delaunay.halfedges[i] == invalid_index;
+        if (!on_boundary && delaunay.halfedges[i] < i) {
           continue;
         }
 
         std::size_t curr_edge = delaunay.triangles[i];
-        std::size_t twin_edge = delaunay.triangles[delaunay.halfedges[i]];
+        // The edge runs from this half edge's point to the next point of the same triangle, which is also where the twin half edge starts
+        const std::size_t next_half_edge = (i % 3 == 2) ? i - 2 : i + 1;
+        std::size_t twin_edge = delaunay.triangles[next_half_edge];
 
         auto curr_edge_color = cones.cones().at(curr_edge).color();
         auto twin_edge_color = cones.cones().at(twin_edge).color();
@@ -87,6 +92,8 @@ namespace planning {
         // only looking for edges that cross the width of the track - this means that one end is a blue cone and the other end is a yellow cone
         bool is_crossing_edge = (curr_edge_color == dv_msgs::Cones_ConeColor_BLUE && twin_edge_color == dv_msgs::Cones_ConeColor_YELLOW) ||
             (curr_edge_color == dv_msgs::Cones_ConeColor_YELLOW && twin_edge_color == dv_msgs::Cones_ConeColor_BLUE);
+
+        if (on_boundary && !is_crossing_edge) continue;
 
         if (is_crossing_edge || known < 2) {
           float dx = delaunay.coords[2 * curr_edge] - delaunay.coords[2 * twin_edge];
