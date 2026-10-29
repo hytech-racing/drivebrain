@@ -2,6 +2,8 @@
 
 #include <Literals.hpp>
 
+#include <algorithm>
+#include <chrono>
 #include <cmath>
 
 bool control::PurePursuitController::init() {
@@ -18,7 +20,21 @@ ControllerOutput control::PurePursuitController::step(const VehicleState& in) {
     ControllerOutput out = {};
     auto steering = path ? _steering(in, *path) : std::nullopt;
     if (steering) {
-        const float rpm = _target_speed * constants::METERS_PER_SECOND_TO_RPM;
+        float speed = _constant_speed;
+        const auto now = std::chrono::steady_clock::now();
+        if (_speed_profile && _track_closed) {
+            const auto profile = speed_profile(*path, *_speed_profile);
+            const float target = profile[steering->closest];
+            // Braking follows the profile at once (it already slows down ahead of corners); speeding up is rate-limited
+            const float dt = std::min(std::chrono::duration<float>(now - _last_step_time).count(), 0.1f);
+            _commanded_speed = target > _commanded_speed ? std::min(target, _commanded_speed + _speed_profile->max_accel_mps2 * dt) : target;
+            speed = _commanded_speed;
+        } else {
+            _commanded_speed = _constant_speed;  // the profile starts from the constant speed the car was already holding
+        }
+        _last_step_time = now;
+        if (_finished) speed = 0.0f;
+        const float rpm = speed * constants::METERS_PER_SECOND_TO_RPM;
         speed_out.desired_rpms = {rpm, rpm, rpm, rpm};
         out.desired_steering_deg = steering->angle_rad * 180.0f / M_PI;
         out.lookahead_point_map_frame = steering->target;
@@ -63,5 +79,5 @@ std::optional<control::PurePursuitController::Steering> control::PurePursuitCont
         return std::nullopt;
     }
     const float lateral = heading.x * dy - heading.y * dx;
-    return Steering{std::atan(2.0f * lateral / dist_sq * WHEELBASE_M), target};
+    return Steering{std::atan(2.0f * lateral / dist_sq * WHEELBASE_M), target, closest};
 }

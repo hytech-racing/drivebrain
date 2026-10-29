@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <csignal>
 #include <memory>
 #include <variant>
 #include <vector>
@@ -70,9 +71,37 @@ void Autonomy::start() {
   if (const auto v = params.get_param<float>("racing_line/max_cone_gap_m")) racing_line.line.max_cone_gap_m = *v;
   if (const auto v = params.get_param<float>("racing_line/replan_period_s")) racing_line.replan_period_s = *v;
   if (const auto v = params.get_param<int>("racing_line/midline_laps_after_closure")) racing_line.midline_laps_after_closure = std::max(*v, 0);
+  if (const auto v = params.get_param<int>("racing_line/racing_laps")) racing_line.racing_laps = std::max(*v, 1);
+  if (const auto v = params.get_param<bool>("racing_line/end_run_when_done")) racing_line.end_run_when_done = *v;
   if (const auto v = params.get_param<int>("racing_line/window_points")) racing_line.window_points = static_cast<std::size_t>(std::max(*v, 2));
+  // The speed held on the discovery lap (and throughout when the speed profile is off) comes from the config too
+  if (const auto v = params.get_param<float>("speed_profile/discovery_speed_mps"); v && *v > 0.0f) {
+    _controller->set_constant_speed(*v);
+    spdlog::info("Discovery lap speed {} m/s", *v);
+  } else {
+    spdlog::error("speed_profile/discovery_speed_mps is missing or not positive: the car will not move until it is set");
+  }
+  // Every value comes from the "speed_profile" config block; if any is missing or unusable the car keeps a constant speed
+  std::optional<control::SpeedProfileParams> speed_profile;
+  if (params.get_param<bool>("speed_profile/enabled").value_or(false)) {
+    const auto max_speed = params.get_param<float>("speed_profile/max_speed_mps");
+    const auto min_speed = params.get_param<float>("speed_profile/min_speed_mps");
+    const auto lat_accel = params.get_param<float>("speed_profile/max_lat_accel_mps2");
+    const auto brake = params.get_param<float>("speed_profile/max_brake_mps2");
+    const auto accel = params.get_param<float>("speed_profile/max_accel_mps2");
+    if (max_speed && min_speed && lat_accel && brake && accel && *min_speed > 0.0f && *max_speed >= *min_speed && *lat_accel > 0.0f && *brake > 0.0f &&
+        *accel > 0.0f) {
+      speed_profile = control::SpeedProfileParams{*max_speed, *min_speed, *lat_accel, *brake, *accel};
+    } else {
+      spdlog::warn("speed_profile/enabled is true but its values are missing or invalid (need max_speed_mps >= min_speed_mps > 0, max_lat_accel_mps2 > 0, max_brake_mps2 > 0, max_accel_mps2 > 0); using a constant speed");
+    }
+  }
+  _controller->set_speed_profile(speed_profile);
+  spdlog::info("Speed profile {}", speed_profile ? "enabled" : "disabled (constant speed)");
   _racing_line = planning::RacingLinePlanner(racing_line);
-  spdlog::info("Racing line planner {}", racing_line.enabled ? "enabled" : "disabled");
+  spdlog::info("Racing line planner {}: 1 discovery lap, {} midline, {} racing line; {}", racing_line.enabled ? "enabled" : "disabled",
+               racing_line.midline_laps_after_closure, racing_line.racing_laps,
+               racing_line.end_run_when_done ? "the run ends after the last lap" : "the run does not end by itself (racing_line/end_run_when_done is false or missing)");
   _thread = std::thread(&Autonomy::_run, this);
   spdlog::info("Autonomy stack started");
 }
@@ -152,6 +181,16 @@ void Autonomy::_run() {
     const auto midline = planning::plan_path(*map);
     render_path(midline, "midline_path", "map", {1.0, 0.5, 0.0, 1.0}, "scene/midline_path"); // orange
     const auto racing_path = _racing_line.plan(*map, scan_ns);
+    _controller->set_track_closed(_racing_line.track_closed());  // the speed profile starts once the discovery lap is over
+    _controller->set_finished(_racing_line.finished());          // all laps done: stop the car
+    if (_racing_line.finished() && !_end_requested) {
+      // Once the car has stopped, shut drivebrain down the way Ctrl+C does, so the MCAP is closed and indexed
+      if (std::fabs(StateTracker::instance().odom_twist().x()) < 0.2) {  // odometry speed: the VectorNav velocity is not populated in the sim
+        _end_requested = true;
+        spdlog::info("Run complete and the car has stopped: shutting down");
+        std::raise(SIGINT);
+      }
+    }
     if (racing_path) render_path(*racing_path, "racing_line_path", "map", {0.2, 1.0, 0.1, 1.0}, "scene/racing_line_path"); // green
     const auto& path = racing_path ? *racing_path : midline;
     render_path(path, "planned_path", "map", {1.0, 0.0, 1.0, 1.0}, "scene/planned_path"); // magenta: what the controller follows, apart from the green trails

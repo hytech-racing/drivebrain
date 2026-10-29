@@ -185,6 +185,10 @@ void DrivebrainApp::run() {
   _io_context.stop();
   if(_io_context_thread.joinable()) _io_context_thread.join();
   if(_camera_init_thread.joinable()) _camera_init_thread.join();
+#if HOOTL_ENABLED
+  // The sim receive threads call core::log(), so stop them before the destructor destroys the MCAP logger and Foxglove server
+  comms::SimComms::instance().close();
+#endif
   spdlog::info("Joined all threads");
 }
 

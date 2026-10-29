@@ -104,7 +104,18 @@
         "max_cone_gap_m": 11.0,
         "replan_period_s": 1.0,
         "midline_laps_after_closure": 1,
+        "racing_laps": 1,
+        "end_run_when_done": true,
         "window_points": 30
+    },
+    "speed_profile": {
+        "discovery_speed_mps": 2.0,
+        "enabled": true,
+        "max_speed_mps": 8.0,
+        "min_speed_mps": 1.5,
+        "max_accel_mps2": 2.5,
+        "max_brake_mps2": 5.0,
+        "max_lat_accel_mps2": 6.0
     },
     "use_vectornav": false,
     "use_fake_vn": false,

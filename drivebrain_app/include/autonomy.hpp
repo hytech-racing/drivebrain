@@ -65,6 +65,7 @@ private:
   static constexpr std::chrono::milliseconds _period{100}; 
   std::unique_ptr<slam::Slam> _slam;
   planning::RacingLinePlanner _racing_line;
+  bool _end_requested = false;  // the run is over and a clean shutdown has been requested
   std::unique_ptr<control::PurePursuitController> _controller;
   std::unique_ptr<perception::ConeClassifier> _cone_classifier;
 };
