@@ -18,8 +18,9 @@ build-*
 .cache
 compile_commands.json
 
+CMakeUserPresets.json
 *.mcap
 
 tests/replay/mcap/*.mcap
-
 .DS_Store
+.agents/

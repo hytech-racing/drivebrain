@@ -1,0 +1,70 @@
+#pragma once
+
+#include <atomic>
+#include <chrono>
+#include <memory>
+#include <thread>
+#include "PurePursuitController.hpp"
+#include "ConeClassifier.hpp"
+#include <StateTracker.hpp>
+#include <GraphSlam.hpp>
+#include <LidarFilter.hpp>
+#include <ConeClassifier.hpp>
+
+namespace core {
+
+/**
+ * The autonomy stack.
+ * Runs the driverless perception, mapping and planning stack on its own thread
+ */
+class Autonomy {
+public:
+  ~Autonomy();
+
+  /**
+   * Constructs the SLAM stack from the config and spawns the autonomy stack thread
+   */
+  void start();
+
+  /**
+   * Stops and joins the autonomy stack thread
+   */
+  void stop();
+
+  /**
+   * Produces the driverless command by tracking the latest planned path.
+   * Called by the control loop at control rate.
+   *
+   * @param vehicle_state the latest vehicle state
+   * @return the controller output to send
+   */
+  ControllerOutput command(const VehicleState& vehicle_state);
+
+  /**
+   * Whether the stack is producing usable output. The control loop gates driverless
+   * commands on this the same way driver mode gates on the driver input timestamps.
+   *
+   * @return whether the car can be commanded from the autonomy stack
+   */
+  bool is_valid();
+
+private:
+  // How long to wait for the next scan before re-checking that the stack is still running
+  static constexpr std::chrono::milliseconds SCAN_WAIT{200};
+  static constexpr std::chrono::milliseconds ODOM_TIMEOUT{100};
+
+  // deskew -> detect -> map -> plan, once per lidar scan
+  void _run();
+
+  std::thread _thread;
+  std::atomic<bool> _running{false};
+
+  perception::ConeClassifier _classifier{"intrinsics"};
+  // Rate of OS1 LiDAR
+  static constexpr std::chrono::milliseconds _period{100}; 
+  std::unique_ptr<slam::Slam> _slam;
+  std::unique_ptr<control::PurePursuitController> _controller;
+  std::unique_ptr<perception::ConeClassifier> _cone_classifier;
+};
+
+}

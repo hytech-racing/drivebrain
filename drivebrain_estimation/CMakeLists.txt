@@ -11,6 +11,7 @@ find_package(Eigen3 REQUIRED)
 add_library(drivebrain_estimation
     src/FzEstimator.cpp
     src/SteeringEstimator.cpp
+    src/Odometry.cpp
 )
 
 target_include_directories(drivebrain_estimation PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
@@ -22,7 +23,7 @@ target_link_libraries(drivebrain_estimation PUBLIC
     boost::boost
     foxglove-websocket::foxglove-websocket 
     protobuf::libprotobuf
-    hytech_msgs_cpp_lib
+    ht_proto::hytech_msgs_cpp_lib
     libvncxx
     Eigen3::Eigen
     dbcppp::dbcppp

@@ -4,7 +4,7 @@ set -e
 linkflags="-static"
 for a in "$@"; do
   case "$a" in
-    --test) shouldTest=1 ;;
+    --test|--local) shouldTest=1 ;;  # --local kept as an alias for the sim workflow
     --clean) shouldClean=1 ;;
     --local-cache-only) localCacheOnly=1 ;;
     --jetson) jetson="-DJETSON=ON"; linkflags="" ;;
@@ -23,15 +23,18 @@ if [ "$shouldTest" = 1 ]; then
 fi
 
 if [ "$shouldClean" = 1 ]; then
-  rm -rf .venv
-  rm -rf cmake
+rm -rf .venv
+rm -rf cmake
 fi
 
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
-# conan remote add artifactory "$ARTIFACTORY_URL" --force
-
+if ! conan remote list | grep -q "^artifactory:"; then
+  conan remote add artifactory "$ARTIFACTORY_URL" --force
+  echo "If you don't know the password, ask in software chat"
+  conan remote login artifactory user -p
+fi
 # let cmake infer this
 unset CC
 unset CXX
@@ -47,11 +50,11 @@ if [ "$localCacheOnly" = 1 ]; then
     -of=cmake \
     --no-remote
 else
-  conan install . \
-    --build=missing \
-    --profile:build=default \
-    --profile:host="$profile" \
-    -of=cmake
+conan install . \
+  --build=missing \
+  --profile:build=default \
+  --profile:host="$profile" \
+  -of=cmake
 fi
 
 

@@ -18,6 +18,20 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(HOOTL "Build with HOOTL sim interface" OFF)
 option(JETSON "Build for the Jetson Orin (else Pi)" OFF)
 
+find_package(ht_proto CONFIG REQUIRED)
+find_package(ht_can CONFIG REQUIRED)
+
+#################################
+# Upstreams needed by the custom libs below
+#################################
+FetchContent_Declare(
+    delaunator
+    GIT_REPOSITORY https://github.com/delfrrr/delaunator-cpp.git
+    GIT_TAG v0.4.0
+    SOURCE_SUBDIR  none
+)
+FetchContent_MakeAvailable(delaunator)
+
 #################################
 # Custom libs
 #################################
@@ -25,6 +39,9 @@ add_subdirectory(drivebrain_core)
 add_subdirectory(drivebrain_comms)
 add_subdirectory(drivebrain_control)
 add_subdirectory(drivebrain_estimation)
+add_subdirectory(drivebrain_planning)
+add_subdirectory(drivebrain_perception)
+add_subdirectory(drivebrain_slam)
 
 #################################
 # Find packages
@@ -39,6 +56,7 @@ find_package(dbcppp REQUIRED)
 find_package(aravis REQUIRED)
 find_package(OpenCV REQUIRED CONFIG)
 find_package(Eigen3 REQUIRED)
+find_package(GTSAM REQUIRED)
 
 
 if (HOOTL)
@@ -48,26 +66,13 @@ endif()
 #################################
 # Upstreams (non-conan)
 #################################
-FetchContent_Declare(
-    HT_Proto
-    GIT_REPOSITORY https://github.com/hytech-racing/HT_proto.git
-    GIT_TAG 2d8c4ca48ddefdb9c041d73baf118ea6a61d9e90
-)
-FetchContent_MakeAvailable(HT_Proto)
-# add_subdirectory(../HT_proto ${CMAKE_BINARY_DIR}/HT_proto)
-
+# 
 FetchContent_Declare(
     vn_driver_lib
     GIT_REPOSITORY https://github.com/hytech-racing/vn_driver_lib.git
     GIT_TAG 0d40803
 )
 FetchContent_MakeAvailable(vn_driver_lib)
-
-FetchContent_Declare(
-    HT_CAN
-    URL "https://github.com/hytech-racing/HT_CAN/releases/download/main-337/drivebrain_can_lib.tar.gz"
-)
-FetchContent_MakeAvailable(HT_CAN)
 
 find_package(OusterSDK REQUIRED)
 
@@ -77,6 +82,7 @@ find_package(OusterSDK REQUIRED)
 add_executable(drivebrain
     drivebrain_app/src/main.cpp
     drivebrain_app/src/drivebrain_app.cpp
+    drivebrain_app/src/autonomy.cpp
 )
 
 #add_executable(drivebrain
@@ -94,6 +100,7 @@ if(HOOTL)
     target_compile_definitions(drivebrain PRIVATE HOOTL_ENABLED)
     target_compile_definitions(drivebrain_core PRIVATE HOOTL_ENABLED)
     target_compile_definitions(drivebrain_comms PRIVATE HOOTL_ENABLED)
+    target_compile_definitions(drivebrain_perception PRIVATE HOOTL_ENABLED)
     target_link_libraries(drivebrain PRIVATE cppzmq)
 endif()
 
@@ -105,14 +112,15 @@ if(JETSON)
     target_link_libraries(drivebrain PRIVATE TensorRT)
 endif()
 
-target_link_libraries(drivebrain PUBLIC
-    foxglove-websocket::foxglove-websocket
+target_link_libraries(drivebrain PUBLIC 
+    foxglove-websocket::foxglove-websocket 
     foxglove-schemas-protobuf::foxglove-schemas-protobuf
     mcap::mcap
     protobuf::libprotobuf
     boost::boost
-    hytech_msgs_cpp_lib
-    hytech_can_msgs_cpp_lib
+    gtsam
+    ht_proto::hytech_msgs_cpp_lib
+    ht_can::hytech_can_msgs_cpp_lib
     drivebrain_core
     drivebrain_comms
     drivebrain_control
@@ -124,6 +132,9 @@ target_link_libraries(drivebrain PUBLIC
     opencv_imgproc
     opencv_imgcodecs
     drivebrain_estimation
+    drivebrain_planning
+    drivebrain_perception
+    drivebrain_slam
 )
 
 if(JETSON)

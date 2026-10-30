@@ -1,4 +1,5 @@
 #include "ETHRecvComms.hpp"
+#include "OMSComms.hpp"
 #include "CANComms.hpp"
 #if HOOTL_ENABLED
 # include "SimComms.hpp"
@@ -8,13 +9,17 @@
 #include <MCAPLogger.hpp>
 #include <boost/asio.hpp>
 #include <memory>
-#include <foxglove/websocket/base64.hpp>
 #include "LoadCellTorqueController.hpp"
+#include "TeleopController.hpp"
 #include "VNComms.hpp"
 #include "OusterComms.hpp"
-
+#include "autonomy.hpp"
+#include "Literals.hpp"
 #include "hytech_msgs.pb.h"
 #include <BlackflyComms.hpp>
+#include "PurePursuitController.hpp"
+
+enum class DrivingMode { DRIVERED, DRIVERLESS, TELEOP };
 
 class DrivebrainApp {
 public:
@@ -40,11 +45,28 @@ private:
    * Processes one loop iteration of Drivebrain
   */
   void _loop();
-  
-private:  
+
+  /**
+   * Sends a controller output to the inverters and steering over both CAN buses,
+   * and logs what was sent.
+   *
+   * @param out the controller output to command
+  */
+  void _actuate(const core::ControllerOutput& out);
+
+  /**
+   * Maps a teleop twist onto torque and steering.
+   *
+   * @param command the latest teleop command
+   * @return the controller output to send
+  */
+  core::ControllerOutput _teleop_command(const core::TeleopCommand& command);
+
+private:
   boost::asio::io_context _io_context;
 
   /* Threads */
+  std::thread _camera_init_thread;
   std::thread _loop_thread;
   std::thread _io_context_thread;
 
@@ -58,20 +80,27 @@ private:
 
   /* Ethernet drivers */
   std::unique_ptr<comms::ETHRecvComms<hytech_msgs::ACUAllData>> _acu_eth_driver;
-  std::unique_ptr<comms::ETHRecvComms<hytech_msgs::CCUData>> _acu_core_eth_driver;
+  std::unique_ptr<comms::ETHRecvComms<hytech_msgs::ACUCoreData>> _acu_core_eth_driver;
   std::unique_ptr<comms::ETHRecvComms<hytech_msgs::VCRData_s>> _vcr_eth_driver;
-  std::unique_ptr<comms::ETHRecvComms<hytech_msgs::VCFData_s>> _vcf_eth_driver; 
-  
+  std::unique_ptr<comms::ETHRecvComms<hytech_msgs::VCFData_s>> _vcf_eth_driver;
+
+  /* Sensoric OMS optical speed sensor */
+  std::unique_ptr<comms::OMSComms> _oms_comms;
+
   /* Controllers */
   std::shared_ptr<control::LoadCellTorqueController> _mode1;
+  std::shared_ptr<control::TeleopController> _mode2;
+  std::shared_ptr<control::PurePursuitController> _dv_controller;
 
   /* Vectornav */
-  std::unique_ptr<comms::VNDriver> _vn_driver; 
+  std::unique_ptr<comms::VNDriver> _vn_driver;
 
 #if !HOOTL_ENABLED
   /* Steering */
   std::unique_ptr<comms::KrakenComms> _kraken_comms;
 #endif
+
+  std::shared_mutex _camera_drivers_mutex;
 
   /* Cameras */
   std::vector<std::unique_ptr<comms::BlackflyComms>> _camera_drivers;
@@ -79,4 +108,6 @@ private:
   /* Ouster Lidar */
   std::unique_ptr<comms::OusterComms> _ouster_driver;
 
+  /* Driverless autonomy stack */
+  core::Autonomy _autonomy;
 };

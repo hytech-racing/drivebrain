@@ -1,6 +1,20 @@
-#include <StateTracker.hpp>
+#include <cmath>
 
-using namespace core; 
+#include <StateTracker.hpp>
+#include <Telemetry.hpp>
+#include <cmath>
+#include <foxglove/PointCloud.pb.h>
+#include <foxglove/websocket/parameter.hpp>
+
+using namespace core;
+
+StateTracker::StateTracker() {
+    const auto mount = [](const std::string& name) {
+        return FoxgloveServer::instance().get_param<float>("static_transforms/" + name).value();
+    };
+    _T_base_lidar = Eigen::Translation3d(mount("lidar_x_m"), mount("lidar_y_m"), mount("lidar_z_m")) *
+                    Eigen::AngleAxisd(mount("lidar_yaw_deg") * M_PI / 180.0, Eigen::Vector3d::UnitZ());
+}
 
 /****************************************************************
  * Public class methods
@@ -32,8 +46,16 @@ void StateTracker::set_previous_control_output(core::ControllerOutput &prev_cont
     _vehicle_state.prev_controller_output = prev_controller_output;
 }
 
+// TODO: we should rename this to like update_state
 void StateTracker::handle_receive_protobuf_message(std::shared_ptr<google::protobuf::Message> msg) {
-    if (msg->GetDescriptor() == hytech_msgs::VNData::descriptor()) {
+    if (msg->GetDescriptor() == foxglove::PointCloud::descriptor()) {
+        auto in_msg = std::static_pointer_cast<const foxglove::PointCloud>(msg);
+        {
+            std::unique_lock lk(_dv_state_mutex);
+            _dv_state.lidar_cloud = in_msg;
+        }
+        _dv_state_cv.notify_all();
+    } else if (msg->GetDescriptor() == hytech_msgs::VNData::descriptor()) {
         auto in_msg = std::static_pointer_cast<hytech_msgs::VNData>(msg);
         xyz_vec<float> body_vel_ms = {(in_msg->vn_vel_m_s().x()), (in_msg->vn_vel_m_s().y()),
                                       (in_msg->vn_vel_m_s().z())};
@@ -61,6 +83,11 @@ void StateTracker::handle_receive_protobuf_message(std::shared_ptr<google::proto
             _vehicle_state.ins_status.status_mode = ins_mode_int;
             _vehicle_state.ins_status.vel_uncertainty = vel_u;
         }
+    } else if (msg->GetDescriptor() == hytech_msgs::OMSData::descriptor()) {
+        auto in_msg = std::static_pointer_cast<hytech_msgs::OMSData>(msg);
+        const uint64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+        _odometry.update(*in_msg, now_ns);
     } else if (msg->GetDescriptor() == hytech_msgs::VCRData_s::descriptor()) {
         auto in_msg = std::static_pointer_cast<hytech_msgs::VCRData_s>(msg);
         bool is_rtd = (in_msg->status().vehicle_state() == hytech_msgs::VehicleState_e::READY_TO_DRIVE);
@@ -74,14 +101,25 @@ void StateTracker::handle_receive_protobuf_message(std::shared_ptr<google::proto
             std::unique_lock lk(_state_mutex);
             _vehicle_state.acc_data.min_cell_voltage = in_msg->core_data().min_cell_voltage();
         }
-    }
-    else {
+    } else if (msg->GetDescriptor() == foxglove::PointCloud::descriptor()) {
+        // UPDATE driverless vehicle state
+    } else if (msg->GetDescriptor() == hytech_msgs::pose::descriptor()) {
+        auto in_msg = std::static_pointer_cast<hytech_msgs::pose>(msg);
+        const auto& q = in_msg->orientation();
+        const float yaw = std::atan2(2.0 * (q.w() * q.z() + q.x() * q.y()),
+                                     1.0 - 2.0 * (q.y() * q.y() + q.z() * q.z()));
+        {
+            std::unique_lock lk(_state_mutex);
+            _vehicle_state.vehicle_position_map_frame = {in_msg->position().x(), in_msg->position().y(), 0.0f};
+            _vehicle_state.vehicle_heading_map_frame_unit_vector = {std::cos(yaw), std::sin(yaw), 0.0f};
+        }
+    } else {
         _receive_low_level_state(msg);
     }
     _update_estimators();
 }
 
-std::pair<core::VehicleState, bool> StateTracker::get_latest_state_and_validity() {
+std::pair<core::VehicleState, bool> StateTracker::vehicle_state() {
     auto state_is_valid = _validate_timestamps(_timestamp_array);
 
     VehicleState current_state  = { };
@@ -93,6 +131,84 @@ std::pair<core::VehicleState, bool> StateTracker::get_latest_state_and_validity(
     }
 
     return {current_state, state_is_valid};
+}
+
+/* 3 scan periods at 20hz: long enough to ride out a dropped scan, short enough to catch a dead sensor */
+static constexpr std::chrono::milliseconds LIDAR_TIMEOUT(150);
+
+core::DriverlessState StateTracker::dv_state() {
+    DriverlessState current_state;
+
+    {
+        /* Copying DriverlessState is a shared_ptr refcount bump, not a point-data copy. */
+        std::unique_lock lk(_dv_state_mutex);
+        current_state = _dv_state;
+    }
+
+    current_state.lidar_is_valid = false;
+    if (current_state.lidar_cloud) {
+        auto scan_time_ns = google::protobuf::util::TimeUtil::TimestampToNanoseconds(current_state.lidar_cloud->timestamp());
+        auto curr_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+        current_state.lidar_is_valid = (curr_time_ns - scan_time_ns) < std::chrono::nanoseconds(LIDAR_TIMEOUT).count();
+    }
+
+    return current_state;
+}
+
+std::shared_ptr<const foxglove::PointCloud> StateTracker::wait_for_scan(
+    const std::shared_ptr<const foxglove::PointCloud>& last, const std::chrono::milliseconds timeout) {
+    std::unique_lock lk(_dv_state_mutex);
+    _dv_state_cv.wait_for(lk, timeout, [&] { return _dv_state.lidar_cloud && _dv_state.lidar_cloud != last; });
+    return _dv_state.lidar_cloud != last ? _dv_state.lidar_cloud : nullptr;
+}
+
+std::optional<Eigen::Isometry2d> StateTracker::odom_pose(uint64_t timestamp_ns, std::chrono::nanoseconds timeout) {
+    return _odometry.pose(timestamp_ns, timeout);
+}
+
+Eigen::Vector3d StateTracker::odom_twist() {
+    return _odometry.twist();
+}
+
+void StateTracker::set_dv_path(std::shared_ptr<const std::vector<xyz_vec<float>>> path) {
+    std::unique_lock lk(_dv_state_mutex);
+    _dv_state.path = std::move(path);
+}
+
+void StateTracker::set_cone_observations(std::shared_ptr<const dv_msgs::Cones> cones) {
+    std::unique_lock lk(_dv_state_mutex);
+    _dv_state.cone_observations = std::move(cones);
+}
+
+void StateTracker::set_ground_truth_cones(std::shared_ptr<const dv_msgs::Cones> cones) {
+    std::unique_lock lk(_dv_state_mutex);
+    _dv_state.ground_truth_cones = std::move(cones);
+}
+
+void StateTracker::set_camera_detections(const std::string& camera, std::shared_ptr<const std::vector<ConeDetection>> detections) {
+    std::unique_lock lk(_dv_state_mutex);
+    _dv_state.camera_detections[camera] = std::move(detections);
+}
+
+static constexpr std::chrono::milliseconds TELEOP_TIMEOUT(500);
+
+void StateTracker::set_teleop_command(const TeleopCommand& command) {
+    std::unique_lock lk(_teleop_mutex);
+    _teleop_command = command;
+}
+
+std::pair<core::TeleopCommand, bool> StateTracker::teleop_command() {
+    TeleopCommand current_command;
+    {
+        std::unique_lock lk(_teleop_mutex);
+        current_command = _teleop_command;
+    }
+
+    bool is_valid = current_command.recv_time.time_since_epoch().count() > 0 &&
+                    (std::chrono::steady_clock::now() - current_command.recv_time) < TELEOP_TIMEOUT;
+
+    return {current_command, is_valid};
 }
 
 /****************************************************************
@@ -167,6 +283,7 @@ void StateTracker::_receive_low_level_state(std::shared_ptr<google::protobuf::Me
             _raw_input_data.raw_steering_analog = in_msg->steering_analog_raw();
             _raw_input_data.raw_steering_digital = in_msg->steering_digital_raw();
             _vehicle_state.received_steering_angle = true;
+            _vehicle_state.last_steering_recv_time = std::chrono::steady_clock::now();
         }
     } else if (msg->GetDescriptor() == hytech::em_measurement::descriptor()) {
         auto in_msg = std::static_pointer_cast<hytech::em_measurement>(msg);
@@ -325,5 +442,15 @@ bool StateTracker::_validate_timestamps(const std::array<std::chrono::microsecon
     bool last_update_recent_enough =
         (std::chrono::duration_cast<std::chrono::microseconds>(curr_time - max_stamp)) < threshold;
 
-    return within_threshold && all_members_received && last_update_recent_enough;
+    // TEMP DEBUG
+    bool valid = within_threshold && all_members_received && last_update_recent_enough;
+    if (!valid) {
+        static int dbg = 0;
+        if (dbg++ % 250 == 0) {
+            spdlog::warn("[DBG] validate_ts: all_recv={} within_thresh={} recent={} stamps=[{},{},{},{}]",
+                all_members_received, within_threshold, last_update_recent_enough,
+                debug_copy[0].count(), debug_copy[1].count(), debug_copy[2].count(), debug_copy[3].count());
+        }
+    }
+    return valid;
 }

@@ -1,4 +1,5 @@
 #include <FoxgloveServer.hpp>
+#include <StateTracker.hpp>
 #include <foxglove/websocket/parameter.hpp>
 #include <nlohmann/detail/value_t.hpp>
 #include <fstream>
@@ -122,6 +123,12 @@ core::FoxgloveServer::FoxgloveServer(std::string file_name) {
     };
 
     _server_options.capabilities.push_back("parameters");
+
+    /* The teleop panel publishes geometry_msgs/Twist. It is a ROS type with no protobuf
+       equivalent, so over a websocket connection the client encodes it as JSON */
+    _server_options.capabilities.push_back(foxglove::CAPABILITY_CLIENT_PUBLISH);
+    _server_options.supportedEncodings.push_back("json");
+    _server_options.clientTopicWhitelistPatterns = {std::regex(".*")};
     _server = foxglove::ServerFactory::createServer<websocketpp::connection_hdl>("HTX_Foxglove", logHandler, _server_options);
 
     foxglove::ServerHandlers<foxglove::ConnHandle> hdlrs;
@@ -136,7 +143,33 @@ core::FoxgloveServer::FoxgloveServer(std::string file_name) {
         spdlog::info("Client {} unsubscribed from {}", clientStr, chanId);
     };
 
-    hdlrs.parameterChangeHandler = [&](const std::vector<foxglove::Parameter> &params, const std::optional<std::string> &request_id, foxglove::ConnHandle clientHandle) 
+    hdlrs.clientAdvertiseHandler = [&](const foxglove::ClientAdvertisement &advertisement, foxglove::ConnHandle clientHandle) {
+        spdlog::info("Client advertised {} as {} ({})", advertisement.topic, advertisement.schemaName, advertisement.encoding);
+    };
+
+    hdlrs.clientUnadvertiseHandler = [&](foxglove::ClientChannelId channelId, foxglove::ConnHandle clientHandle) {
+        spdlog::info("Client unadvertised channel {}", channelId);
+    };
+
+    hdlrs.clientMessageHandler = [&](const foxglove::ClientMessage &msg, foxglove::ConnHandle clientHandle) {
+        if (msg.advertisement.encoding != "json") {
+            spdlog::warn("Ignoring client message with unsupported encoding {}", msg.advertisement.encoding);
+            return;
+        }
+
+        try {
+            auto twist = nlohmann::json::parse(msg.getData(), msg.getData() + msg.getLength());
+            core::TeleopCommand command;
+            command.linear_x = twist.value("linear", nlohmann::json::object()).value("x", 0.0f);
+            command.angular_z = twist.value("angular", nlohmann::json::object()).value("z", 0.0f);
+            command.recv_time = std::chrono::steady_clock::now();
+            StateTracker::instance().set_teleop_command(command);
+        } catch (const nlohmann::json::exception &e) {
+            spdlog::warn("Failed to parse teleop message: {}", e.what());
+        }
+    };
+
+    hdlrs.parameterChangeHandler = [&](const std::vector<foxglove::Parameter> &params, const std::optional<std::string> &request_id, foxglove::ConnHandle clientHandle)
     {
         std::unordered_map<std::string, DBParam> param_copy;
         {
@@ -171,7 +204,9 @@ core::FoxgloveServer::FoxgloveServer(std::string file_name) {
         _server->publishParameterValues(clientHandle, foxglove_params, request_id);
     };
 
-    std::vector<std::string> proto_names = {"hytech_msgs.proto", "ht_can.proto", "foxglove/PointCloud.proto", "foxglove/CompressedImage.proto", "foxglove/RawImage.proto"};
+    std::vector<std::string> proto_names = {"hytech_msgs.proto", "ht_can.proto", "dv_msgs.proto",
+                                            "foxglove/PointCloud.proto", "foxglove/SceneUpdate.proto", "foxglove/FrameTransform.proto",
+                                            "foxglove/CompressedImage.proto", "foxglove/RawImage.proto"};
 
     auto descriptors = get_pb_descriptors(proto_names);
     std::vector<foxglove::ChannelWithoutId> channels;
@@ -185,7 +220,9 @@ core::FoxgloveServer::FoxgloveServer(std::string file_name) {
             server_channel.topic = message_descriptor->name();
             server_channel.encoding = "protobuf";
             server_channel.schemaName = message_descriptor->full_name();
-            server_channel.schema = foxglove::base64Encode(SerializeFdSet(message_descriptor));
+
+            auto fdset_str = SerializeFdSet(message_descriptor);
+            server_channel.schema = foxglove::base64Encode(fdset_str);
             _name_to_id_map[server_channel.topic] = running_index;
             channels.push_back(server_channel);
             running_index++;
@@ -197,7 +234,10 @@ core::FoxgloveServer::FoxgloveServer(std::string file_name) {
     _server->setHandlers(std::move(hdlrs));
     _server->start("0.0.0.0", 5555);
 
-    params_file.close(); 
+    _send_running = true;
+    _send_thread = std::thread([this]() { _broadcast_loop(); });
+
+    params_file.close();
 }
 
 boost::signals2::connection core::FoxgloveServer::register_param_callback(std::function<void (const std::unordered_map<std::string, core::DBParam> &)> callback) {
@@ -277,8 +317,8 @@ core::DBParam core::FoxgloveServer::_get_db_param(foxglove::Parameter param) {
     }
 }
 
-void core::FoxgloveServer::send_live_telem_msg(std::shared_ptr<google::protobuf::Message> msg, const std::string &topic) {
-    const std::string &name = topic.empty() ? msg->GetDescriptor()->name() : topic;
+void core::FoxgloveServer::send_live_telem_msg(std::shared_ptr<const google::protobuf::Message> msg, const std::string& topic) {
+    const std::string& name = topic.empty() ? msg->GetDescriptor()->name() : topic;
     foxglove::ChannelId msg_chan_id;
     {
         std::unique_lock lock(_channel_mutex);
@@ -294,9 +334,38 @@ void core::FoxgloveServer::send_live_telem_msg(std::shared_ptr<google::protobuf:
         }
         msg_chan_id = channel->second;
     }
-    const auto serialized_msg = msg->SerializeAsString(); 
-    const auto now = nanosecondsSinceEpoch();
-    _server->broadcastMessage(msg_chan_id, now, reinterpret_cast<const uint8_t *>(serialized_msg.data()), serialized_msg.size());
+
+    OutgoingMsg out;
+    out.channel_id = msg_chan_id;
+    out.timestamp = nanosecondsSinceEpoch();
+    out.data = msg->SerializeAsString();
+    {
+        std::unique_lock lock(_send_mutex);
+        if (_send_queue.size() >= MAX_SEND_QUEUE) {
+            _send_queue.pop_front();
+        }
+        _send_queue.push_back(std::move(out));
+    }
+    _send_cv.notify_one();
+}
+
+void core::FoxgloveServer::_broadcast_loop() {
+    std::deque<OutgoingMsg> batch;
+    while (true) {
+        {
+            std::unique_lock lock(_send_mutex);
+            _send_cv.wait(lock, [this]() { return !_send_queue.empty() || !_send_running; });
+            if (!_send_running && _send_queue.empty()) {
+                break;
+            }
+            batch.swap(_send_queue); 
+        }
+        for (const auto &m : batch) {
+            _server->broadcastMessage(m.channel_id, m.timestamp,
+                                      reinterpret_cast<const uint8_t *>(m.data.data()), m.data.size());
+        }
+        batch.clear();
+    }
 }
 
 
