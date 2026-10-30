@@ -33,7 +33,7 @@ std::shared_ptr<const foxglove::PointCloud> deskew_cloud(const foxglove::PointCl
     Eigen::Vector3d q = T_base_lidar * Eigen::Vector3d(points[i].x, points[i].y, points[i].z);
     q.head<2>() = motion * q.head<2>();
     q = T_lidar_base * q;
-    points[i] = {static_cast<float>(q.x()), static_cast<float>(q.y()), static_cast<float>(q.z())};
+    points[i] = {static_cast<float>(q.x()), static_cast<float>(q.y()), static_cast<float>(q.z()), points[i].r};
   }
   return core::to_cloud(points, scan);
 }

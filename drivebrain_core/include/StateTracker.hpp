@@ -282,8 +282,8 @@ namespace core {
         ControllerOutput current_controller_output;
     };
 
-    struct LidarPoint { float x, y, z; };
-    static_assert(sizeof(LidarPoint) == 12);
+    struct LidarPoint { float x, y, z, r; };
+    static_assert(sizeof(LidarPoint) == 16);
 
     struct PointView {
         const LidarPoint* ptr = nullptr;
@@ -305,8 +305,8 @@ namespace core {
         out->set_frame_id(src.frame_id());
         *out->mutable_pose() = src.pose();
         out->set_point_stride(sizeof(LidarPoint));
-        const char* names[] = {"x", "y", "z"};
-        for (int i = 0; i < 3; i++) {
+        const char* names[] = {"x", "y", "z", "r"};
+        for (int i = 0; i < 4; i++) {
             auto* field = out->add_fields();
             field->set_name(names[i]);
             field->set_offset(i * sizeof(float));

@@ -12,10 +12,11 @@ namespace {
     };
 
     struct ClusterFeatures {
-        core::LidarPoint centroid{0, 0, 0}, min{0, 0, 0}, max{0, 0, 0};
+        core::xyz_vec<float> centroid{0, 0, 0}, min{0, 0, 0}, max{0, 0, 0};
         float width_x_m = 0, width_y_m = 0, height_z_m = 0; 
         float top_height_m = 0;  // cluster top above the local ground estimate
         float max_horizontal_width_m = 0, range_m = 0; 
+        float mean_reflectivity = 0;
         std::size_t num_points = 0;
     };
 
@@ -186,7 +187,7 @@ namespace {
 
             ClusterFeatures feature;
             const auto& first = pts[cluster.point_indices.front()];
-            feature.min = feature.max = first;
+            feature.min = feature.max = {first.x, first.y, first.z};
             
             // Get centroid and bounding box for the cluster
             for (const auto& idx : cluster.point_indices) {
@@ -195,6 +196,7 @@ namespace {
                 feature.min.x = std::min(feature.min.x, pt.x);  feature.max.x = std::max(feature.max.x, pt.x);
                 feature.min.y = std::min(feature.min.y, pt.y);  feature.max.y = std::max(feature.max.y, pt.y);
                 feature.min.z = std::min(feature.min.z, pt.z);  feature.max.z = std::max(feature.max.z, pt.z);
+                feature.mean_reflectivity += pt.r;
             }
 
             feature.num_points = cluster.point_indices.size();
@@ -207,6 +209,8 @@ namespace {
             feature.top_height_m = feature.max.z - grid.at(feature.centroid.x, feature.centroid.y);
             feature.max_horizontal_width_m = std::max(feature.width_x_m, feature.width_y_m);
             feature.range_m = std::hypot(feature.centroid.x, feature.centroid.y);
+
+            feature.mean_reflectivity = feature.mean_reflectivity / feature.num_points;
 
             features.push_back(std::move(feature));
         }

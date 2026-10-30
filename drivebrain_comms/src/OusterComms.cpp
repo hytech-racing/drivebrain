@@ -133,6 +133,11 @@ void comms::OusterComms::_loop() {
         const float* dir = lut.direction.data();
         const float* ofs = lut.offset.data();
 
+        // get reflectivity
+        const auto reflectivity = frame.field<uint16_t>(ouster::sdk::core::ChanField::REFLECTIVITY);
+        const uint16_t* refl = reflectivity.data();
+
+
         // per-column sensor timestamps; points are stamped relative to the last valid column (scan end)
         const auto column_ts = frame.timestamp();
         uint64_t scan_end_ts = 0;
@@ -144,9 +149,9 @@ void comms::OusterComms::_loop() {
         pc->mutable_timestamp()->set_nanos(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count() % 1000000000);
         pc->set_frame_id("os_sensor");
         pc->mutable_pose()->mutable_orientation()->set_w(1);
-        pc->set_point_stride(4 * sizeof(float));
-        const char* names[] = {"x", "y", "z", "t"};
-        for (int i = 0; i < 4; i++) {
+        pc->set_point_stride(5 * sizeof(float));
+        const char* names[] = {"x", "y", "z", "r", "t"};
+        for (int i = 0; i < 5; i++) {
             auto* f = pc->add_fields();
             f->set_name(names[i]);
             f->set_offset(i * sizeof(float));
@@ -157,12 +162,13 @@ void comms::OusterComms::_loop() {
 
         // xyz = range * direction + offset for every return (range 0 = no return), written straight into the cloud
         std::string* data = pc->mutable_data();
-        data->reserve(static_cast<size_t>(n) * 4 * sizeof(float));
+        data->reserve(static_cast<size_t>(n) * 5 * sizeof(float));
         for (Eigen::Index i = 0; i < n; ++i) {
             const float r = static_cast<float>(rng[i]);
             if (r == 0.0f) continue;
             const uint64_t ts = column_ts(i % w);
-            const float point[4] = {r * dir[3 * i] + ofs[3 * i], r * dir[3 * i + 1] + ofs[3 * i + 1], r * dir[3 * i + 2] + ofs[3 * i + 2],
+            const float point[5] = {r * dir[3 * i] + ofs[3 * i], r * dir[3 * i + 1] + ofs[3 * i + 1], r * dir[3 * i + 2] + ofs[3 * i + 2],
+                                    static_cast<float>(refl[i]),
                                     ts == 0 ? 0.0f : static_cast<float>(static_cast<double>(static_cast<int64_t>(ts) - static_cast<int64_t>(scan_end_ts)) * 1e-9)};
             data->append(reinterpret_cast<const char*>(point), sizeof(point));
         }
@@ -196,7 +202,7 @@ void comms::OusterComms::_loop() {
 
         // stream just every Nth point
         constexpr int stream_stride = 16;
-        const size_t point_size = 4 * sizeof(float);
+        const size_t point_size = 5 * sizeof(float);
         const size_t m = data->size() / point_size;
         std::string* live_data = live_pc->mutable_data();
         live_data->reserve(data->size() / stream_stride + point_size);
