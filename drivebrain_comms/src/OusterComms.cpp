@@ -134,8 +134,8 @@ void comms::OusterComms::_loop() {
         const float* ofs = lut.offset.data();
 
         // get reflectivity
-        const auto reflectivity = frame.field<uint16_t>(ouster::sdk::core::ChanField::REFLECTIVITY);
-        const uint16_t* refl = reflectivity.data();
+        const auto reflectivity = frame.field<uint8_t>(ouster::sdk::core::ChanField::REFLECTIVITY);
+        const uint8_t* refl = reflectivity.data();
 
 
         // per-column sensor timestamps; points are stamped relative to the last valid column (scan end)
