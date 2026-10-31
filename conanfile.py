@@ -58,6 +58,11 @@ class DrivebrainSoftware(ConanFile):
         self.tool_requires("protobuf/5.29.3")
 
     def configure(self):
+        if not cross_building(self):
+            # The prebuilt native glib on the remote was built against glibc < 2.34 and fails to link on Ubuntu 22.04
+            # (undefined __dn_expand/__res_nquery). A non-default option changes its package id, so it builds from source.
+            #TODO: DISCUSS PROPER SOLUTION WITH KRISH
+            self.options["glib"].with_selinux = False
         self.options["aravis"].usb = False
         self.options["hwloc"].shared = True
         self.options["gtsam"].with_TBB = False
