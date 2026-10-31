@@ -46,6 +46,11 @@ namespace perception {
                                                const std::map<std::string, std::shared_ptr<const std::vector<core::ConeDetection>>>& detections,
                                                const std::string& frame_id);
 
+
+      std::shared_ptr<dv_msgs::Cones> classifyWithReflectivity(std::shared_ptr<dv_msgs::Cones> cones, const std::string& frame_id);
+
+
+
     private:
       std::map<std::string, CameraModel> _cameras;
   };

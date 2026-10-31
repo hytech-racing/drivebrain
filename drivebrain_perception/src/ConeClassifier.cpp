@@ -242,4 +242,69 @@ namespace {
         return cones;
     }
 
+
+
+
+    std::shared_ptr<dv_msgs::Cones> ConeClassifier::classifyWithReflectivity(std::shared_ptr<dv_msgs::Cones> cones, const std::string& frame_id) {
+
+        for (int i=0; i<cones->cones_size(); i++) {
+            auto* cone = cones->mutable_cones(i);
+
+            if (cone->mean_reflectivity() > 60) {
+                cone->set_color(dv_msgs::Cones::BLUE);
+            } else {
+                cone->set_color(dv_msgs::Cones::YELLOW);
+            }
+
+            // TODO: Implementation of bayesean probability of seeing each cone
+            // TODO: measure mean_y, mean_b, sigma_y, sigma_b
+            // Given: measured = cone->mean_reflectivity()
+            // p_given_blue = f(mean_reflectivity | blue cone) = 1 / ( sigma_b * 2.5066 ) * std::exp( -0.5 * std::pow(measured-mean_b, 2) / std::pow(sigma_b, 2) )
+            // p_given_yellow =  f(mean_reflectivity | yellow cone) = 1 / ( sigma_y * 2.5066 ) * std::exp( -0.5 * std::pow(measured-mean_y, 2) / std::pow(sigma_y, 2) )
+            // p_is_blue = p_given_blue / (p_given_yellow + p_given_blue)
+            // p_is_yellow = p_given_yellow / (p_given_yellow + p_given_blue)
+
+        }
+
+        /*
+        for (const auto& [name, dets] : detections) {
+
+
+
+            const auto cam_it = _cameras.find(name);
+            if (cam_it == _cameras.end() || !dets) continue;
+            const std::vector<CameraCone> placed = place_detections(cam_it->second, camera_from_lidar(name), *dets);
+            render_camera_cones(name, placed, cones->timestamp_us(), frame_id);
+
+            // (distance, cone, detection) for every pair within the match distance
+            std::vector<std::tuple<float, int, int>> pairs;
+            for (int i = 0; i < cones->cones_size(); ++i) {
+                const auto& pos = cones->cones(i).position();
+                for (int j = 0; j < static_cast<int>(placed.size()); ++j) {
+                    const float dist = (placed[j].xy - Eigen::Vector2f(pos.x(), pos.y())).norm();
+                    if (dist < MATCH_DISTANCE_M) pairs.emplace_back(dist, i, j);
+                }
+            }
+
+            // Greedy one-to-one matching, closest pairs first
+            std::sort(pairs.begin(), pairs.end());
+            std::vector<bool> cone_used(cones->cones_size()), det_used(placed.size());
+            for (const auto& [dist, i, j] : pairs) {
+                if (cone_used[i] || det_used[j]) continue;
+                cone_used[i] = det_used[j] = true;
+                if (placed[j].score > best_score[i]) {
+                    best_score[i] = placed[j].score;
+                    cones->mutable_cones(i)->set_color(placed[j].color);
+                    cones->mutable_cones(i)->set_color_confidence(placed[j].score);
+                }
+            }
+        }
+        */
+
+        return cones;
+    }
+
+
+
+
 }

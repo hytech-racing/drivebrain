@@ -252,6 +252,8 @@ namespace {
             position->set_x(feature.centroid.x);
             position->set_y(feature.centroid.y);
             position->set_z(feature.centroid.z);
+
+            cone->set_mean_reflectivity(feature.mean_reflectivity);
         }
         
         return cones;

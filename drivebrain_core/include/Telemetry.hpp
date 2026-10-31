@@ -132,6 +132,22 @@ inline void render_cones(std::shared_ptr<dv_msgs::Cones> cones, std::string id, 
             text->mutable_color()->set_a(0.9);
             text->set_text(std::to_string(cone.landmark_id()));
         }
+
+        // temporary
+        auto* text = entity->add_texts();
+        auto* text_pos = text->mutable_pose()->mutable_position();
+        text_pos->set_x(cone.position().x());
+        text_pos->set_y(cone.position().y());
+        text_pos->set_z(cone.position().z() + 0.5);
+        text->mutable_pose()->mutable_orientation()->set_w(1.0);
+        text->set_billboard(true);
+        text->set_font_size(12.0);
+        text->set_scale_invariant(true);
+        text->mutable_color()->set_r(1.0);
+        text->mutable_color()->set_g(1.0);
+        text->mutable_color()->set_b(1.0);
+        text->mutable_color()->set_a(0.9);
+        text->set_text(fmt::format("{:.0f}", cone.mean_reflectivity()));
     }
 
     log(scene);
