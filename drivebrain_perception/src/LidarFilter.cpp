@@ -16,7 +16,7 @@ namespace {
         float width_x_m = 0, width_y_m = 0, height_z_m = 0; 
         float top_height_m = 0;  // cluster top above the local ground estimate
         float max_horizontal_width_m = 0, range_m = 0; 
-        float mean_reflectivity = 0;
+        float coloring_score = -1;
         std::size_t num_points = 0;
     };
 
@@ -188,7 +188,9 @@ namespace {
             ClusterFeatures feature;
             const auto& first = pts[cluster.point_indices.front()];
             feature.min = feature.max = {first.x, first.y, first.z};
-            
+
+            float mean_reflectivity = 0;
+
             // Get centroid and bounding box for the cluster
             for (const auto& idx : cluster.point_indices) {
                 const auto& pt = pts[idx];
@@ -196,7 +198,7 @@ namespace {
                 feature.min.x = std::min(feature.min.x, pt.x);  feature.max.x = std::max(feature.max.x, pt.x);
                 feature.min.y = std::min(feature.min.y, pt.y);  feature.max.y = std::max(feature.max.y, pt.y);
                 feature.min.z = std::min(feature.min.z, pt.z);  feature.max.z = std::max(feature.max.z, pt.z);
-                feature.mean_reflectivity += pt.r;
+                mean_reflectivity += pt.r;
             }
 
             feature.num_points = cluster.point_indices.size();
@@ -210,7 +212,26 @@ namespace {
             feature.max_horizontal_width_m = std::max(feature.width_x_m, feature.width_y_m);
             feature.range_m = std::hypot(feature.centroid.x, feature.centroid.y);
 
-            feature.mean_reflectivity = feature.mean_reflectivity / feature.num_points;
+            mean_reflectivity = mean_reflectivity / feature.num_points;
+            float refl_above = 0;
+            float num_above = 0;
+            float refl_below = 0;
+            float num_below = 0;
+
+            for (const auto& idx : cluster.point_indices) {
+                const auto& pt = pts[idx];
+                if (pt.r > mean_reflectivity)  {
+                    refl_above += pt.r;
+                    num_above++;
+                } else {
+                    refl_below += pt.r;
+                    num_below++;
+                }
+            }
+
+            if (num_above > 0 && num_below > 0) {
+                feature.coloring_score = std::abs(refl_above/num_above - refl_below/num_below);
+            }
 
             features.push_back(std::move(feature));
         }
@@ -253,7 +274,7 @@ namespace {
             position->set_y(feature.centroid.y);
             position->set_z(feature.centroid.z);
 
-            cone->set_mean_reflectivity(feature.mean_reflectivity);
+            cone->set_mean_reflectivity(feature.coloring_score);
         }
         
         return cones;
