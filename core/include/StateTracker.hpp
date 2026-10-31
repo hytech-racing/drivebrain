@@ -254,6 +254,9 @@ namespace core {
         float old_energy_meter_kw;
         DrivetrainData dt_data;
         AccumulatorData acc_data;
+
+        xyz_vec<float> vehicle_position_map_frame;
+        xyz_vec<float> vehicle_heading_map_frame_unit_vector;
     };
 
     enum class ControllerManagerStatus
@@ -297,18 +300,6 @@ namespace core {
         uint64_t num_points() const { return lidar_cloud ? core::num_points(*lidar_cloud) : 0; }
     };
 
-
-    struct VehicleSimPosition {
-        float vehicle_x;
-        float vehicle_y;
-        float vehicle_z = 0;
-
-        float orientation_w;
-        float orientation_x;
-        float orientation_y;
-        float orientation_z;
-
-    };
 
 
     /**
@@ -398,9 +389,7 @@ namespace core {
              */
             std::pair<TeleopCommand, bool> teleop_command();
 
-            void set_vehicle_sim_pose(std::shared_ptr<const hytech_msgs::pose> vehicle_pose);
 
-            VehicleSimPosition vehicle_sim_pos();
 
         private:
 
@@ -427,9 +416,6 @@ namespace core {
 
             TeleopCommand _teleop_command = { };
             std::mutex _teleop_mutex;
-
-            VehicleSimPosition _vehicle_sim_position = { };
-            std::mutex _vehicle_sim_pos_mutex;
             
             /* Private constructor called by the init method */
             StateTracker() {}; 
