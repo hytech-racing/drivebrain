@@ -120,13 +120,6 @@ namespace core {
              */
             int log_params(nlohmann::json params);
 
-            /**
-             * Logs the git metadata of the running build to the GitMetadata topic
-             *
-             * @return 0 on success, negative err code on failure
-             */
-            int log_git_metadata();
-
         private:
           
             /* Private constructor to be called by init method */
@@ -136,7 +129,14 @@ namespace core {
              * Spawned by thread, loops until end of program life or error occurs. 
              * Logs all queued messages to a file. 
              */
-            void _handle_log_to_file();     
+            void _handle_log_to_file();  
+            
+            /**
+             * Logs the git metadata of the running build to the GitMetadata topic
+             *
+             * @return 0 on success, negative err code on failure
+             */
+            int _log_git_metadata();
 
             /* Singleton move semantics */
             MCAPLogger(const MCAPLogger&) = delete;

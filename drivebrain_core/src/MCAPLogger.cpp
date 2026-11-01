@@ -205,7 +205,7 @@ int core::MCAPLogger::open_new_mcap() {
     _name_to_id_map["GitMetadata"] = git_channel.id;
     _type_to_schema_id_map["GitMetadata"] = git_schema.id;
 
-    log_git_metadata();
+    _log_git_metadata();
 
     spdlog::info("Successfully added git metadata schema");
     
@@ -320,7 +320,7 @@ int core::MCAPLogger::log_params(nlohmann::json params) {
     return 0;
 }
 
-int core::MCAPLogger::log_git_metadata() {
+int core::MCAPLogger::_log_git_metadata() {
     mcap::Timestamp log_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 
     RawMessage_s msg;
