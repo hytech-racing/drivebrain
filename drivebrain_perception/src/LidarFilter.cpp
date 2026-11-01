@@ -255,7 +255,6 @@ namespace {
             }
 
             if (num_top > 0 && num_middle > 0 && num_bottom > 0) {
-                float outsides = (top/num_top+bottom/num_bottom)/2;
                 feature.coloring_score = (outsides - middle/num_middle)/outsides;
             }
 
