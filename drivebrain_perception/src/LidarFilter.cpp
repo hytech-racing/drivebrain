@@ -255,7 +255,7 @@ namespace {
             }
 
             if (num_top > 0 && num_middle > 0 && num_bottom > 0) {
-                feature.coloring_score = (outsides - middle/num_middle)/outsides;
+                feature.coloring_score = middle/num_middle - (top/num_top+bottom/num_bottom)/2;
             }
 
             features.push_back(std::move(feature));
