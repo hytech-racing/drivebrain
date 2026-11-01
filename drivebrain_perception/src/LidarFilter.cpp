@@ -16,7 +16,7 @@ namespace {
         float width_x_m = 0, width_y_m = 0, height_z_m = 0; 
         float top_height_m = 0;  // cluster top above the local ground estimate
         float max_horizontal_width_m = 0, range_m = 0; 
-        float coloring_score = -1;
+        float coloring_score = 0;
         std::size_t num_points = 0;
     };
 
@@ -212,25 +212,50 @@ namespace {
             feature.max_horizontal_width_m = std::max(feature.width_x_m, feature.width_y_m);
             feature.range_m = std::hypot(feature.centroid.x, feature.centroid.y);
 
-            mean_reflectivity = mean_reflectivity / feature.num_points;
-            float refl_above = 0;
-            float num_above = 0;
-            float refl_below = 0;
-            float num_below = 0;
+            // mean_reflectivity = mean_reflectivity / feature.num_points;
+            // float refl_above = 0;
+            // float num_above = 0;
+            // float refl_below = 0;
+            // float num_below = 0;
+
+            // for (const auto& idx : cluster.point_indices) {
+            //     const auto& pt = pts[idx];
+            //     if (pt.r > mean_reflectivity)  {
+            //         refl_above += pt.r;
+            //         num_above++;
+            //     } else {
+            //         refl_below += pt.r;
+            //         num_below++;
+            //     }
+            // }
+
+            // if (num_above > 0 && num_below > 0) {
+            //     feature.coloring_score = std::abs(refl_above/num_above - refl_below/num_below);
+            // }
+
+            float top = 0;
+            int num_top = 0;
+            float middle = 0;
+            int num_middle = 0;
+            float bottom = 0;
+            int num_bottom = 0;
 
             for (const auto& idx : cluster.point_indices) {
                 const auto& pt = pts[idx];
-                if (pt.r > mean_reflectivity)  {
-                    refl_above += pt.r;
-                    num_above++;
-                } else {
-                    refl_below += pt.r;
-                    num_below++;
+                if (pt.z > feature.max.z - (feature.max.z-feature.min.z)/3)  {
+                    top += pt.r;
+                    num_top++;
+                } else if (pt.z > feature.max.z - 2*(feature.max.z-feature.min.z)/3) {
+                    middle += pt.r;
+                    num_middle++;
+                } else{ 
+                    bottom += pt.r;
+                    num_bottom++;
                 }
             }
 
-            if (num_above > 0 && num_below > 0) {
-                feature.coloring_score = std::abs(refl_above/num_above - refl_below/num_below);
+            if (num_top > 0 && num_middle > 0 && num_bottom > 0) {
+                feature.coloring_score = (top/num_top+bottom/num_bottom)/2 - middle/num_middle;
             }
 
             features.push_back(std::move(feature));
