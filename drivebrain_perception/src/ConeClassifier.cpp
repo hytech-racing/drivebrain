@@ -250,7 +250,7 @@ namespace {
         for (int i=0; i<cones->cones_size(); i++) {
             auto* cone = cones->mutable_cones(i);
 
-            if (cone->mean_reflectivity() > 30) {
+            if (cone->mean_reflectivity() < 15) {
                 cone->set_color(dv_msgs::Cones::BLUE);
             } else {
                 cone->set_color(dv_msgs::Cones::YELLOW);
