@@ -1,12 +1,28 @@
 #include "PathPlanner.hpp"
 
+#include <cmath>
+#include <foxglove/FrameTransform.pb.h>
+#include <limits>
+#include <random>
+#include <vector>
+#include <algorithm>
+#include <numbers>
+#include <StateTracker.hpp>
+#include "base_msgs.pb.h"
+#include "dv_msgs.pb.h"
+#include "hytech_msgs.pb.h"
+#include <delaunator.hpp>
+#include <FoxgloveServer.hpp>
 
 // left side = blue
 // right side = yellow
 
-inline constexpr float MAX_TRACK_WIDTH_SQ = 36.0f;
-inline constexpr float MIN_COS_TURN = -0.3f;      // only reject points that are clearly behind
-inline constexpr float MAX_JUMP_SQ  = 8.0f * 8.0f; 
+constexpr float MAX_TRACK_WIDTH_SQ = 36.0f; // 6 meters^2
+constexpr float MIN_TRACK_WIDTH_SQ = 2.8f * 2.8f; // rules requires track width to be at least 3 meters
+constexpr float MIN_COS_TURN = -0.3f;      // only reject points that are clearly behind
+constexpr float MAX_JUMP_SQ  = 8.0f * 8.0f; 
+
+// TODO: make max track width something that changes with event OR a tunable param in foxglove since accel and skidpad have different track widths
 
 namespace planning {
 
@@ -20,7 +36,7 @@ std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones) {
     const float vehicle_x = vehicle_state.vehicle_position_map_frame.x;
     const float vehicle_y = vehicle_state.vehicle_position_map_frame.y;
     const float heading_x = vehicle_state.vehicle_heading_map_frame_unit_vector.x;
-    const float heading_y = vehicle_state.vehicle_heading_map_frame_unit_vector.y;;
+    const float heading_y = vehicle_state.vehicle_heading_map_frame_unit_vector.y;
 
 
     coords.reserve(cones.cones_size()*2); // Allocate enough memory to store the x and y coordinates of each cone
@@ -59,14 +75,15 @@ std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones) {
         bool is_crossing_edge = (curr_edge_color == dv_msgs::Cones_ConeColor_BLUE && twin_edge_color == dv_msgs::Cones_ConeColor_YELLOW) ||
             (curr_edge_color == dv_msgs::Cones_ConeColor_YELLOW && twin_edge_color == dv_msgs::Cones_ConeColor_BLUE);
 
+        bool color_unknown = curr_edge_color == dv_msgs::Cones_ConeColor_UNKNOWN; // WIP
+
         if (is_crossing_edge) {
         float dx = delaunay.coords[2 * curr_edge] - delaunay.coords[2 * twin_edge];
         float dy = delaunay.coords[2 * curr_edge + 1] - delaunay.coords[2 * twin_edge +1];
         float edge_length_sq = (dx * dx) + (dy * dy);
 
         // filtering crossing edges based on length - they should only be the width of the track
-        // track width changes with event type (autocross vs accel) so add a parameter to check this??
-        if (edge_length_sq > MAX_TRACK_WIDTH_SQ) continue;
+        if (edge_length_sq > MAX_TRACK_WIDTH_SQ || edge_length_sq < MIN_TRACK_WIDTH_SQ) continue;
         
         float mx = (delaunay.coords[2* curr_edge] + delaunay.coords[2* twin_edge]) / (2.0);
         float my = (delaunay.coords[2*curr_edge + 1] + delaunay.coords[2* twin_edge + 1]) / (2.0);

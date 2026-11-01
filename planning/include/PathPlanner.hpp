@@ -1,18 +1,10 @@
 #pragma once
 
-#include <cmath>
-#include <foxglove/FrameTransform.pb.h>
-#include <limits>
-#include <random>
 #include <vector>
-#include <algorithm>
-#include <numbers>
+
 #include <StateTracker.hpp>
-#include "base_msgs.pb.h"
 #include "dv_msgs.pb.h"
-#include "hytech_msgs.pb.h"
-#include <delaunator.hpp>
-#include <FoxgloveServer.hpp>
+
 
 
 
