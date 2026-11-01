@@ -139,9 +139,9 @@ void comms::OusterComms::_loop() {
         for (Eigen::Index u = 0; u < w; ++u) scan_end_ts = std::max<uint64_t>(scan_end_ts, column_ts(u));
 
         auto pc = std::make_shared<foxglove::PointCloud>();
-        const auto now = std::chrono::system_clock::now().time_since_epoch();
-        pc->mutable_timestamp()->set_seconds(std::chrono::duration_cast<std::chrono::seconds>(now).count());
-        pc->mutable_timestamp()->set_nanos(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count() % 1000000000);
+        // stamp with the sensor's PTP hardware time (scan end), same timebase as the cameras
+        pc->mutable_timestamp()->set_seconds(scan_end_ts / 1000000000ULL);
+        pc->mutable_timestamp()->set_nanos(scan_end_ts % 1000000000ULL);
         pc->set_frame_id("os_sensor");
         pc->mutable_pose()->mutable_orientation()->set_w(1);
         pc->set_point_stride(4 * sizeof(float));
@@ -175,8 +175,8 @@ void comms::OusterComms::_loop() {
         if (compressed_ranges) {
             auto recorded_range = std::make_shared<foxglove::RawImage>();
             const auto now = std::chrono::system_clock::now().time_since_epoch();
-            const auto secs = std::chrono::duration_cast<std::chrono::seconds>(now).count();
-            const auto nanos = std::chrono::duration_cast<std::chrono::nanoseconds>(now).count() % 1000000000;
+            const auto secs = scan_end_ts / 1000000000ULL;
+            const auto nanos = scan_end_ts % 1000000000ULL;
 
             recorded_range->mutable_timestamp()->set_seconds(secs);
             recorded_range->mutable_timestamp()->set_nanos(nanos);
