@@ -183,6 +183,7 @@ namespace comms
             });
 
         _running = true;
+
         _thread = std::thread([this]() {
             try
             {

@@ -81,6 +81,7 @@ bool BlackflyComms::start(const std::string& id, const std::string& name, const 
 
     // Start the receive thread
     _running = true;
+
     _blackfly_receive_thread = std::thread(&BlackflyComms::_aravis_receive_loop, this);
 
     return true;
@@ -89,6 +90,7 @@ bool BlackflyComms::start(const std::string& id, const std::string& name, const 
 void BlackflyComms::_aravis_receive_loop() {
     static int frame_count = 0;
     while (_running) {
+
         ArvBuffer *buffer = nullptr; 
 
         buffer = arv_stream_timeout_pop_buffer(_stream, 1000000);

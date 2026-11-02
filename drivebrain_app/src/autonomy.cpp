@@ -12,6 +12,7 @@
 #include <LidarFilter.hpp>
 #include <PointCloudDeskew.hpp>
 #include <PathPlanner.hpp>
+#include <tracy/Tracy.hpp>
 
 namespace core {
 
@@ -56,9 +57,12 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
 }
 
 void Autonomy::_run() {
+  tracy::SetThreadName("Autonomy thread"); // Sets a known name for the specific operating system thread
+
   std::shared_ptr<const foxglove::PointCloud> last_scan;
 
   while (_running) {
+    ZoneScopedN("Autonomy Iteration"); // Zone scoped marks a specific block of code to measure how long it takes to execute
     const auto scan = StateTracker::instance().wait_for_scan(last_scan, SCAN_WAIT);
     if (!scan) continue;
     last_scan = scan;

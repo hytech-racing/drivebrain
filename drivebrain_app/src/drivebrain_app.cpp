@@ -12,12 +12,14 @@
 #include <StateTracker.hpp>
 #include <atomic>
 #include <chrono>
+#include <common/TracySystem.hpp>
 #include <mcap/writer.hpp>
 #include <memory>
 #include <fmt/chrono.h>
 #include <spdlog/spdlog.h>
 #include <filesystem>
 #include <stdexcept>
+#include <tracy/Tracy.hpp>
 
 std::atomic<bool> running{true};
 
@@ -158,8 +160,11 @@ void DrivebrainApp::run() {
 
   running = true;
 
+  // NOT SURE ABOUT THIS ONE
+  tracy::SetThreadName("IO Context thread");
   _io_context_thread = std::thread([this]() {
     try {
+      ZoneScopedN("IO Context thread run");
       _io_context.run();
     } catch (const std::exception& e) {
       spdlog::error("io_context error: {}", e.what());
@@ -263,8 +268,11 @@ void DrivebrainApp::_loop() {
   std::chrono::microseconds loop_time_ms((int) (loop_time * 1000000.0f));
   auto next_tick = std::chrono::steady_clock::now();
 
+  tracy::SetThreadName("DB App loop thread");
+
   while(running) {
 
+    ZoneScopedN("App loop thread iteration");
     next_tick += loop_time_ms;
 
     auto state_and_validity = core::StateTracker::instance().vehicle_state();

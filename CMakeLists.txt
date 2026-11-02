@@ -57,7 +57,7 @@ find_package(aravis REQUIRED)
 find_package(OpenCV REQUIRED CONFIG)
 find_package(Eigen3 REQUIRED)
 find_package(GTSAM REQUIRED)
-
+find_package(Tracy REQUIRED)
 
 if (HOOTL)
     find_package(cppzmq REQUIRED)
@@ -174,6 +174,7 @@ target_link_libraries(drivebrain PUBLIC
     drivebrain_planning
     drivebrain_perception
     drivebrain_slam
+    Tracy::TracyClient
 )
 
 if(JETSON)
