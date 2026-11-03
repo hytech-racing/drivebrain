@@ -185,6 +185,11 @@ void SimComms::_veh_recv_loop() {
             // core::render_cones(std::static_pointer_cast<dv_msgs::Cones>(msg), "ground_truth_cones");
             // Kept in its own slot so the autonomy stack's map doesn't overwrite it
             core::StateTracker::instance().set_ground_truth_cones(std::static_pointer_cast<dv_msgs::Cones>(msg));
+            static bool logged = false;  // the true cones are the same every time: write them to the MCAP once, for scripts/compare_paths.py
+            if (!logged) {
+                core::log_mcap_only(msg, "ground_truth_cones");
+                logged = true;
+            }
         } else if (desc == hytech_msgs::pose::descriptor()) {
             core::render_pose(std::static_pointer_cast<hytech_msgs::pose>(msg), "ground_truth_pose", "map", {0.2f, 0.4f, 1.0f});
             {
