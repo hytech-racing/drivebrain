@@ -21,6 +21,7 @@ constexpr float MAX_TRACK_WIDTH_SQ = 36.0f; // 6 meters^2
 constexpr float MIN_TRACK_WIDTH_SQ = 2.8f * 2.8f; // rules requires track width to be at least 3 meters
 constexpr float MIN_COS_TURN = -0.3f;      // only reject points that are clearly behind
 constexpr float MAX_JUMP_SQ  = 8.0f * 8.0f; 
+constexpr float COLOR_WEIGHT = 2.0f;
 
 // TODO: make max track width something that changes with event OR a tunable param in foxglove since accel and skidpad have different track widths
 
@@ -37,6 +38,8 @@ std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones) {
     const float vehicle_y = vehicle_state.vehicle_position_map_frame.y;
     const float heading_x = vehicle_state.vehicle_heading_map_frame_unit_vector.x;
     const float heading_y = vehicle_state.vehicle_heading_map_frame_unit_vector.y;
+
+    bool uncolored_edges;
 
 
     coords.reserve(cones.cones_size()*2); // Allocate enough memory to store the x and y coordinates of each cone
@@ -80,8 +83,7 @@ std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones) {
         bool is_true_crossing_edge = (curr_edge_color == dv_msgs::Cones_ConeColor_BLUE && twin_edge_color == dv_msgs::Cones_ConeColor_YELLOW) ||
              (curr_edge_color == dv_msgs::Cones_ConeColor_YELLOW && twin_edge_color == dv_msgs::Cones_ConeColor_BLUE);
 
-        bool uncolored_edges = curr_edge_color == dv_msgs::Cones_ConeColor_UNKNOWN || twin_edge_color == dv_msgs::Cones_ConeColor_UNKNOWN;
-
+        uncolored_edges = curr_edge_color == dv_msgs::Cones_ConeColor_UNKNOWN || twin_edge_color == dv_msgs::Cones_ConeColor_UNKNOWN;
 
         // // only looking for edges that cross the width of the track - this means that one end is a blue cone and the other end is a yellow cone
         // bool is_crossing_edge = (curr_edge_color == dv_msgs::Cones_ConeColor_BLUE && twin_edge_color == dv_msgs::Cones_ConeColor_YELLOW) ||
@@ -145,8 +147,8 @@ std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones) {
         float dist = std::sqrt(d_square);
         float angle = (dx * hx + dy * hy) / dist;
         if (angle <= MIN_COS_TURN) continue; 
-        float cost = dist * (2.0f - angle) + color_weight; // angle = 1 means straight ahead, then cost is only based on distance
-        if (uncolred_edges) {
+        float cost = dist * (2.0f - angle) + COLOR_WEIGHT; // angle = 1 means straight ahead, then cost is only based on distance
+        if (uncolored_edges) {
             cost *= 2; // prioritize colored over uncolored edges
         }
         if (cost < best_cost) {
