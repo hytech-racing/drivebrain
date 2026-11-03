@@ -2,6 +2,10 @@
 
 #include <boost/crc.hpp>
 #include <boost/asio/post.hpp>
+#include <boost/asio/write.hpp>
+#include <spdlog/spdlog.h>
+
+#include "Telemetry.hpp"
 
 #include <limits>
 #include <stdexcept>
@@ -39,11 +43,16 @@ void UARTComms::start() {
     if (_running.load()) {
         return;
     }
+    if (_worker.joinable()) {
+        throw std::logic_error("Call UARTComms::stop() before restarting after an I/O failure");
+    }
     if (_config.device_name.empty() || _config.baud_rate == 0) {
         throw std::invalid_argument("UART start requires a device name and nonzero baud rate");
     }
 
     _io_context.restart();
+    _encoded_frame.clear();
+    _discarding_frame = false;
     try {
         _serial.open(_config.device_name);
         using Serial = boost::asio::serial_port_base;
@@ -55,36 +64,220 @@ void UARTComms::start() {
 
         _work_guard.emplace(boost::asio::make_work_guard(_io_context));
         _running.store(true);
+        boost::asio::post(_io_context, [this]() { _start_receive(); });
+        // A failure on the worker must not race enabling send admission.
+        std::lock_guard lock(_submission_mutex);
         _worker = std::thread([this]() { _io_context.run(); });
+        _accepting_sends = true;
     } catch (...) {
         // No worker was launched if opening, configuring, or thread creation failed.
         _running.store(false);
         _work_guard.reset();
         boost::system::error_code ignored;
         _serial.close(ignored);
+        // Drain the initial receive post if worker creation failed.
+        _io_context.run();
         throw;
     }
 }
 
 void UARTComms::stop() {
-    _running.store(false);
+    {
+        std::lock_guard lock(_submission_mutex);
+        _accepting_sends = false;
+        _running.store(false);
+    }
     if (!_worker.joinable()) {
         return;
     }
 
-    // Close on the I/O thread so future read/write handlers cannot race shutdown.
-    boost::asio::post(_io_context, [this]() {
-        boost::system::error_code ignored;
-        _serial.cancel(ignored);
-        _serial.close(ignored);
-        _work_guard.reset();
-    });
+    // Closing on the I/O thread serializes shutdown with read/write handlers.
+    boost::asio::post(_io_context, [this]() { _halt_io(); });
     // run() drains cancellation handlers before returning; do not call io_context::stop().
     _worker.join();
+    // A read failure may have ended run() before it could execute the shutdown post.
+    // Drain that post now, while stopped, so it cannot affect the next start().
+    _io_context.restart();
+    _io_context.run();
+    _encoded_frame.clear();
+    _discarding_frame = false;
 }
 
 bool UARTComms::is_running() const noexcept {
     return _running.load();
+}
+
+bool UARTComms::send(const Message& message) {
+    auto frame = _encode_message(message);
+    const std::size_t size = frame.size();
+
+    std::lock_guard lock(_submission_mutex);
+    if (!_accepting_sends || size > _config.max_outstanding_tx_bytes - _outstanding_tx_bytes) {
+        return false;
+    }
+    _outstanding_tx_bytes += size;
+    try {
+        boost::asio::post(_io_context, [this, frame = std::move(frame)]() mutable {
+            const std::size_t size = frame.size();
+            if (!_running.load()) {
+                _release_tx_bytes(size);
+                return;
+            }
+
+            const bool idle = _write_queue.empty();
+            try {
+                _write_queue.push_back(std::move(frame));
+            } catch (const std::exception& error) {
+                _release_tx_bytes(size);
+                spdlog::error("UART {} could not queue a write: {}", _config.device_name, error.what());
+                _halt_io();
+                return;
+            }
+            if (idle) {
+                _start_write();
+            }
+        });
+    } catch (...) {
+        _outstanding_tx_bytes -= size; // Posting failed; the frame was never submitted.
+        throw;
+    }
+    return true;
+}
+
+void UARTComms::_release_tx_bytes(std::size_t size) {
+    std::lock_guard lock(_submission_mutex);
+    _outstanding_tx_bytes -= size;
+}
+
+void UARTComms::_halt_io() {
+    {
+        std::lock_guard lock(_submission_mutex);
+        _accepting_sends = false;
+        _running.store(false);
+    }
+    boost::system::error_code ignored;
+    _serial.cancel(ignored);
+    _serial.close(ignored);
+    _work_guard.reset();
+    _encoded_frame.clear();
+    _discarding_frame = false;
+
+    // Keep the active buffer until its completion handler runs after cancellation.
+    const std::size_t keep = _write_in_progress ? 1 : 0;
+    while (_write_queue.size() > keep) {
+        _release_tx_bytes(_write_queue.back().size());
+        _write_queue.pop_back();
+    }
+}
+
+void UARTComms::_start_write() {
+    if (!_running.load() || _write_in_progress || _write_queue.empty()) {
+        return;
+    }
+    _write_in_progress = true;
+    try {
+        boost::asio::async_write(_serial, boost::asio::buffer(_write_queue.front()),
+            [this](const boost::system::error_code& error, std::size_t size) {
+                _handle_write(error, size);
+            });
+    } catch (const std::exception& error) {
+        _write_in_progress = false;
+        spdlog::error("UART {} could not start writing: {}", _config.device_name, error.what());
+        _halt_io();
+    }
+}
+
+void UARTComms::_handle_write(const boost::system::error_code& error, std::size_t size) {
+    const std::size_t expected = _write_queue.front().size();
+    _write_in_progress = false;
+    _release_tx_bytes(expected);
+    _write_queue.pop_front();
+
+    if (!_running.load()) {
+        _halt_io();
+        return;
+    }
+    if (error || size != expected) {
+        spdlog::error("UART {} write failed after {} of {} bytes: {}", _config.device_name,
+                      size, expected, error ? error.message() : "incomplete write");
+        _halt_io();
+        return;
+    }
+    _start_write();
+}
+
+void UARTComms::_start_receive() {
+    if (!_running.load()) {
+        return;
+    }
+    try {
+        _serial.async_read_some(boost::asio::buffer(_receive_buffer),
+            [this](const boost::system::error_code& error, std::size_t size) {
+                _handle_receive(error, size);
+            });
+    } catch (const std::exception& error) {
+        spdlog::error("UART {} could not start reading: {}", _config.device_name, error.what());
+        _halt_io();
+    }
+}
+
+void UARTComms::_handle_receive(const boost::system::error_code& error, std::size_t size) {
+    if (!_running.load()) {
+        return; // Includes the cancellation completion during normal shutdown.
+    }
+    if (error) {
+        spdlog::error("UART {} read failed: {}", _config.device_name, error.message());
+        _halt_io();
+        return;
+    }
+
+    const std::size_t decoded_limit = _config.max_payload_bytes + 2; // Include CRC.
+    const std::size_t encoded_limit = decoded_limit + decoded_limit / 254 + 1;
+    for (std::size_t index = 0; index < size && _running.load(); ++index) {
+        const uint8_t byte = _receive_buffer[index];
+        if (byte != 0) {
+            if (!_discarding_frame) {
+                if (_encoded_frame.size() == encoded_limit) {
+                    _encoded_frame.clear();
+                    _discarding_frame = true;
+                } else {
+                    _encoded_frame.push_back(byte);
+                }
+            }
+            continue;
+        }
+
+        // A delimiter completes one frame and resets collection for the next.
+        std::shared_ptr<Message> message;
+        if (!_discarding_frame && !_encoded_frame.empty()) {
+            message = _decode_message(_encoded_frame);
+        }
+        _encoded_frame.clear();
+        _discarding_frame = false;
+        if (!message) {
+            continue;
+        }
+
+        // Logging failures must not prevent application delivery.
+        try {
+            core::log(message, _config.receive_topic);
+        } catch (const std::exception& exception) {
+            spdlog::error("UART RX logging failed: {}", exception.what());
+        } catch (...) {
+            spdlog::error("UART RX logging failed with an unknown exception");
+        }
+        if (!_running.load()) {
+            break;
+        }
+        try {
+            _handler(message);
+        } catch (const std::exception& exception) {
+            spdlog::error("UART receive handler failed: {}", exception.what());
+        } catch (...) {
+            spdlog::error("UART receive handler failed with an unknown exception");
+        }
+    }
+    _start_receive();
 }
 
 std::vector<uint8_t> UARTComms::_encode_message(const Message& message) const {
