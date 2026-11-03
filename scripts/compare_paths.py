@@ -59,6 +59,7 @@ from mcap_protobuf.decoder import DecoderFactory
 POSE, MIDLINE, RACING, PLANNED, LANDMARKS = "slam/vehicle_pose", "scene/midline_path", "scene/racing_line_path", "scene/planned_path", "slam_landmarks"
 LANDMARK_SCENE = "scene/slam_landmarks"
 SCENE = "SceneUpdate"
+TRUE_CONES = "ground_truth_cones"  # the sim's true cones, logged by newer builds of drivebrain
 LAP_RADIUS_M = 4.0      # back within this of the start = lap done
 LEAVE_RADIUS_M = 15.0   # must first have been this far from the start
 MIN_LAP_M = 30.0
@@ -113,7 +114,7 @@ def decode_pose(data):
 
 
 def read(path):
-    wanted = {POSE, MIDLINE, RACING, PLANNED, LANDMARKS, LANDMARK_SCENE, SCENE}
+    wanted = {POSE, MIDLINE, RACING, PLANNED, LANDMARKS, LANDMARK_SCENE, SCENE, TRUE_CONES}
     schemas, channels, raw = {}, {}, {t: [] for t in wanted}
     decoders = DecoderFactory()
     n = 0
@@ -129,7 +130,7 @@ def read(path):
                     ch = channels.get(rec.channel_id)
                     if ch is None or ch.topic not in wanted:
                         continue
-                    if ch.topic in (LANDMARKS, LANDMARK_SCENE):
+                    if ch.topic in (LANDMARKS, LANDMARK_SCENE, TRUE_CONES):
                         raw[ch.topic] = [(rec.log_time, ch.schema_id, rec.data)]  # only the last one is used
                     else:
                         raw[ch.topic].append((rec.log_time, ch.schema_id, rec.data))
@@ -177,7 +178,11 @@ def read(path):
                     c = cyl.color
                     name = "BLUE" if c.b > c.r else ("YELLOW" if c.g > 0.6 else "ORANGE_SMALL")
                     cones.append((cyl.pose.position.x, cyl.pose.position.y, name))
-    return pose, lines, msg_times, cones, np.array(gt)
+    true_cones = []  # (x, y, colour name), only in recordings from a drivebrain that logs them
+    for _, msg in decode(TRUE_CONES, raw[TRUE_CONES]):
+        enum = msg.DESCRIPTOR.fields_by_name["cones"].message_type.fields_by_name["color"].enum_type
+        true_cones = [(c.position.x, c.position.y, enum.values_by_number[c.color].name) for c in msg.cones]
+    return pose, lines, msg_times, cones, np.array(gt), true_cones
 
 
 def find_laps(pose):
@@ -281,7 +286,7 @@ def main():
     args = ap.parse_args()
 
     print(f"reading {args.mcap} (a large file takes a minute or two) ...")
-    pose, lines, times, cones, gt = read(args.mcap)
+    pose, lines, times, cones, gt, recorded_truth = read(args.mcap)
     if len(pose) < 10:
         sys.exit(f"no '{POSE}' messages in this file, so there is no car path to analyse")
     print(f"{len(pose)} poses over {pose[-1, 0] - pose[0, 0]:.0f} s, {len(lines[MIDLINE])} midline / {len(lines[RACING])} racing-line messages")
@@ -291,16 +296,28 @@ def main():
         sys.exit("no complete lap in this file (the car never came back to its start)")
     cone_xy = np.array([(x, y) for x, y, _ in cones]) if cones else np.zeros((0, 2))
     true_cones = cone_xy
-    track_yaml = args.track_yaml or (guess_track(gt, args.track_dir) if len(gt) else None)
-    if track_yaml:
-        import yaml
-        track = yaml.safe_load(open(track_yaml))
-        true_cones = np.array([c[:2] for k in ("cones_left", "cones_right", "cones_orange", "cones_orange_big") for c in (track.get(k) or [])], float)
-        print(f"track: {track_yaml}")
-        print(f"clearance: ground truth ({len(gt)} poses, {len(true_cones)} cones)" if len(gt) else "no ground_truth_pose in this file: clearance uses SLAM")
+    truth_by_colour = {}  # colour name -> (n, 2) true cone positions
+    if args.track_yaml or (not recorded_truth and len(gt)):
+        track_yaml = args.track_yaml or guess_track(gt, args.track_dir)
+        if track_yaml:
+            import yaml
+            track = yaml.safe_load(open(track_yaml))
+            for key, name in (("cones_left", "BLUE"), ("cones_right", "YELLOW"), ("cones_orange", "ORANGE_SMALL"), ("cones_orange_big", "ORANGE_BIG")):
+                truth_by_colour[name] = np.array([q[:2] for q in (track.get(key) or [])], float).reshape(-1, 2)
+            print(f"true cones: {track_yaml}")
+    elif recorded_truth:
+        for name in {n for _, _, n in recorded_truth}:
+            truth_by_colour[name] = np.array([(x, y) for x, y, n in recorded_truth if n == name], float)
+        print("true cones: logged in the recording")
+    if truth_by_colour:
+        true_cones = np.vstack(list(truth_by_colour.values()))
+    have_truth = bool(len(gt) and truth_by_colour)
+    if have_truth:
+        print(f"clearance: ground truth ({len(gt)} poses, {len(true_cones)} cones)")
     else:
-        print("clearance: SLAM pose and map (no track file found, pass --track-yaml or --track-dir): early laps can show false cone hits")
+        print("clearance: SLAM pose and map (no true cones: not in the recording, no track file found; pass --track-yaml or --track-dir): early laps can show false cone hits")
 
+    clearance_source = "sim true pose and cones" if have_truth else "SLAM pose and map: NOT reliable, false cone contacts"
     planned = lines[PLANNED] or lines[MIDLINE]
     planned_t = np.array([t for t, _ in planned])
 
@@ -410,15 +427,28 @@ def main():
     fig = plt.figure(figsize=(17, 12))
     gs = fig.add_gridspec(4, 2, width_ratios=[1.5, 1])
     ax = fig.add_subplot(gs[:, 0])
-    for x, y, name in cones:
-        ax.scatter(x, y, s=14, color=CONE_COLORS.get(name, "#9ca3af"), zorder=3)
+    truth = have_truth  # draw what really happened: the sim's true pose and cones, not SLAM's
+    if truth:
+        for name, c in truth_by_colour.items():
+            ax.scatter(c[:, 0], c[:, 1], s=14, color=CONE_COLORS.get(name, "#9ca3af"), zorder=3)
+    else:
+        for x, y, name in cones:
+            ax.scatter(x, y, s=14, color=CONE_COLORS.get(name, "#9ca3af"), zorder=3)
     for lap in laps:  # the driven path of each lap, in its planner's colour
         sl = slice(lap["first"], lap["last"] + 1)
         discovery = lap["planner"] == "discovery"  # dashed and on top, so it stays visible where the later laps overlap it
-        ax.plot(pose[sl, 1], pose[sl, 2], color=LAP_COLORS[lap["planner"]], lw=1.6 if discovery else 1.8, ls="--" if discovery else "-",
-                zorder=6 if discovery else 5)
+        px, py = pose[sl, 1], pose[sl, 2]
+        if truth:
+            m = (gt[:, 0] >= lap["start"]) & (gt[:, 0] <= lap["end"])
+            px, py = gt[m, 1], gt[m, 2]
+            if lap is laps[-1]:  # the car's width, on the last lap only: every lap shaded on top of each other is unreadable
+                tx, ty = np.gradient(px), np.gradient(py)
+                norm = np.maximum(np.hypot(tx, ty), 1e-9)
+                nx, ny = -ty / norm * args.car_half_width, tx / norm * args.car_half_width
+                ax.fill(np.r_[px + nx, (px - nx)[::-1]], np.r_[py + ny, (py - ny)[::-1]], color=LAP_COLORS[lap["planner"]], alpha=0.25, lw=0, zorder=2)
+        ax.plot(px, py, color=LAP_COLORS[lap["planner"]], lw=1.6 if discovery else 1.8, ls="--" if discovery else "-", zorder=6 if discovery else 5)
     ax.set_aspect("equal"); ax.grid(alpha=0.2)
-    ax.set_title(f"{Path(args.mcap).name}: driven path by lap (SLAM map frame)")
+    ax.set_title(f"{Path(args.mcap).name}: driven path by lap, last lap shaded the car\'s width (sim true pose and cones)" if truth else f"{Path(args.mcap).name}: driven path by lap (SLAM pose and map: not reliable)", color="black" if truth else "#dc2626")
     ax.set_xlabel("x (m)"); ax.set_ylabel("y (m)")
     ax.legend(handles=[plt.Line2D([], [], color=LAP_COLORS[l["planner"]], lw=2, ls="--" if l["planner"] == "discovery" else "-", label=f"Lap {l['n']} ({l['planner']})") for l in laps] + [
                        plt.Line2D([], [], marker="o", ls="", color=CONE_COLORS["BLUE"], label="blue cone"),
@@ -433,7 +463,7 @@ def main():
         a2.plot(lap["u_pose"], lap["clear"], color=c, lw=1.0, alpha=0.8)
     a1.set_ylabel("Curvature (1/m)"); a1.set_title("Curvature of the driven path along the lap")
     a2.axhline(CONTACT_M, color="#dc2626", ls="--", lw=1); a2.text(0.01, CONTACT_M, " cone contact", color="#dc2626", va="bottom", fontsize=8)
-    a2.set_ylabel("nearest cone (m)"); a2.set_title("clearance to the nearest cone"); a2.set_ylim(bottom=0)
+    a2.set_ylabel("nearest cone (m)"); a2.set_title(f"clearance to the nearest cone ({clearance_source})", fontsize=10, color="black" if "true" in clearance_source else "#dc2626"); a2.set_ylim(bottom=0)
     a1r.set_ylabel("Curvature rate (1/m²)"); a1r.set_title("Rate of change of path curvature along the lap")
     a2.set_xlabel("fraction of the lap")
     for a in (a1, a1r, a2):
