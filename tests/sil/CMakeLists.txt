@@ -8,6 +8,7 @@ add_executable(drivebrain_test
     main.cpp
     MCAPLoggerTest.cpp
     UARTCodecTest.cpp
+    UARTLifecycleTest.cpp
 )
 
 target_link_libraries(drivebrain_test PUBLIC

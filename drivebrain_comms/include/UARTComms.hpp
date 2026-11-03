@@ -2,12 +2,18 @@
 
 #include <google/protobuf/message.h>
 
+#include <boost/asio/executor_work_guard.hpp>
+#include <boost/asio/io_context.hpp>
+#include <boost/asio/serial_port.hpp>
+
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace comms {
@@ -34,8 +40,15 @@ public:
     UARTComms(UARTComms&&) = delete;
     UARTComms& operator=(UARTComms&&) = delete;
 
+    // Call from the owning application thread, outside receive callbacks.
+    // Repeated calls are safe. start() throws if opening or configuring fails.
+    void start();
+    void stop(); // Cancels I/O and joins the worker before returning.
+    bool is_running() const noexcept;
+
 private:
     friend struct UARTCodecTestAccess;
+    friend struct UARTLifecycleTestAccess;
 
     // Throws invalid_argument for missing required fields, length_error for oversized
     // payloads, or runtime_error if protobuf serialization fails.
@@ -55,6 +68,13 @@ private:
     Config _config;
     std::unique_ptr<Message> _receive_prototype;
     ReceiveHandler _handler;
+
+    using WorkGuard = boost::asio::executor_work_guard<boost::asio::io_context::executor_type>;
+    boost::asio::io_context _io_context;
+    boost::asio::serial_port _serial;
+    std::optional<WorkGuard> _work_guard; // Keeps run() alive between operations.
+    std::thread _worker;
+    std::atomic<bool> _running{false};
 };
 
 } // namespace comms

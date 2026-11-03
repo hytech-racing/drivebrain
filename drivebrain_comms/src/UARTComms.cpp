@@ -1,6 +1,7 @@
 #include "UARTComms.hpp"
 
 #include <boost/crc.hpp>
+#include <boost/asio/post.hpp>
 
 #include <limits>
 #include <stdexcept>
@@ -11,7 +12,8 @@ namespace comms {
 UARTComms::UARTComms(Config config, const Message& receive_prototype, ReceiveHandler handler)
     : _config(std::move(config)),
       _receive_prototype(receive_prototype.New()),
-      _handler(std::move(handler)) {
+      _handler(std::move(handler)),
+      _serial(_io_context) {
     if (!_handler) {
         throw std::invalid_argument("UARTComms requires a receive handler");
     }
@@ -29,7 +31,61 @@ UARTComms::UARTComms(Config config, const Message& receive_prototype, ReceiveHan
     }
 }
 
-UARTComms::~UARTComms() = default;
+UARTComms::~UARTComms() {
+    stop();
+}
+
+void UARTComms::start() {
+    if (_running.load()) {
+        return;
+    }
+    if (_config.device_name.empty() || _config.baud_rate == 0) {
+        throw std::invalid_argument("UART start requires a device name and nonzero baud rate");
+    }
+
+    _io_context.restart();
+    try {
+        _serial.open(_config.device_name);
+        using Serial = boost::asio::serial_port_base;
+        _serial.set_option(Serial::baud_rate(_config.baud_rate));
+        _serial.set_option(Serial::character_size(8));
+        _serial.set_option(Serial::parity(Serial::parity::none));
+        _serial.set_option(Serial::stop_bits(Serial::stop_bits::one));
+        _serial.set_option(Serial::flow_control(Serial::flow_control::none));
+
+        _work_guard.emplace(boost::asio::make_work_guard(_io_context));
+        _running.store(true);
+        _worker = std::thread([this]() { _io_context.run(); });
+    } catch (...) {
+        // No worker was launched if opening, configuring, or thread creation failed.
+        _running.store(false);
+        _work_guard.reset();
+        boost::system::error_code ignored;
+        _serial.close(ignored);
+        throw;
+    }
+}
+
+void UARTComms::stop() {
+    _running.store(false);
+    if (!_worker.joinable()) {
+        return;
+    }
+
+    // Close on the I/O thread so future read/write handlers cannot race shutdown.
+    boost::asio::post(_io_context, [this]() {
+        boost::system::error_code ignored;
+        _serial.cancel(ignored);
+        _serial.close(ignored);
+        _work_guard.reset();
+    });
+    // run() drains cancellation handlers before returning; do not call io_context::stop().
+    _worker.join();
+}
+
+bool UARTComms::is_running() const noexcept {
+    return _running.load();
+}
 
 std::vector<uint8_t> UARTComms::_encode_message(const Message& message) const {
     if (!message.IsInitialized()) {
