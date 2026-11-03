@@ -18,7 +18,9 @@ class InterpolatingTable {
             });
         }
 
-        double interpolate(double x) const {
+        // Returns a pair of [interpolatedValue, distanceToNearestPoint].
+        // We use the distanceToNearestPoint for scaling standard deviations for load cell measurements
+        std::pair<double, double> interpolate(double x) const {
             if (_table.empty()) {
                 throw std::runtime_error("Interpolation table is empty.");
             }
@@ -28,11 +30,11 @@ class InterpolatingTable {
             }
 
             if (x <= _table.front().first) {
-                return _table.front().second;
+                return {_table.front().second, _table.front().first - x};
             }
 
             if (x >= _table.back().first) {
-                return _table.back().second;
+                return {_table.back().second, x - _table.back().first};
             }
 
             auto it = std::lower_bound(_table.begin(), _table.end(), x, [](const table_entry& entry, double value) {
@@ -43,7 +45,9 @@ class InterpolatingTable {
             auto& [x1, y1] = *it;
 
             double slope = (y1 - y0) / (x1 - x0);
-            return y0 + slope * (x - x0);
+            double interpolation = y0 + slope * (x - x0);
+            double nearestDist = std::min(std::abs(x - x0), std::abs(x1 - x));
+            return {interpolation, nearestDist};
         }
 
     private: 

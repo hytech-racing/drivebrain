@@ -69,7 +69,8 @@
     },
     "FzEstimator": {
         "Q_gain": 0.1,
-        "R_gain": 0.1
+        "R_gain": 0.1,
+        "interpolation_scalar": 0.001
     },
     "odometry": {
         "oms_position_base_x_m": -1.108,

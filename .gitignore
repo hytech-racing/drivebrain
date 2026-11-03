@@ -22,4 +22,5 @@ CMakeUserPresets.json
 *.mcap
 
 tests/replay/mcap/*.mcap
+.DS_Store
 .agents/
