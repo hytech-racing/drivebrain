@@ -44,6 +44,7 @@ Metrics, per lap and then averaged per planner:
 import argparse
 import csv
 import math
+import os
 import struct
 import sys
 from pathlib import Path
@@ -57,6 +58,7 @@ from mcap_protobuf.decoder import DecoderFactory
 
 POSE, MIDLINE, RACING, PLANNED, LANDMARKS = "slam/vehicle_pose", "scene/midline_path", "scene/racing_line_path", "scene/planned_path", "slam_landmarks"
 LANDMARK_SCENE = "scene/slam_landmarks"
+SCENE = "SceneUpdate"
 LAP_RADIUS_M = 4.0      # back within this of the start = lap done
 LEAVE_RADIUS_M = 15.0   # must first have been this far from the start
 MIN_LAP_M = 30.0
@@ -111,7 +113,7 @@ def decode_pose(data):
 
 
 def read(path):
-    wanted = {POSE, MIDLINE, RACING, PLANNED, LANDMARKS, LANDMARK_SCENE}
+    wanted = {POSE, MIDLINE, RACING, PLANNED, LANDMARKS, LANDMARK_SCENE, SCENE}
     schemas, channels, raw = {}, {}, {t: [] for t in wanted}
     decoders = DecoderFactory()
     n = 0
@@ -156,6 +158,13 @@ def read(path):
                         lines[topic].append((t * 1e-9, np.array([[p.x, p.y] for p in ln.points])))
     msg_times = {topic: np.array([t * 1e-9 for t, _, _ in raw[topic]]) for topic in (MIDLINE, RACING, PLANNED)}
 
+    gt = []  # the sim's true car pose, (t, x, y, yaw), from the 'ground_truth_pose' cube
+    for t, msg in decode(SCENE, raw[SCENE]):
+        for ent in msg.entities:
+            if ent.id == "ground_truth_pose" and ent.cubes:
+                q = ent.cubes[0].pose
+                gt.append((t * 1e-9, q.position.x, q.position.y, 2.0 * math.atan2(q.orientation.z, q.orientation.w)))
+
     cones = []  # (x, y, colour name)
     if raw[LANDMARKS]:
         for _, msg in decode(LANDMARKS, raw[LANDMARKS]):
@@ -168,7 +177,7 @@ def read(path):
                     c = cyl.color
                     name = "BLUE" if c.b > c.r else ("YELLOW" if c.g > 0.6 else "ORANGE_SMALL")
                     cones.append((cyl.pose.position.x, cyl.pose.position.y, name))
-    return pose, lines, msg_times, cones
+    return pose, lines, msg_times, cones, np.array(gt)
 
 
 def find_laps(pose):
@@ -239,6 +248,21 @@ def count_events(mask):
     return int(np.sum(mask[1:] & ~mask[:-1]) + (1 if mask[0] else 0)) if len(mask) else 0
 
 
+def guess_track(gt, track_dir):
+    """The sim track whose cones lie closest to the car's true path, or None if there are none."""
+    import glob, yaml
+    best, best_d = None, np.inf
+    for f in sorted(glob.glob(os.path.join(os.path.expanduser(track_dir), "*.yaml"))):
+        track = yaml.safe_load(open(f))
+        c = np.array([q[:2] for k in ("cones_left", "cones_right") for q in (track.get(k) or [])], float)
+        if len(c) == 0:
+            continue
+        d = np.median(np.min(np.hypot(*(gt[::20, None, 1:3] - c[None]).transpose(2, 0, 1)), axis=1))
+        if d < best_d:
+            best, best_d = f, d
+    return best if best_d < 3.0 else None
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("mcap")
@@ -247,6 +271,8 @@ def main():
     ap.add_argument("--car-half-width", type=float, default=0.70, help="half the car's width, m (same as racing_line/car_half_width_m)")
     ap.add_argument("--car-front", type=float, default=1.4, help="pose reference point to the front of the body, m (assumed)")
     ap.add_argument("--car-rear", type=float, default=1.4, help="pose reference point to the rear of the body, m (assumed)")
+    ap.add_argument("--track-yaml", help="the sim's track file (xcel gazebo/models/track/tracks_yaml/FSG.yaml): cone clearance is then measured from the sim's true car pose to the true cones, not from SLAM's pose and map, which drift")
+    ap.add_argument("--track-dir", default="~/dev/xcel/gazebo/models/track/tracks_yaml", help="where the sim's track files are, searched when --track-yaml is not given")
     ap.add_argument("--cone-radius", type=float, default=0.114, help="cone radius, m")
     ap.add_argument("--a-lat", type=float, default=8.0, help="lateral acceleration limit, m/s^2 (placeholder, set from the real car)")
     ap.add_argument("--a-long", type=float, default=4.0, help="acceleration limit, m/s^2")
@@ -255,7 +281,7 @@ def main():
     args = ap.parse_args()
 
     print(f"reading {args.mcap} (a large file takes a minute or two) ...")
-    pose, lines, times, cones = read(args.mcap)
+    pose, lines, times, cones, gt = read(args.mcap)
     if len(pose) < 10:
         sys.exit(f"no '{POSE}' messages in this file, so there is no car path to analyse")
     print(f"{len(pose)} poses over {pose[-1, 0] - pose[0, 0]:.0f} s, {len(lines[MIDLINE])} midline / {len(lines[RACING])} racing-line messages")
@@ -264,6 +290,16 @@ def main():
     if not laps:
         sys.exit("no complete lap in this file (the car never came back to its start)")
     cone_xy = np.array([(x, y) for x, y, _ in cones]) if cones else np.zeros((0, 2))
+    true_cones = cone_xy
+    track_yaml = args.track_yaml or (guess_track(gt, args.track_dir) if len(gt) else None)
+    if track_yaml:
+        import yaml
+        track = yaml.safe_load(open(track_yaml))
+        true_cones = np.array([c[:2] for k in ("cones_left", "cones_right", "cones_orange", "cones_orange_big") for c in (track.get(k) or [])], float)
+        print(f"track: {track_yaml}")
+        print(f"clearance: ground truth ({len(gt)} poses, {len(true_cones)} cones)" if len(gt) else "no ground_truth_pose in this file: clearance uses SLAM")
+    else:
+        print("clearance: SLAM pose and map (no track file found, pass --track-yaml or --track-dir): early laps can show false cone hits")
 
     planned = lines[PLANNED] or lines[MIDLINE]
     planned_t = np.array([t for t, _ in planned])
@@ -297,13 +333,18 @@ def main():
         lap["est_time"], lap["speed"] = speed_limited_time(kappa, args.a_lat, args.a_long, args.a_brake, args.v_max)
 
         if len(cone_xy):
-            lap["clear"] = np.min(np.hypot(xy[:, None, 0] - cone_xy[None, :, 0], xy[:, None, 1] - cone_xy[None, :, 1]), axis=1)
+            cxy, cyaw, cone_c = xy, pose[sl, 3], cone_xy
+            if len(gt) and len(true_cones):  # the sim's true pose at the same instants, against the true cones
+                cxy = np.stack([np.interp(t, gt[:, 0], gt[:, 1]), np.interp(t, gt[:, 0], gt[:, 2])], 1)
+                cyaw = np.interp(t, gt[:, 0], np.unwrap(gt[:, 3]))
+                cone_c = true_cones
+            lap["clear"] = np.min(np.hypot(cxy[:, None, 0] - cone_c[None, :, 0], cxy[:, None, 1] - cone_c[None, :, 1]), axis=1)
             lap["clear_min"] = float(lap["clear"].min())
             lap["contacts"] = count_events(lap["clear"] < CONTACT_M)
             # rectangle footprint: cones into the car frame, distance to the rectangle, minus the cone radius
-            yaw = pose[sl, 3]
+            yaw = cyaw
             c, sn = np.cos(yaw)[:, None], np.sin(yaw)[:, None]
-            dx, dy = cone_xy[None, :, 0] - xy[:, None, 0], cone_xy[None, :, 1] - xy[:, None, 1]
+            dx, dy = cone_c[None, :, 0] - cxy[:, None, 0], cone_c[None, :, 1] - cxy[:, None, 1]
             fwd, left = c * dx + sn * dy, -sn * dx + c * dy
             du = np.maximum(np.maximum(-args.car_rear - fwd, fwd - args.car_front), 0.0)
             dv = np.maximum(np.abs(left) - args.car_half_width, 0.0)

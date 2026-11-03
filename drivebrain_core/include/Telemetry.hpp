@@ -147,8 +147,9 @@ inline void render_cones(std::shared_ptr<dv_msgs::Cones> cones, std::string id, 
  * @param pose the pose to render
  * @param id The identifier of the pose (used to distinguish e.g. "gt_pose" from "slam_pose")
  * @param frame_id The frame the pose is expressed in.
+ * @param rgb Box colour. Default red (the SLAM pose); the sim's ground truth is drawn blue so the two can be told apart.
  */
-inline void render_pose(std::shared_ptr<hytech_msgs::pose> pose, std::string id, std::string frame_id = "map") {
+inline void render_pose(std::shared_ptr<hytech_msgs::pose> pose, std::string id, std::string frame_id = "map", std::array<float, 3> rgb = {0.86f, 0.2f, 0.2f}) {
     auto scene = std::make_shared<foxglove::SceneUpdate>();
     auto* entity = scene->add_entities();
     entity->set_frame_id(frame_id);
@@ -168,9 +169,9 @@ inline void render_pose(std::shared_ptr<hytech_msgs::pose> pose, std::string id,
     box->mutable_size()->set_y(1.2);
     box->mutable_size()->set_z(0.4);
     auto* color = box->mutable_color();
-    color->set_r(0.86);
-    color->set_g(0.2);
-    color->set_b(0.2);
+    color->set_r(rgb[0]);
+    color->set_g(rgb[1]);
+    color->set_b(rgb[2]);
     color->set_a(0.3);
 
     log(scene);
