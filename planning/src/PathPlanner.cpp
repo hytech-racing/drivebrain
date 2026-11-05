@@ -13,6 +13,7 @@
 #include "hytech_msgs.pb.h"
 #include <delaunator.hpp>
 #include <FoxgloveServer.hpp>
+#include <spdlog/spdlog.h>
 
 // left side = blue
 // right side = yellow
@@ -21,7 +22,7 @@ constexpr float MAX_TRACK_WIDTH_SQ = 36.0f; // 6 meters^2
 constexpr float MIN_TRACK_WIDTH_SQ = 2.8f * 2.8f; // rules requires track width to be at least 3 meters
 constexpr float MIN_COS_TURN = -0.3f;      // only reject points that are clearly behind
 constexpr float MAX_JUMP_SQ  = 8.0f * 8.0f; 
-constexpr float COLOR_WEIGHT = 2.0f;
+constexpr float UNCOLORED_COST = 2.0f;
 
 // TODO: make max track width something that changes with event OR a tunable param in foxglove since accel and skidpad have different track widths
 
@@ -39,7 +40,8 @@ std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones) {
     const float heading_x = vehicle_state.vehicle_heading_map_frame_unit_vector.x;
     const float heading_y = vehicle_state.vehicle_heading_map_frame_unit_vector.y;
 
-    bool uncolored_edges;
+    std::vector<char> crossing_edges;
+
 
 
     coords.reserve(cones.cones_size()*2); // Allocate enough memory to store the x and y coordinates of each cone
@@ -80,10 +82,8 @@ std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones) {
         
         if (edge_length_sq > MAX_TRACK_WIDTH_SQ || edge_length_sq < MIN_TRACK_WIDTH_SQ) continue;
         
-        bool is_true_crossing_edge = (curr_edge_color == dv_msgs::Cones_ConeColor_BLUE && twin_edge_color == dv_msgs::Cones_ConeColor_YELLOW) ||
+        bool is_crossing_edge = (curr_edge_color == dv_msgs::Cones_ConeColor_BLUE && twin_edge_color == dv_msgs::Cones_ConeColor_YELLOW) ||
              (curr_edge_color == dv_msgs::Cones_ConeColor_YELLOW && twin_edge_color == dv_msgs::Cones_ConeColor_BLUE);
-
-        uncolored_edges = curr_edge_color == dv_msgs::Cones_ConeColor_UNKNOWN || twin_edge_color == dv_msgs::Cones_ConeColor_UNKNOWN;
 
         // // only looking for edges that cross the width of the track - this means that one end is a blue cone and the other end is a yellow cone
         // bool is_crossing_edge = (curr_edge_color == dv_msgs::Cones_ConeColor_BLUE && twin_edge_color == dv_msgs::Cones_ConeColor_YELLOW) ||
@@ -102,6 +102,7 @@ std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones) {
         float mx = (delaunay.coords[2* curr_edge] + delaunay.coords[2* twin_edge]) / (2.0);
         float my = (delaunay.coords[2*curr_edge + 1] + delaunay.coords[2* twin_edge + 1]) / (2.0);
         midpoints.push_back({mx, my, 0.0f});
+        crossing_edges.push_back(is_crossing_edge);
     
     }
 
@@ -147,10 +148,11 @@ std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones) {
         float dist = std::sqrt(d_square);
         float angle = (dx * hx + dy * hy) / dist;
         if (angle <= MIN_COS_TURN) continue; 
-        float cost = dist * (2.0f - angle) + COLOR_WEIGHT; // angle = 1 means straight ahead, then cost is only based on distance
-        if (uncolored_edges) {
-            cost *= 2; // prioritize colored over uncolored edges
+        float cost = dist * (2.0f - angle); // angle = 1 means straight ahead, then cost is only based on distance
+        if (!crossing_edges[j]) {
+            cost *= UNCOLORED_COST;
         }
+
         if (cost < best_cost) {
             best_cost = cost;
             best_next = j;
@@ -160,6 +162,7 @@ std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones) {
         if (best_next == midpoints.size()) break;
 
         std::swap(midpoints[count], midpoints[best_next]);
+        std::swap(crossing_edges[count], crossing_edges[best_next]);
 
         float dx = midpoints[count].x - current.x;
         float dy = midpoints[count].y - current.y;
