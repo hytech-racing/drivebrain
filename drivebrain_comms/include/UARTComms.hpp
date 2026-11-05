@@ -9,8 +9,6 @@
 #include <array>
 #include <atomic>
 #include <cstddef>
-#include <chrono>
-#include <condition_variable>
 #include <cstdint>
 #include <deque>
 #include <functional>
@@ -61,10 +59,6 @@ public:
     // not transmitted. The caller may modify or destroy the message after return.
     bool send(const Message& message);
 
-    // Owning thread only, outside callbacks. Waits for queued local writes;
-    // true does not acknowledge peer receipt or physical actuation.
-    bool wait_for_transmit_idle(std::chrono::milliseconds timeout);
-
 private:
     friend struct UARTCodecTestAccess;
     friend struct UARTLifecycleTestAccess;
@@ -112,7 +106,6 @@ private:
 
     // Includes posted frames, queued frames, and the active write.
     std::mutex _submission_mutex;
-    std::condition_variable _transmit_idle;
     bool _accepting_sends = false;
     std::size_t _outstanding_tx_bytes = 0;
 };
