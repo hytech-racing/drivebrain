@@ -1,0 +1,15 @@
+syntax = "proto3";
+package uart_bench;
+import "hytech_msgs.proto";
+
+// Bench-only envelope: identifies exchanges without changing the production command.
+message Command {
+  fixed64 run_id = 1;
+  uint64 sequence = 2;
+  hytech_msgs.MCUCommandData command = 3;
+  bytes pattern = 4;
+}
+message Reply {
+  // Reconstructed after decoding. This acknowledges decoding, NOT motor actuation.
+  Command decoded = 1;
+}

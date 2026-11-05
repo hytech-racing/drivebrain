@@ -23,7 +23,7 @@ UARTComms::UARTComms(Config config, const Message& receive_prototype, ReceiveHan
         throw std::invalid_argument("UART payload limit exceeds protobuf's array API limit");
     }
     if (_config.receive_topic.empty()) {
-        std::string name = _receive_prototype->GetDescriptor()->name();
+        std::string name(_receive_prototype->GetDescriptor()->name());
         for (char& character : name) {
             if (character >= 'A' && character <= 'Z') {
                 character = static_cast<char>(character - 'A' + 'a');
@@ -84,6 +84,7 @@ void UARTComms::stop() {
         std::lock_guard lock(_submission_mutex);
         _accepting_sends = false;
         _running.store(false);
+        _transmit_idle.notify_all();
     }
     if (!_worker.joinable()) {
         return;
@@ -142,9 +143,17 @@ bool UARTComms::send(const Message& message) {
     return true;
 }
 
+bool UARTComms::wait_for_transmit_idle(std::chrono::milliseconds timeout) {
+    std::unique_lock lock(_submission_mutex);
+    return _transmit_idle.wait_for(lock, timeout, [this] {
+        return !_running.load() || _outstanding_tx_bytes == 0;
+    }) && _running.load();
+}
+
 void UARTComms::_release_tx_bytes(std::size_t size) {
     std::lock_guard lock(_submission_mutex);
     _outstanding_tx_bytes -= size;
+    _transmit_idle.notify_all();
 }
 
 void UARTComms::_halt_io() {
@@ -152,6 +161,7 @@ void UARTComms::_halt_io() {
         std::lock_guard lock(_submission_mutex);
         _accepting_sends = false;
         _running.store(false);
+        _transmit_idle.notify_all();
     }
     boost::system::error_code ignored;
     _serial.cancel(ignored);
@@ -188,16 +198,21 @@ void UARTComms::_start_write() {
 void UARTComms::_handle_write(const boost::system::error_code& error, std::size_t size) {
     const std::size_t expected = _write_queue.front().size();
     _write_in_progress = false;
+    if (_running.load() && (error || size != expected)) {
+        // Publish failure before releasing bytes, so an idle waiter cannot
+        // mistake a failed final write for successful completion.
+        {
+            std::lock_guard lock(_submission_mutex);
+            _accepting_sends = false;
+            _running.store(false);
+        }
+        spdlog::error("UART {} write failed after {} of {} bytes: {}", _config.device_name,
+                      size, expected, error ? error.message() : "incomplete write");
+    }
     _release_tx_bytes(expected);
     _write_queue.pop_front();
 
     if (!_running.load()) {
-        _halt_io();
-        return;
-    }
-    if (error || size != expected) {
-        spdlog::error("UART {} write failed after {} of {} bytes: {}", _config.device_name,
-                      size, expected, error ? error.message() : "incomplete write");
         _halt_io();
         return;
     }
@@ -280,19 +295,19 @@ void UARTComms::_handle_receive(const boost::system::error_code& error, std::siz
 
 std::vector<uint8_t> UARTComms::_encode_message(const Message& message) const {
     if (!message.IsInitialized()) {
-        throw std::invalid_argument("Cannot encode UART message " + message.GetTypeName() +
+        throw std::invalid_argument("Cannot encode UART message " + std::string(message.GetTypeName()) +
                                     ": missing required fields: " + message.InitializationErrorString());
     }
     const std::size_t size = message.ByteSizeLong();
     if (size > _config.max_payload_bytes) {
-        throw std::length_error("Cannot encode UART message " + message.GetTypeName() +
+        throw std::length_error("Cannot encode UART message " + std::string(message.GetTypeName()) +
                                 ": payload is " + std::to_string(size) + " bytes; maximum is " +
                                 std::to_string(_config.max_payload_bytes));
     }
 
     std::vector<uint8_t> payload(size);
     if (!message.SerializeToArray(payload.data(), static_cast<int>(size))) {
-        throw std::runtime_error("Cannot encode UART message " + message.GetTypeName() +
+        throw std::runtime_error("Cannot encode UART message " + std::string(message.GetTypeName()) +
                                  ": protobuf serialization failed");
     }
     return _encode_uart_frame(payload, _config.max_payload_bytes);
