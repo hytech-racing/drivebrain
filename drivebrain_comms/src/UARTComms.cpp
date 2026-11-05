@@ -5,6 +5,8 @@
 #include <boost/asio/write.hpp>
 #include <spdlog/spdlog.h>
 
+#include "Telemetry.hpp"
+
 #include <limits>
 #include <stdexcept>
 #include <utility>
@@ -258,7 +260,7 @@ void UARTComms::_handle_receive(const boost::system::error_code& error, std::siz
 
         // Logging failures must not prevent application delivery.
         try {
-            if (_config.logger) _config.logger(message, _config.receive_topic);
+            core::log(message, _config.receive_topic);
         } catch (const std::exception& exception) {
             spdlog::error("UART RX logging failed: {}", exception.what());
         } catch (...) {

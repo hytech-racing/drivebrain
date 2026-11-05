@@ -26,15 +26,12 @@ public:
     using Message = google::protobuf::Message;
     using ReceiveHandler = std::function<void(std::shared_ptr<const Message>)>;
 
-    using LogHandler = std::function<void(std::shared_ptr<const Message>, const std::string&)>;
-
     struct Config {
         std::string device_name;
         unsigned int baud_rate = 115200;
         std::size_t max_payload_bytes = 4096;
         std::size_t max_outstanding_tx_bytes = 64 * 1024;
         std::string receive_topic; // Empty generates uart/<lowercase message name>/rx.
-        LogHandler logger; // Optional; empty disables telemetry logging. Runs on the I/O thread.
     };
 
     // Stores an empty prototype of the receive type; does not open the port or start I/O.
@@ -48,7 +45,7 @@ public:
 
     // Call from the owning application thread, outside receive callbacks.
     // Repeated calls are safe. After an I/O failure, call stop() before restarting.
-    // Initialize any services used by Config::logger before starting RX.
+    // Initialize MCAPLogger and FoxgloveServer before starting RX.
     // start() throws if opening or configuring fails.
     void start();
     void stop(); // Cancels I/O and joins the worker before returning.
