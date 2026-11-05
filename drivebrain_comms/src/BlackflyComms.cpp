@@ -1,5 +1,7 @@
 #include "BlackflyComms.hpp"
 #include <ImageCompression.hpp>
+#include <H264Encoder.hpp>
+#include <foxglove/CompressedVideo.pb.h>
 
 #include <foxglove/websocket/common.hpp>
 #include <memory>
@@ -88,6 +90,7 @@ bool BlackflyComms::start(const std::string& id, const std::string& name, const 
 
 void BlackflyComms::_aravis_receive_loop() {
     static int frame_count = 0;
+    std::unique_ptr<H264Encoder> video_encoder;
     while (_running) {
         ArvBuffer *buffer = nullptr; 
 
@@ -112,23 +115,23 @@ void BlackflyComms::_aravis_receive_loop() {
                 const auto secs = timestamp_ns / 1000000000ULL;
                 const auto nanos = timestamp_ns % 1000000000ULL;
 
-                // Log full compressed image to mcap
-                std::size_t compressed_size = 0;
-                std::unique_ptr<uint8_t[]> compressed_buffer = compressBayerImage(static_cast<const uint8_t*>(data), width, height, compressed_size);
-
-                auto mcap_image = std::make_shared<foxglove::RawImage>();
-                mcap_image->mutable_timestamp()->set_seconds(secs);
-                mcap_image->mutable_timestamp()->set_nanos(nanos);
-                mcap_image->set_frame_id(_name);
-                mcap_image->set_width(width);
-                mcap_image->set_height(height);
-                if (compressed_buffer) {
-                    mcap_image->set_data(compressed_buffer.get(), compressed_size);
-                    core::log_mcap_only(mcap_image, _name + "/raw");
-                } else {
-                    spdlog::error("[{}] Failed to compress camera frame", _name);
+                // Record full-resolution upright video; autonomy keeps its existing image path.
+                try {
+                    cv::Mat bayer(height, width, CV_8UC1, const_cast<void*>(data));
+                    cv::Mat video_bgr;
+                    cv::cvtColor(bayer, video_bgr, cv::COLOR_BayerRGGB2BGR);
+                    cv::rotate(video_bgr, video_bgr, cv::ROTATE_180);
+                    if (!video_encoder) video_encoder = std::make_unique<H264Encoder>(width, height);
+                    auto video = std::make_shared<foxglove::CompressedVideo>();
+                    video->mutable_timestamp()->set_seconds(secs);
+                    video->mutable_timestamp()->set_nanos(nanos);
+                    video->set_frame_id(_name);
+                    video->set_format("h264");
+                    video->set_data(video_encoder->encode(video_bgr));
+                    core::log_mcap_only(video, _name + "/h264");
+                } catch (const std::exception& e) {
+                    spdlog::error("[{}] Video compression failed: {}", _name, e.what());
                 }
-
 
                 // stream compressed image over foxglove stream
                 cv::Mat bgr;

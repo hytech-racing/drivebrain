@@ -12,6 +12,7 @@ find_package(aravis REQUIRED)
 find_package(foxglove-schemas-protobuf REQUIRED)
 find_package(OpenCV REQUIRED CONFIG)
 find_package(zstd REQUIRED CONFIG)
+find_package(libx264 REQUIRED CONFIG)
 
 
 set(DRIVEBRAIN_COMMS_SRCS
@@ -64,6 +65,7 @@ target_link_libraries(drivebrain_comms PUBLIC
     opencv_core
     opencv_imgproc
     opencv_imgcodecs
+    libx264::libx264
     zstd::libzstd_static
 )
 

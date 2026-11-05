@@ -27,6 +27,7 @@ class DrivebrainSoftware(ConanFile):
         self.requires("spdlog/1.13.0")
         self.requires("mcap/2.0.2")
         self.requires("zstd/1.5.5")
+        self.requires("libx264/cci.20250910", options={"bit_depth": 8, "with_opencl": False})
         self.requires("dbcppp/3.2.6")
         self.requires("gtsam/4.2.1")
         self.requires("cppzmq/4.11.0")
