@@ -121,7 +121,7 @@ void BlackflyComms::_aravis_receive_loop() {
                     cv::Mat video_bgr;
                     cv::cvtColor(bayer, video_bgr, cv::COLOR_BayerRGGB2BGR);
                     cv::rotate(video_bgr, video_bgr, cv::ROTATE_180);
-                    if (!video_encoder) video_encoder = std::make_unique<H264Encoder>(width, height);
+                    if (!video_encoder) video_encoder = std::make_unique<H264Encoder>(width, height, arv_camera_get_frame_rate(_camera, nullptr));
                     auto video = std::make_shared<foxglove::CompressedVideo>();
                     video->mutable_timestamp()->set_seconds(secs);
                     video->mutable_timestamp()->set_nanos(nanos);
@@ -130,6 +130,7 @@ void BlackflyComms::_aravis_receive_loop() {
                     video->set_data(video_encoder->encode(video_bgr));
                     core::log_mcap_only(video, _name + "/h264");
                 } catch (const std::exception& e) {
+                    video_encoder.reset();
                     spdlog::error("[{}] Video compression failed: {}", _name, e.what());
                 }
 

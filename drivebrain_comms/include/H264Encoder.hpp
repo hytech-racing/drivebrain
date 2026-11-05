@@ -1,59 +1,79 @@
 #pragma once
 
-#include <cstdint>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <opencv2/imgproc.hpp>
-extern "C" {
-#include <x264.h>
-}
+#include <gst/app/gstappsrc.h>
+#include <gst/app/gstappsink.h>
 
 namespace comms {
 
-// One Annex-B access unit per call, with no delayed frames. Each frame includes
-// its headers and is independently decodable, including after MCAP rotation.
+// One independently decodable Annex-B access unit per call, including headers.
 class H264Encoder {
 public:
-    H264Encoder(int width, int height) {
-        x264_param_t params;
-        x264_param_default_preset(&params, "ultrafast", "zerolatency");
-        params.i_width = width;
-        params.i_height = height;
-        params.i_csp = X264_CSP_I420;
-        params.i_keyint_max = 1;
-        params.b_repeat_headers = 1;
-        params.b_annexb = 1;
-        params.rc.i_rc_method = X264_RC_CRF;
-        params.rc.f_rf_constant = 23;
-        encoder.reset(x264_encoder_open(&params));
-        if (!encoder) throw std::runtime_error("Could not open H.264 encoder");
+    H264Encoder(int width, int height, double fps) {
+        static std::once_flag init;
+        std::call_once(init, [] { gst_init(nullptr, nullptr); });
+        int numerator, denominator;
+        gst_util_double_to_fraction(fps, &numerator, &denominator);
+        const std::string description =
+            "appsrc name=input is-live=true format=time do-timestamp=true "
+            "caps=\"video/x-raw,format=I420,width=" + std::to_string(width) +
+            ",height=" + std::to_string(height) + ",framerate=" +
+            std::to_string(numerator) + "/" + std::to_string(denominator) +
+            "\" ! nvvidconv ! video/x-raw(memory:NVMM),format=NV12 "
+            "! nvv4l2h264enc bitrate=8000000 iframeinterval=1 idrinterval=1 "
+            "insert-sps-pps=true num-B-Frames=0 "
+            "! video/x-h264,stream-format=byte-stream,alignment=au "
+            "! appsink name=output sync=false async=false max-buffers=1";
+        GError* error = nullptr;
+        pipeline.reset(gst_parse_launch(description.c_str(), &error));
+        if (error) {
+            const std::string message = error->message;
+            g_error_free(error);
+            throw std::runtime_error(message);
+        }
+        if (!pipeline) throw std::runtime_error("Could not create H.264 pipeline");
+        source.reset(gst_bin_get_by_name(GST_BIN(pipeline.get()), "input"));
+        sink.reset(gst_bin_get_by_name(GST_BIN(pipeline.get()), "output"));
+        if (!source || !sink || gst_element_set_state(pipeline.get(), GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE) {
+            gst_element_set_state(pipeline.get(), GST_STATE_NULL);
+            throw std::runtime_error("Could not start H.264 pipeline");
+        }
+    }
+
+    ~H264Encoder() {
+        if (pipeline) gst_element_set_state(pipeline.get(), GST_STATE_NULL);
     }
 
     std::string encode(const cv::Mat& bgr) {
         cv::Mat yuv;
         cv::cvtColor(bgr, yuv, cv::COLOR_BGR2YUV_I420);
-        x264_picture_t input, output;
-        x264_picture_init(&input);
-        input.img.i_csp = X264_CSP_I420;
-        input.img.i_plane = 3;
-        const auto pixels = bgr.total();
-        input.img.plane[0] = yuv.data;
-        input.img.plane[1] = yuv.data + pixels;
-        input.img.plane[2] = yuv.data + pixels + pixels / 4;
-        input.img.i_stride[0] = bgr.cols;
-        input.img.i_stride[1] = input.img.i_stride[2] = bgr.cols / 2;
-        input.i_pts = sequence++;
-        x264_nal_t* nals;
-        int count;
-        const int size = x264_encoder_encode(encoder.get(), &nals, &count, &input, &output);
-        if (size <= 0) throw std::runtime_error("Could not encode H.264 frame");
-        return std::string(reinterpret_cast<char*>(nals[0].p_payload), size);
+        auto* buffer = gst_buffer_new_allocate(nullptr, yuv.total(), nullptr);
+        if (!buffer) throw std::runtime_error("Could not allocate video buffer");
+        gst_buffer_fill(buffer, 0, yuv.data, yuv.total());
+        // appsrc takes ownership of buffer, including on failure.
+        if (gst_app_src_push_buffer(GST_APP_SRC(source.get()), buffer) != GST_FLOW_OK)
+            throw std::runtime_error("Could not submit H.264 frame");
+        std::unique_ptr<GstSample, decltype(&gst_sample_unref)> sample(
+            gst_app_sink_try_pull_sample(GST_APP_SINK(sink.get()), GST_SECOND), gst_sample_unref);
+        if (!sample) throw std::runtime_error("H.264 encoder timed out or stopped");
+        auto* encoded = gst_sample_get_buffer(sample.get());
+        GstMapInfo map;
+        if (!gst_buffer_map(encoded, &map, GST_MAP_READ))
+            throw std::runtime_error("Could not read H.264 frame");
+        std::string result(reinterpret_cast<char*>(map.data), map.size);
+        gst_buffer_unmap(encoded, &map);
+        return result;
     }
 
 private:
-    std::unique_ptr<x264_t, decltype(&x264_encoder_close)> encoder{nullptr, x264_encoder_close};
-    int64_t sequence = 0;
+    using Element = std::unique_ptr<GstElement, decltype(&gst_object_unref)>;
+    Element pipeline{nullptr, gst_object_unref};
+    Element source{nullptr, gst_object_unref};
+    Element sink{nullptr, gst_object_unref};
 };
 
 } // namespace comms
