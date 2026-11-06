@@ -72,7 +72,7 @@ cmake .. \
   $jetson \
   --log-level=NOTICE
 
-make -j2
+make -j
 
 # run unit tests
 if [ "$shouldTest" = 1 ]; then
