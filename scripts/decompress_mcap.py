@@ -90,8 +90,8 @@ def calibration_lut(metadata_json: str):
     return core.XYZLutFloat(info, use_extrinsics=True)
 
 
-def pointcloud_schema() -> bytes:
-    """Build the MCAP protobuf descriptor set from Foxglove's PointCloud class."""
+def pointcloud_schema(message_class=PointCloud) -> bytes:
+    """Build an MCAP protobuf descriptor set for a Foxglove message class."""
     files = {}
 
     def add_file(file):
@@ -103,11 +103,11 @@ def pointcloud_schema() -> bytes:
         file.CopyToProto(proto)
         files[file.name] = proto
 
-    add_file(PointCloud.DESCRIPTOR.file)
+    add_file(message_class.DESCRIPTOR.file)
     return descriptor_pb2.FileDescriptorSet(file=list(files.values())).SerializeToString()
 
 
-def convert(input_path: Path, output_path: Path) -> dict[str, int]:
+def convert(input_path: Path, output_path: Path, *, decode_video=False) -> dict[str, int]:
     counts = {"cameras": 0, "ranges": 0, "copied": 0}
     created_output = False
     try:
@@ -155,6 +155,7 @@ def convert(input_path: Path, output_path: Path) -> dict[str, int]:
                         )
                     return channel_ids[channel.id]
 
+                video_channels = {}
                 point_channel_id = None
                 for schema, channel, message in reader.iter_messages(log_time_order=False):
                     topic = channel.topic
@@ -167,6 +168,43 @@ def convert(input_path: Path, output_path: Path) -> dict[str, int]:
                             if calibration.encoding != "ouster_sensor_metadata_json":
                                 raise ValueError("unexpected Ouster calibration encoding")
                             lut = calibration_lut(calibration.data.decode("utf-8"))
+
+                        elif decode_video and topic.startswith("blackfly_") and topic.endswith("/h264"):
+                            import av
+                            from foxglove_schemas_protobuf.RawImage_pb2 import RawImage
+
+                            video = decode_proto(decoder_factory, schema, channel, payload)
+                            if video.format != "h264":
+                                raise ValueError(f"unexpected video format {video.format!r}")
+                            codec = av.CodecContext.create("h264", "r")
+                            frames = codec.decode(av.Packet(video.data)) + codec.decode(None)
+                            if len(frames) != 1:
+                                raise ValueError(f"expected one video frame, got {len(frames)}")
+                            bgr = frames[0].to_ndarray(format="bgr24")
+                            image = RawImage()
+                            image.timestamp.seconds = video.timestamp.seconds
+                            image.timestamp.nanos = video.timestamp.nanos
+                            image.frame_id = video.frame_id
+                            image.height, image.width = bgr.shape[:2]
+                            image.encoding = "bgr8"
+                            image.step = image.width * 3
+                            image.data = bgr.tobytes()
+                            if channel.id not in video_channels:
+                                raw_schema = writer.register_schema(
+                                    name="foxglove.RawImage", encoding="protobuf",
+                                    data=pointcloud_schema(RawImage),
+                                )
+                                video_channels[channel.id] = writer.register_channel(
+                                    topic=topic.removesuffix("/h264") + "/raw",
+                                    message_encoding="protobuf", schema_id=raw_schema,
+                                )
+                            writer.add_message(
+                                channel_id=video_channels[channel.id],
+                                log_time=message.log_time, publish_time=message.publish_time,
+                                sequence=message.sequence, data=image.SerializeToString(),
+                            )
+                            counts["cameras"] += 1
+                            emit_original = False
 
                         elif topic.startswith("blackfly_") and topic.endswith("/raw"):
                             image = decode_proto(decoder_factory, schema, channel, payload)
@@ -263,9 +301,9 @@ def convert(input_path: Path, output_path: Path) -> dict[str, int]:
         raise
 
 
-def main():
+def main(*, decode_video=False):
     if len(sys.argv) != 2:
-        print("Usage: decompress_mcap.py INPUT.mcap")
+        print(f"Usage: {Path(sys.argv[0]).name} INPUT.mcap")
         return
     try:
         # parse input args
@@ -300,7 +338,7 @@ def main():
             subprocess.run([mcap_cli, "doctor", str(recovered_path)], check=True)
             source_path = recovered_path
 
-        counts = convert(source_path, output_path)
+        counts = convert(source_path, output_path, decode_video=decode_video)
 
         # check that newly produced mcap is valid
         subprocess.run([mcap_cli, "doctor", str(output_path)], check=True)
@@ -309,7 +347,7 @@ def main():
         return
 
     print(
-        f"Wrote {output_path}: {counts['cameras']} Bayer frames, "
+        f"Wrote {output_path}: {counts['cameras']} camera frames, "
         f"{counts['ranges']} point clouds, {counts['copied']} other messages"
     )
 
