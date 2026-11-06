@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run drivebrain, and when it exits (Ctrl+C, or by itself once racing_line/end_run_when_done has finished the laps),
+# Run drivebrain, and when it exits (Ctrl+C),
 # run compare_paths.py on the recording it just wrote and open the plot.
 #
 #   scripts/run_and_analyze.sh            # from anywhere; uses python3, or set PYTHON=/path/to/python

@@ -63,12 +63,6 @@ std::optional<std::vector<core::xyz_vec<float>>> RacingLinePlanner::plan(const d
     }
   }
   const int discovery_laps = 1;
-  const int last_lap = discovery_laps + std::max(_config.midline_laps_after_closure, 0) + std::max(_config.racing_laps, 1);
-  if (_config.enabled && _laps_completed >= last_lap && !_finished) {
-    _finished = true;
-    spdlog::info("Racing line: all {} laps complete (1 discovery, {} midline, {} racing line)", last_lap, _config.midline_laps_after_closure,
-                 _config.racing_laps);
-  }
 
   if (!_line || !_config.enabled) return std::nullopt;
 

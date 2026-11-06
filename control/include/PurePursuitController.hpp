@@ -29,9 +29,6 @@ public:
     /* Corner-dependent target speed (see SpeedProfile.hpp); nullopt keeps the constant speed */
     void set_speed_profile(std::optional<SpeedProfileParams> params) { _speed_profile = params; }
 
-    /* Once the run is over the car is told to stop (zero speed); the steering still follows the path */
-    void set_finished(bool finished) { _finished = finished; }
-
     /* Until the track is closed (the discovery lap) the speed profile can only slow the car below the constant speed; after that it sets the speed */
     void set_track_closed(bool closed) { _track_closed = closed; }
 
@@ -50,7 +47,6 @@ private:
     std::optional<SpeedProfileParams> _speed_profile;
     float _commanded_speed = 0.0f;                          // what the speed profile has ramped up to; only touched by step()
     std::chrono::steady_clock::time_point _last_step_time{};
-    std::atomic<bool> _finished{false};
     std::atomic<bool> _track_closed{false};  // set by the autonomy thread, read by the controller thread
     float _torque_lim = 5.0f;
 
