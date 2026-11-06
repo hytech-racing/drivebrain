@@ -33,7 +33,6 @@ ControllerOutput control::PurePursuitController::step(const VehicleState& in) {
             speed = _commanded_speed;
         }
         _last_step_time = now;
-        if (_finished) speed = 0.0f;
         const float rpm = speed * constants::METERS_PER_SECOND_TO_RPM;
         speed_out.desired_rpms = {rpm, rpm, rpm, rpm};
         out.desired_steering_deg = steering->angle_rad * 180.0f / M_PI;

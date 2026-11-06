@@ -26,12 +26,9 @@ public:
     std::size_t window_points = 30;  // points handed to the controller, one per gate_spacing_m
     double replan_period_s = 1.0;    // the line is rebuilt from the map at most this often
     // Lap 1 is the discovery lap (midline planner, the map is still being built). Then the midline planner is kept for
-    // this many laps on the closed map, then the racing line is followed for racing_laps laps. 1 and 1 give one lap of
-    // each on the same map to compare; 0 midline laps switches to the racing line as soon as the lap is over.
+    // this many laps on the closed map, then the racing line is followed until the run is stopped. 0 midline laps
+    // switches to the racing line as soon as the discovery lap is over.
     int midline_laps_after_closure = 1;
-    int racing_laps = 1;
-    // When all of those laps are done, finished() turns true so the caller can stop the car and end the run
-    bool end_run_when_done = false;
   };
 
   RacingLinePlanner();
@@ -48,9 +45,6 @@ public:
   /// True from the moment the map first forms a closed track (the discovery lap is over), whether or not the racing line is enabled
   bool track_closed() const { return _ever_closed; }
 
-  /// True once the discovery lap, the midline laps and the racing-line laps are all complete (and end_run_when_done is set)
-  bool finished() const { return _config.enabled && _config.end_run_when_done && _finished; }
-
 private:
   Config _config;
   std::optional<std::vector<racing_line::Vec2>> _line;  // closed, in driving direction
@@ -61,7 +55,6 @@ private:
   bool _left_start = false;
   int _laps_completed = 0;
   bool _racing_started = false;
-  bool _finished = false;
   bool _ever_closed = false;
   std::optional<bool> _last_reported_ok;
   std::uint64_t _last_report_ns = 0;  // while unavailable, the reason is repeated every few seconds so it is not lost in a busy log
