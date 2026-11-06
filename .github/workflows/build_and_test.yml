@@ -35,11 +35,14 @@ jobs:
           ARTIFACTORY_TOKEN: ${{ secrets.ARTIFACTORY_TOKEN }}
           ARTIFACTORY_URL: ${{ secrets.ARTIFACTORY_URL }}
           ARTIFACTORY_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
+          # conan's `remote login` password; build_script.sh falls back to ARTIFACTORY_TOKEN
+          ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
         run: |
           docker compose run --rm \
             -e ARTIFACTORY_TOKEN \
             -e ARTIFACTORY_URL \
             -e ARTIFACTORY_USERNAME \
+            -e ARTIFACTORY_PASSWORD \
             dev ./scripts/build_script.sh
 
       - name: Extract binary from build
