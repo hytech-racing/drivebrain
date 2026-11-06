@@ -35,13 +35,13 @@ FetchContent_MakeAvailable(delaunator)
 #################################
 # Custom libs
 #################################
-add_subdirectory(drivebrain_core)
-add_subdirectory(drivebrain_comms)
-add_subdirectory(drivebrain_control)
-add_subdirectory(drivebrain_estimation)
-add_subdirectory(drivebrain_planning)
-add_subdirectory(drivebrain_perception)
-add_subdirectory(drivebrain_slam)
+add_subdirectory(core)
+add_subdirectory(comms)
+add_subdirectory(control)
+add_subdirectory(estimation)
+add_subdirectory(planning)
+add_subdirectory(perception)
+add_subdirectory(slam)
 
 #################################
 # Find packages
@@ -120,15 +120,15 @@ configure_file(
 # Linking to main app
 #################################
 add_executable(drivebrain
-    drivebrain_app/src/main.cpp
-    drivebrain_app/src/drivebrain_app.cpp
-    drivebrain_app/src/autonomy.cpp
+    app/src/main.cpp
+    app/src/drivebrain_app.cpp
+    app/src/autonomy.cpp
 )
 #add_executable(drivebrain
 #    tests/hil/scripts/test_ouster.cpp
 #)
 
-target_include_directories(drivebrain PUBLIC drivebrain_app/include)
+target_include_directories(drivebrain PUBLIC app/include)
 
 # add_executable(drivebrain
 #     tests/hil/scripts/test_backfly.cpp
