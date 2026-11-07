@@ -1,10 +1,27 @@
 #include "PurePursuitController.hpp"
 
+#include <FoxgloveServer.hpp>
 #include <Literals.hpp>
 
+#include <algorithm>
 #include <cmath>
 
 bool control::PurePursuitController::init() {
+    auto& foxglove = FoxgloveServer::instance();
+    auto lookahead = foxglove.get_param<float>("purepursuitcontroller/lookahead_dist_m");
+    auto min_speed = foxglove.get_param<float>("purepursuitcontroller/min_speed_mps");
+    auto max_speed = foxglove.get_param<float>("purepursuitcontroller/max_speed_mps");
+    auto max_lat_accel = foxglove.get_param<float>("purepursuitcontroller/max_lat_accel_mps2");
+    auto torque_lim = foxglove.get_param<float>("purepursuitcontroller/torque_lim_nm");
+    if (!lookahead || !min_speed || !max_speed || !max_lat_accel || !torque_lim) {
+        spdlog::error("Couldn't load all params for pure pursuit controller.");
+        return false;
+    }
+    _lookahead_dist = *lookahead;
+    _min_speed = *min_speed;
+    _max_speed = *max_speed;
+    _max_lat_accel = *max_lat_accel;
+    _torque_lim = *torque_lim;
     return true;
 }
 
@@ -18,7 +35,8 @@ ControllerOutput control::PurePursuitController::step(const VehicleState& in) {
     ControllerOutput out = {};
     auto steering = path ? _steering(in, *path) : std::nullopt;
     if (steering) {
-        const float rpm = _target_speed * constants::METERS_PER_SECOND_TO_RPM;
+        const float speed = std::clamp(std::sqrt(_max_lat_accel / std::max(std::fabs(steering->curvature), 1e-3f)), _min_speed, _max_speed);
+        const float rpm = speed * constants::METERS_PER_SECOND_TO_RPM;
         speed_out.desired_rpms = {rpm, rpm, rpm, rpm};
         out.desired_steering_deg = steering->angle_rad * 180.0f / M_PI;
         spdlog::info("steer deg: {}", out.desired_steering_deg.value());
@@ -64,5 +82,6 @@ std::optional<control::PurePursuitController::Steering> control::PurePursuitCont
         return std::nullopt;
     }
     const float lateral = heading.x * dy - heading.y * dx;
-    return Steering{std::atan(2.0f * lateral / dist_sq * WHEELBASE_M), target};
+    const float curvature = 2.0f * lateral / dist_sq;
+    return Steering{std::atan(curvature * WHEELBASE_M), curvature, target};
 }
