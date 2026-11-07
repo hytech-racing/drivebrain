@@ -190,8 +190,7 @@ void comms::OusterComms::_loop() {
             spdlog::error("Failed to compress Ouster range frame");
         }
 
-        // full resolution to the mcap and the autonomy stack
-        core::MCAPLogger::instance().log_msg(pc);
+        // full resolution to the autonomy stack; MCAP stores ouster/range above
         core::StateTracker::instance().handle_receive_protobuf_message(pc);
 
         // stream just every Nth point

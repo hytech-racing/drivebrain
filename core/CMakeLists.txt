@@ -19,7 +19,10 @@ add_library(drivebrain_core
     src/DrivebrainControllerInterface.cpp
 )
 
-target_include_directories(drivebrain_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_include_directories(drivebrain_core PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${CMAKE_BINARY_DIR}/generated/include"
+)
 
 target_link_libraries(drivebrain_core PUBLIC
     drivebrain_estimation

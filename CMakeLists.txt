@@ -35,13 +35,13 @@ FetchContent_MakeAvailable(delaunator)
 #################################
 # Custom libs
 #################################
-add_subdirectory(drivebrain_core)
-add_subdirectory(drivebrain_comms)
-add_subdirectory(drivebrain_control)
-add_subdirectory(drivebrain_estimation)
-add_subdirectory(drivebrain_planning)
-add_subdirectory(drivebrain_perception)
-add_subdirectory(drivebrain_slam)
+add_subdirectory(core)
+add_subdirectory(comms)
+add_subdirectory(control)
+add_subdirectory(estimation)
+add_subdirectory(planning)
+add_subdirectory(perception)
+add_subdirectory(slam)
 
 #################################
 # Find packages
@@ -75,21 +75,60 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(vn_driver_lib)
 
 find_package(OusterSDK REQUIRED)
+find_package(Git REQUIRED)
+
+# 2. Execute Git commands to harvest metadata
+execute_process(
+    COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
+    OUTPUT_VARIABLE GIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+execute_process(
+    COMMAND ${GIT_EXECUTABLE} rev-parse --abbrev-ref HEAD
+    OUTPUT_VARIABLE GIT_BRANCH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+execute_process(
+    COMMAND ${GIT_EXECUTABLE} log -1 --format=%ci
+    OUTPUT_VARIABLE GIT_DATE
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+execute_process(
+    COMMAND ${GIT_EXECUTABLE} status --porcelain
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_STATUS
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+if(GIT_STATUS)
+    set(GIT_HAS_UNCOMMITTED_CHANGES "true")
+else()
+    set(GIT_HAS_UNCOMMITTED_CHANGES "false")
+endif()
+
+# 3. Generate the actual header file from the template
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/generated/include)
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/version.h.in
+    ${CMAKE_CURRENT_BINARY_DIR}/generated/include/version.h
+)
 
 #################################
 # Linking to main app
 #################################
 add_executable(drivebrain
-    drivebrain_app/src/main.cpp
-    drivebrain_app/src/drivebrain_app.cpp
-    drivebrain_app/src/autonomy.cpp
+    app/src/main.cpp
+    app/src/drivebrain_app.cpp
+    app/src/autonomy.cpp
 )
-
 #add_executable(drivebrain
 #    tests/hil/scripts/test_ouster.cpp
 #)
 
-target_include_directories(drivebrain PUBLIC drivebrain_app/include)
+target_include_directories(drivebrain PUBLIC app/include)
 
 # add_executable(drivebrain
 #     tests/hil/scripts/test_backfly.cpp

@@ -1,0 +1,8 @@
+#pragma once
+
+namespace Version {
+    inline constexpr const char* GIT_HASH = "@GIT_HASH@";
+    inline constexpr const char* GIT_BRANCH = "@GIT_BRANCH@";
+    inline constexpr const char* GIT_DATE = "@GIT_DATE@";
+    inline constexpr bool HAS_UNCOMMITTED_CHANGES = @GIT_HAS_UNCOMMITTED_CHANGES@;
+}
