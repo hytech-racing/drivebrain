@@ -59,6 +59,7 @@ class DrivebrainSoftware(ConanFile):
 
     def configure(self):
         self.options["aravis"].usb = False
+        self.options["glib"].shared = True
         self.options["hwloc"].shared = True
         self.options["gtsam"].with_TBB = False
         self.options["gtsam"].support_nested_dissection = False  # drops metis/gklib (breaks ARM cross-compile)

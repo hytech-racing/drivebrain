@@ -4,7 +4,7 @@ set -e
 linkflags="-static"
 for a in "$@"; do
   case "$a" in
-    --test|--local) shouldTest=1 ;;  # --local kept as an alias for the sim workflow
+    --test|--local) shouldTest=1; linkflags="" ;;  # --local kept as an alias for the sim workflow
     --clean) shouldClean=1 ;;
     --local-cache-only) localCacheOnly=1 ;;
     --jetson) jetson="-DJETSON=ON"; linkflags="" ;;
