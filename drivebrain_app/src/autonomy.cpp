@@ -73,16 +73,16 @@ void Autonomy::_run() {
 
     perception::UnclassifiedCones unclassifiedCones = perception::filter_cloud(*cloud);
 
-    #if HOOTL_ENABLED
+     // TODO: the comment is temporary! for testing only so that I don't need to rerun in the mcap
+    //#if HOOTL_ENABLED
     std::vector<core::LidarPoint> cone_points;
     for (const auto& cone : unclassifiedCones.cones) {
       cone_points.insert(cone_points.end(), cone.points.begin(), cone.points.end());
     }
     auto cone_cloud = core::to_cloud(cone_points, *cloud);
     core::log(cone_cloud, "perception/cone_cluster_points");
-    #endif
-    core::log(cone_cloud, "perception/cone_cluster_points"); // TODO: temporary! for testing only so that I don't need to rerun in the mcap
-
+    //#endif
+    
     //cones = _classifier.classify(cones, StateTracker::instance().dv_state().camera_detections, last_scan->frame_id());
     std::shared_ptr<dv_msgs::Cones> cones = _classifier.classifyWithReflectivity(unclassifiedCones, last_scan->frame_id());
     render_cones(cones, "filtered_cones", "os_sensor");
