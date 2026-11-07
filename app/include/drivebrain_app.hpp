@@ -21,6 +21,8 @@
 
 enum class DrivingMode { DRIVERED, DRIVERLESS, TELEOP };
 
+constexpr double WHEEL_TO_COLUMN_RATIO = 4.11861614498;
+
 class DrivebrainApp {
 public:
   /**

@@ -65,7 +65,7 @@ The first time you run it, it will take some time because it needs to compile al
 
 ### Local Testing
 
-If you want to run Drivebrain locally with the (simulator)[https://github.com/warrenyun/xcel], you can pass in the `--local` flag when calling the build script.
+If you want to run Drivebrain locally with the simulator, you can pass in the `--local` flag when calling the build script.
 ```bash
 ./scripts/build_script.sh --local
 ```
