@@ -39,6 +39,13 @@
         "invert_steering_axis": false,
         "axis_deadzone": 0.05
     },
+    "PurePursuitController": {
+        "lookahead_dist_m": 2.5,
+        "min_speed_mps": 1.5,
+        "max_speed_mps": 5.0,
+        "max_lat_accel_mps2": 3.0,
+        "torque_lim_nm": 5.0
+    },
     "vn_driver": {
         "device_name": "/dev/ttyUSB0",
         "baud_rate": 921600, 
