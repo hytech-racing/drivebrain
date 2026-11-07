@@ -9,8 +9,8 @@ services:
       - ./:/app
       - /tmp:/tmp
       # - ../HT_proto:/HT_proto
-    environment:
-      - SIM_HOST=host.docker.internal
+    ports:
+      - "5555:5555"
     working_dir: /app
     tty: true
     stdin_open: true
