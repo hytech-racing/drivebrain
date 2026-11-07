@@ -18,7 +18,6 @@
 #include <chrono>
 #include <spdlog/spdlog.h>
 
-#include "hytech.pb.h"
 #include "hytech_msgs.pb.h"
 #include "ht_can.pb.h"
 #include "dv_msgs.pb.h"
