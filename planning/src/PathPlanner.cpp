@@ -22,7 +22,7 @@ constexpr float MAX_TRACK_WIDTH_SQ = 36.0f; // 6 meters^2
 constexpr float MIN_TRACK_WIDTH_SQ = 2.8f * 2.8f; // rules requires track width to be at least 3 meters
 constexpr float MIN_COS_TURN = -0.3f;      // only reject points that are clearly behind
 constexpr float MAX_JUMP_SQ  = 8.0f * 8.0f; 
-constexpr float UNCOLORED_COST = 2.0f;
+constexpr float PATH_POINTS_AHEAD = 50.0f;
 
 // TODO: make max track width something that changes with event OR a tunable param in foxglove since accel and skidpad have different track widths
 
@@ -41,7 +41,6 @@ std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones) {
     const float heading_y = vehicle_state.vehicle_heading_map_frame_unit_vector.y;
 
     std::vector<char> crossing_edges;
-
 
 
     coords.reserve(cones.cones_size()*2); // Allocate enough memory to store the x and y coordinates of each cone
@@ -66,9 +65,7 @@ std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones) {
     for (std::size_t i = 0; i < delaunay.triangles.size(); i++) {
 
         // If the edge is a boundary (-1) or a twin edge already iterated over, skip it
-        if (delaunay.halfedges[i] == invalid_index || delaunay.halfedges[i] < i) {
-        continue; 
-        }
+        if (delaunay.halfedges[i] == invalid_index || delaunay.halfedges[i] < i) continue; 
 
         std::size_t curr_edge = delaunay.triangles[i];
         std::size_t twin_edge = delaunay.triangles[delaunay.halfedges[i]];
@@ -84,21 +81,10 @@ std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones) {
         
         bool is_crossing_edge = (curr_edge_color == dv_msgs::Cones_ConeColor_BLUE && twin_edge_color == dv_msgs::Cones_ConeColor_YELLOW) ||
              (curr_edge_color == dv_msgs::Cones_ConeColor_YELLOW && twin_edge_color == dv_msgs::Cones_ConeColor_BLUE);
-
-        // // only looking for edges that cross the width of the track - this means that one end is a blue cone and the other end is a yellow cone
-        // bool is_crossing_edge = (curr_edge_color == dv_msgs::Cones_ConeColor_BLUE && twin_edge_color == dv_msgs::Cones_ConeColor_YELLOW) ||
-        //     (curr_edge_color == dv_msgs::Cones_ConeColor_YELLOW && twin_edge_color == dv_msgs::Cones_ConeColor_BLUE);
-
-        // bool color_unknown = curr_edge_color == dv_msgs::Cones_ConeColor_UNKNOWN; // WIP
-
-        // if (is_crossing_edge) {
-        // float dx = delaunay.coords[2 * curr_edge] - delaunay.coords[2 * twin_edge];
-        // float dy = delaunay.coords[2 * curr_edge + 1] - delaunay.coords[2 * twin_edge +1];
-        // float edge_length_sq = (dx * dx) + (dy * dy);
-
-        // // filtering crossing edges based on length - they should only be the width of the track
-        // if (edge_length_sq > MAX_TRACK_WIDTH_SQ || edge_length_sq < MIN_TRACK_WIDTH_SQ) continue;
         
+        // skip over same colored edges or unknown colored edges 
+        if (!is_crossing_edge && curr_edge_color != dv_msgs::Cones_ConeColor_UNKNOWN && twin_edge_color != dv_msgs::Cones_ConeColor_UNKNOWN) continue;
+
         float mx = (delaunay.coords[2* curr_edge] + delaunay.coords[2* twin_edge]) / (2.0);
         float my = (delaunay.coords[2*curr_edge + 1] + delaunay.coords[2* twin_edge + 1]) / (2.0);
         midpoints.push_back({mx, my, 0.0f});
@@ -119,15 +105,15 @@ std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones) {
         
         // using the dot product to determine whether a point is in front of or behind the car
         if (dx * heading_x + dy * heading_y > 0.0f && d < closest_ahead) {
-        closest_ahead = d;
-        start = i;
+            closest_ahead = d;
+            start = i;
         }
     }
 
     if (start == midpoints.size()) return {}; // if no midpoints are close to the car, plan no path
 
     std::swap(midpoints[0], midpoints[start]); // make the index of the closest cone the start of the midpoints
-
+    std::swap(crossing_edges[0], crossing_edges[start]);
     // sort the rest of the midpoints based on proximity to the first one
     std::size_t count = 1;
     float hx = heading_x;
@@ -136,33 +122,42 @@ std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones) {
     while (count < midpoints.size()) {
         const auto current = midpoints[count - 1];
         std::size_t best_next = midpoints.size();
+        std::size_t best_uncolored = midpoints.size();
         float best_cost = std::numeric_limits<float>::max(); // using a cost variable to evaluate vector distance from the first midpoint
+        float best_uncolored_cost = std::numeric_limits<float>::max();
 
         for (std::size_t j = count; j < midpoints.size(); j++) {
-        float dx = midpoints[j].x - current.x;
-        float dy = midpoints[j].y - current.y;
-        float d_square = dx * dx + dy * dy;
+            float dx = midpoints[j].x - current.x;
+            float dy = midpoints[j].y - current.y;
+            float d_square = dx * dx + dy * dy;
 
-        if (d_square < 1e-6f || d_square > MAX_JUMP_SQ) continue;                       
+            if (d_square < 1e-6f || d_square > MAX_JUMP_SQ) continue;                       
 
-        float dist = std::sqrt(d_square);
-        float angle = (dx * hx + dy * hy) / dist;
-        if (angle <= MIN_COS_TURN) continue; 
-        float cost = dist * (2.0f - angle); // angle = 1 means straight ahead, then cost is only based on distance
-        if (!crossing_edges[j]) {
-            cost *= UNCOLORED_COST;
+            float dist = std::sqrt(d_square);
+            float angle = (dx * hx + dy * hy) / dist;
+            if (angle <= MIN_COS_TURN) continue; 
+            float cost = dist * (2.0f - angle); // angle = 1 means straight ahead, then cost is only based on distance
+            // check if there is a colored edge within the plan ahead range but if there isn't, then look at the uncolored cones
+            if (crossing_edges[j]) {
+                if (cost < best_cost) {
+                    best_cost = cost;
+                    best_next = j;
+                }
+            // catches edges that meet the distance criteria and where at least one cone has an unknown color
+            } else {
+                if (cost < best_uncolored_cost) {
+                    best_uncolored_cost = cost;
+                    best_uncolored = j;
+                }
+            }
         }
 
-        if (cost < best_cost) {
-            best_cost = cost;
-            best_next = j;
-        }
-        }
+        // use colored cones if they still exist and if they don't then use uncolored. if uncolored doesn't exist then stop
+        std::size_t chosen = (best_next != midpoints.size()) ? best_next : best_uncolored;
+        if (chosen == midpoints.size()) break;
 
-        if (best_next == midpoints.size()) break;
-
-        std::swap(midpoints[count], midpoints[best_next]);
-        std::swap(crossing_edges[count], crossing_edges[best_next]);
+        std::swap(midpoints[count], midpoints[chosen]);
+        std::swap(crossing_edges[count], crossing_edges[chosen]);
 
         float dx = midpoints[count].x - current.x;
         float dy = midpoints[count].y - current.y;
