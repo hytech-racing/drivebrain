@@ -6,8 +6,6 @@
 #include "dv_msgs.pb.h"
 
 
-
-
 namespace planning {
 
     /**

@@ -5,7 +5,7 @@ Thanks to [AMZ's simulator](https://github.com/AMZ-Racing/fssim) for the track a
 
 ## Drivebrain communication
 
-The sim binds three ZMQ sockets and drivebrain (`drivebrain_comms/src/SimComms.cpp`) connects to them:
+The sim binds three ZMQ sockets and drivebrain (`comms/src/SimComms.cpp`) connects to them:
 
 | Port | Direction | Contents |
 |------|-----------|----------|

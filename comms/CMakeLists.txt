@@ -12,6 +12,8 @@ find_package(aravis REQUIRED)
 find_package(foxglove-schemas-protobuf REQUIRED)
 find_package(OpenCV REQUIRED CONFIG)
 find_package(zstd REQUIRED CONFIG)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GSTREAMER REQUIRED IMPORTED_TARGET gstreamer-app-1.0)
 
 
 set(DRIVEBRAIN_COMMS_SRCS
@@ -64,6 +66,7 @@ target_link_libraries(drivebrain_comms PUBLIC
     opencv_core
     opencv_imgproc
     opencv_imgcodecs
+    PkgConfig::GSTREAMER
     zstd::libzstd_static
 )
 
