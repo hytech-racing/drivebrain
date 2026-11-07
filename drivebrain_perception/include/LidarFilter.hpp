@@ -58,12 +58,22 @@ namespace perception {
     return std::clamp(1.0f - (1.0f - MIN_CONFIDENCE) * s, MIN_CONFIDENCE, 1.0f);
   }
 
+  struct UnclassifiedCone {
+    core::xyz_vec<float> position;
+    std::vector<core::LidarPoint> points;
+  };
+
+  struct UnclassifiedCones {
+    std::vector<UnclassifiedCone> cones;
+    uint64_t timestamp_us = 0;
+  };
+
   /**
    * Performs ground and object filtering on a LiDAR scan
    * @param scan The pointcloud to run filtering on
    * @return shared pointer to the filtered cones
   */
-  std::shared_ptr<dv_msgs::Cones> filter_cloud(const foxglove::PointCloud& scan);
+  UnclassifiedCones filter_cloud(const foxglove::PointCloud& scan);
 } // namespace perception
 
 

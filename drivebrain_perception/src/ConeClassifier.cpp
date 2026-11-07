@@ -7,7 +7,6 @@
 #include <tuple>
 #include <spdlog/spdlog.h>
 #include "FoxgloveServer.hpp"
-#include "LidarFilter.hpp"
 #include "Telemetry.hpp"
 
 namespace perception {
@@ -245,61 +244,90 @@ namespace {
 
 
 
-    std::shared_ptr<dv_msgs::Cones> ConeClassifier::classifyWithReflectivity(std::shared_ptr<dv_msgs::Cones> cones, const std::string& frame_id) {
+    std::shared_ptr<dv_msgs::Cones> ConeClassifier::classifyWithReflectivity(const UnclassifiedCones& unclassifiedCones, const std::string& frame_id) {
 
-        for (int i=0; i<cones->cones_size(); i++) {
-            auto* cone = cones->mutable_cones(i);
+        auto cones = std::make_shared<dv_msgs::Cones>();
 
-            if (cone->mean_reflectivity() < 15) {
-                cone->set_color(dv_msgs::Cones::BLUE);
-            } else {
-                cone->set_color(dv_msgs::Cones::YELLOW);
+        for (const auto& unclassifiedCone : unclassifiedCones.cones) {
+            auto* cone = cones->add_cones();
+
+            //TODO: Classificaiton
+
+            struct PointSample { float angle; float r;};
+            std::vector<PointSample> samples;
+            samples.reserve(unclassifiedCone.points.size());
+
+            for (const auto& pt : unclassifiedCone.points) {
+                samples.push_back({
+                    std::atan2(pt.z, std::hypot(pt.x, pt.y)),
+                    pt.r
+                });
             }
 
-            // TODO: Implementation of bayesean probability of seeing each cone
-            // TODO: measure mean_y, mean_b, sigma_y, sigma_b
-            // Given: measured = cone->mean_reflectivity()
-            // p_given_blue = f(mean_reflectivity | blue cone) = 1 / ( sigma_b * 2.5066 ) * std::exp( -0.5 * std::pow(measured-mean_b, 2) / std::pow(sigma_b, 2) )
-            // p_given_yellow =  f(mean_reflectivity | yellow cone) = 1 / ( sigma_y * 2.5066 ) * std::exp( -0.5 * std::pow(measured-mean_y, 2) / std::pow(sigma_y, 2) )
-            // p_is_blue = p_given_blue / (p_given_yellow + p_given_blue)
-            // p_is_yellow = p_given_yellow / (p_given_yellow + p_given_blue)
+            std::sort(samples.begin(), samples.end(), [](const PointSample& a, const PointSample& b) {
+                return a.angle > b.angle;
+            });
 
-        }
+            std::vector<float> row_averages;
 
-        /*
-        for (const auto& [name, dets] : detections) {
+            const float window_angle = 0.003; //radians
+            float prev_angle = samples[0].angle;
+            float row_sum = 0;
+            int row_cts = 0;
 
+            for (const auto sample : samples) {
+                if (prev_angle - sample.angle > window_angle) {
+                    if (row_cts > 0) {
+                        row_averages.push_back(row_sum/row_cts);
+                        row_sum = 0;
+                        row_cts = 0;
+                    }
+                    prev_angle = sample.angle;
+                }
+                row_sum += sample.r;
+                row_cts++;
+                prev_angle = sample.angle;
+            }
+            if (row_cts > 0) {
+                row_averages.push_back(row_sum/row_cts);
+            }
 
+            if (row_averages.size() > 2) {
+                float sum = std::accumulate(row_averages.begin(), row_averages.end(), 0.0);
+                float mean = sum / row_averages.size();
 
-            const auto cam_it = _cameras.find(name);
-            if (cam_it == _cameras.end() || !dets) continue;
-            const std::vector<CameraCone> placed = place_detections(cam_it->second, camera_from_lidar(name), *dets);
-            render_camera_cones(name, placed, cones->timestamp_us(), frame_id);
+                float refl_above = 0;
+                float num_above = 0;
+                float refl_below = 0;
+                float num_below = 0;
 
-            // (distance, cone, detection) for every pair within the match distance
-            std::vector<std::tuple<float, int, int>> pairs;
-            for (int i = 0; i < cones->cones_size(); ++i) {
-                const auto& pos = cones->cones(i).position();
-                for (int j = 0; j < static_cast<int>(placed.size()); ++j) {
-                    const float dist = (placed[j].xy - Eigen::Vector2f(pos.x(), pos.y())).norm();
-                    if (dist < MATCH_DISTANCE_M) pairs.emplace_back(dist, i, j);
+                for (const auto& row : row_averages) {
+                    if (row > mean)  {
+                        refl_above += row;
+                        num_above++;
+                    } else {
+                        refl_below += row;
+                        num_below++;
+                    }
+                }
+
+                if (num_above > 0 && num_below > 0) {
+                    cone->set_mean_reflectivity(refl_above/num_above - refl_below/num_below);
                 }
             }
 
-            // Greedy one-to-one matching, closest pairs first
-            std::sort(pairs.begin(), pairs.end());
-            std::vector<bool> cone_used(cones->cones_size()), det_used(placed.size());
-            for (const auto& [dist, i, j] : pairs) {
-                if (cone_used[i] || det_used[j]) continue;
-                cone_used[i] = det_used[j] = true;
-                if (placed[j].score > best_score[i]) {
-                    best_score[i] = placed[j].score;
-                    cones->mutable_cones(i)->set_color(placed[j].color);
-                    cones->mutable_cones(i)->set_color_confidence(placed[j].score);
-                }
-            }
+
+            cone->set_color(dv_msgs::Cones::UNKNOWN); // TODO
+            cone->set_color_confidence(0); // TODO
+
+            auto* position = cone->mutable_position();
+            position->set_x(unclassifiedCone.position.x);
+            position->set_y(unclassifiedCone.position.y);
+            position->set_z(unclassifiedCone.position.z);
+
         }
-        */
+
+        cones->set_timestamp_us(unclassifiedCones.timestamp_us);
 
         return cones;
     }

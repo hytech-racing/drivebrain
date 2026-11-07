@@ -11,14 +11,6 @@ namespace {
         std::vector<std::size_t> point_indices;
     };
 
-    struct ClusterFeatures {
-        core::xyz_vec<float> centroid{0, 0, 0}, min{0, 0, 0}, max{0, 0, 0};
-        float width_x_m = 0, width_y_m = 0, height_z_m = 0; 
-        float top_height_m = 0;  // cluster top above the local ground estimate
-        float max_horizontal_width_m = 0, range_m = 0; 
-        float coloring_score = 0;
-        std::size_t num_points = 0;
-    };
 
     /* Estimated ground height per polar cell, from remove_ground */
     struct GroundGrid {
@@ -177,129 +169,78 @@ namespace {
      * @param grid The ground height estimates, for heights relative to the local ground.
      * @return A vector of ClusterFeatures for each cluster.
      */
-    std::vector<ClusterFeatures> extract_features(const std::vector<Cluster>& clusters, const foxglove::PointCloud& filtered_cloud, const GroundGrid& grid) {
+    UnclassifiedCones extract_cones(std::vector<Cluster>& clusters, const foxglove::PointCloud& filtered_cloud, const GroundGrid& grid) {
         const auto pts = core::points(filtered_cloud); 
-        std::vector<ClusterFeatures> features;
-        features.reserve(clusters.size());
+        UnclassifiedCones cones;
 
-        for (const auto& cluster : clusters) {
+        for (auto& cluster : clusters) {
+
+            // Extract features
             if (cluster.point_indices.empty()) continue;
 
-            ClusterFeatures feature;
             const auto& first = pts[cluster.point_indices.front()];
-            feature.min = feature.max = {first.x, first.y, first.z};
 
-            float mean_reflectivity = 0;
+            core::xyz_vec<float> centroid{0,0,0}, min{first.x, first.y, first.z}, max{first.x, first.y, first.z};
+            float width_x_m = 0, width_y_m = 0, height_z_m = 0; 
+            float top_height_m = 0;  // cluster top above the local ground estimate
+            float max_horizontal_width_m = 0, range_m = 0; 
+            std::size_t num_points = 0;
 
             // Get centroid and bounding box for the cluster
             for (const auto& idx : cluster.point_indices) {
                 const auto& pt = pts[idx];
-                feature.centroid.x += pt.x;  feature.centroid.y += pt.y;  feature.centroid.z += pt.z;
-                feature.min.x = std::min(feature.min.x, pt.x);  feature.max.x = std::max(feature.max.x, pt.x);
-                feature.min.y = std::min(feature.min.y, pt.y);  feature.max.y = std::max(feature.max.y, pt.y);
-                feature.min.z = std::min(feature.min.z, pt.z);  feature.max.z = std::max(feature.max.z, pt.z);
-                mean_reflectivity += pt.r;
+                centroid.x += pt.x;  centroid.y += pt.y;  centroid.z += pt.z;
+                min.x = std::min(min.x, pt.x);  max.x = std::max(max.x, pt.x);
+                min.y = std::min(min.y, pt.y);  max.y = std::max(max.y, pt.y);
+                min.z = std::min(min.z, pt.z);  max.z = std::max(max.z, pt.z);
             }
 
-            feature.num_points = cluster.point_indices.size();
-            const float n = static_cast<float>(feature.num_points);
-            feature.centroid = {feature.centroid.x / n, feature.centroid.y / n, feature.centroid.z / n};
 
-            feature.width_x_m = feature.max.x - feature.min.x;
-            feature.width_y_m = feature.max.y - feature.min.y;
-            feature.height_z_m = feature.max.z - feature.min.z;
-            feature.top_height_m = feature.max.z - grid.at(feature.centroid.x, feature.centroid.y);
-            feature.max_horizontal_width_m = std::max(feature.width_x_m, feature.width_y_m);
-            feature.range_m = std::hypot(feature.centroid.x, feature.centroid.y);
+            num_points = cluster.point_indices.size();
+            const float n = static_cast<float>(num_points);
+            centroid = {centroid.x / n, centroid.y / n, centroid.z / n};
 
-            // mean_reflectivity = mean_reflectivity / feature.num_points;
-            // float refl_above = 0;
-            // float num_above = 0;
-            // float refl_below = 0;
-            // float num_below = 0;
+            width_x_m = max.x - min.x;
+            width_y_m = max.y - min.y;
+            height_z_m = max.z - min.z;
+            top_height_m = max.z - grid.at(centroid.x, centroid.y);
+            max_horizontal_width_m = std::max(width_x_m, width_y_m);
+            range_m = std::hypot(centroid.x, centroid.y);
 
-            // for (const auto& idx : cluster.point_indices) {
-            //     const auto& pt = pts[idx];
-            //     if (pt.r > mean_reflectivity)  {
-            //         refl_above += pt.r;
-            //         num_above++;
-            //     } else {
-            //         refl_below += pt.r;
-            //         num_below++;
-            //     }
-            // }
 
-            // if (num_above > 0 && num_below > 0) {
-            //     feature.coloring_score = std::abs(refl_above/num_above - refl_below/num_below);
-            // }
+            // Determine if it is a cone
 
-            float top = 0;
-            int num_top = 0;
-            float middle = 0;
-            int num_middle = 0;
-            float bottom = 0;
-            int num_bottom = 0;
-
-            for (const auto& idx : cluster.point_indices) {
-                const auto& pt = pts[idx];
-                if (pt.z > feature.max.z - (feature.max.z-feature.min.z)/3)  {
-                    top += pt.r;
-                    num_top++;
-                } else if (pt.z > feature.max.z - 2*(feature.max.z-feature.min.z)/3) {
-                    middle += pt.r;
-                    num_middle++;
-                } else{ 
-                    bottom += pt.r;
-                    num_bottom++;
-                }
-            }
-
-            if (num_top > 0 && num_middle > 0 && num_bottom > 0) {
-                feature.coloring_score = middle/num_middle - (top/num_top+bottom/num_bottom)/2;
-            }
-
-            features.push_back(std::move(feature));
-        }
-
-        return features;
-    }
-
-    std::shared_ptr<dv_msgs::Cones> extract_cones(const std::vector<ClusterFeatures>& features, const foxglove::PointCloud& filtered_cloud) {
-        auto cones = std::make_shared<dv_msgs::Cones>();
-
-        for (const ClusterFeatures& feature : features) {
             // Determine the range category of the cluster (near, mid, far) and create lambda for returning values based on range
-            const bool near = feature.range_m < NEAR_RANGE_M;
-            const bool mid = !near && feature.range_m <= MID_RANGE_M;
+            const bool near = range_m < NEAR_RANGE_M;
+            const bool mid = !near && range_m <= MID_RANGE_M;
             const bool far = !near && !mid;
             const auto by_range = [&](auto n, auto m, auto f) { return near ? n : mid ? m : f; };
 
             const std::size_t min_points = by_range(NEAR_MIN_CONE_POINTS, MID_MIN_CONE_POINTS, FAR_MIN_CONE_POINTS);
             const double min_height = by_range(NEAR_MIN_CONE_HEIGHT_M, MID_MIN_CONE_HEIGHT_M, FAR_MIN_CONE_HEIGHT_M);
             const double max_width = by_range(NEAR_MAX_CONE_WIDTH_M, MID_MAX_CONE_WIDTH_M, FAR_MAX_CONE_WIDTH_M);
-            const double small_width = std::max(std::min(feature.width_x_m, feature.width_y_m), MIN_WIDTH_FOR_ELONGATION_M);
-            const double elongation = feature.max_horizontal_width_m / small_width;
+            const double small_width = std::max(std::min(width_x_m, width_y_m), MIN_WIDTH_FOR_ELONGATION_M);
+            const double elongation = max_horizontal_width_m / small_width;
 
             // TODO better debug information for why a cluster is being skipped 
-            if (feature.range_m > MAX_DETECTION_RANGE_M) continue;
-            else if (feature.num_points < min_points) continue;
-            else if (feature.height_z_m < min_height) continue;
-            else if (feature.height_z_m > MAX_CONE_HEIGHT_M) continue;
-            else if (feature.max_horizontal_width_m > max_width) continue;
+            if (range_m > MAX_DETECTION_RANGE_M) continue;
+            else if (num_points < min_points) continue;
+            else if (height_z_m < min_height) continue;
+            else if (height_z_m > MAX_CONE_HEIGHT_M) continue;
+            else if (max_horizontal_width_m > max_width) continue;
             else if (elongation > MAX_ELONGATION) continue;
-            else if (feature.top_height_m > MAX_CONE_TOP_HEIGHT_M) continue;
+            else if (top_height_m > MAX_CONE_TOP_HEIGHT_M) continue;
 
-            // Add the dv cone
-            auto* cone = cones->add_cones();
+            
+            UnclassifiedCone cone;
+            cone.position = centroid;
 
-            cone->set_color(dv_msgs::Cones::UNKNOWN);
+            cone.points.reserve(num_points);
+            for (const auto& idx : cluster.point_indices) {
+                cone.points.push_back(pts[idx]);
+            }
 
-            auto* position = cone->mutable_position();
-            position->set_x(feature.centroid.x);
-            position->set_y(feature.centroid.y);
-            position->set_z(feature.centroid.z);
-
-            cone->set_mean_reflectivity(feature.coloring_score);
+            cones.cones.push_back(std::move(cone));
         }
         
         return cones;
@@ -308,13 +249,13 @@ namespace {
 
 } // END OF ANONYMOUS NAMESPACE
 
-    std::shared_ptr<dv_msgs::Cones> filter_cloud(const foxglove::PointCloud& scan) {
+    UnclassifiedCones filter_cloud(const foxglove::PointCloud& scan) {     
         GroundGrid ground;
         std::shared_ptr<const foxglove::PointCloud> filtered_scan = remove_ground(scan, ground);
         auto clusters = cluster(*filtered_scan);
-        auto features = extract_features(clusters, *filtered_scan, ground);
-        auto cones = extract_cones(features, *filtered_scan);
-        cones->set_timestamp_us(google::protobuf::util::TimeUtil::TimestampToMicroseconds(scan.timestamp()));
+        auto cones = extract_cones(clusters, *filtered_scan, ground);
+        cones.timestamp_us = google::protobuf::util::TimeUtil::TimestampToMicroseconds(scan.timestamp());
+
         return cones;
     }
 

@@ -64,12 +64,6 @@ void Autonomy::_run() {
     last_scan = scan;
     const uint64_t scan_ns = google::protobuf::util::TimeUtil::TimestampToNanoseconds(last_scan->timestamp());
 
-    // Get odometry pose for the scan
-    const auto pose = StateTracker::instance().odom_pose(scan_ns, ODOM_TIMEOUT);
-    if (!pose) {
-      spdlog::warn("Autonomy: no odom pose for scan at {} ns, skipping SLAM", scan_ns);
-      continue;
-    }
 
     // Deskew the point cloud
     const Eigen::Isometry3d& T_base_lidar = StateTracker::instance().T_base_lidar();
@@ -77,11 +71,29 @@ void Autonomy::_run() {
     const auto cloud = perception::deskew_cloud(*last_scan, StateTracker::instance().odom_twist(), T_base_lidar);
     log_foxglove_only(cloud, "perception/deskewed_points");
 
-    std::shared_ptr<dv_msgs::Cones> cones = perception::filter_cloud(*cloud);
+    perception::UnclassifiedCones unclassifiedCones = perception::filter_cloud(*cloud);
+
+    #if HOOTL_ENABLED
+    std::vector<core::LidarPoint> cone_points;
+    for (const auto& cone : unclassifiedCones.cones) {
+      cone_points.insert(cone_points.end(), cone.points.begin(), cone.points.end());
+    }
+    auto cone_cloud = core::to_cloud(cone_points, *cloud);
+    core::log(cone_cloud, "perception/cone_cluster_points");
+    #endif
+    core::log(cone_cloud, "perception/cone_cluster_points"); // TODO: temporary! for testing only so that I don't need to rerun in the mcap
+
     //cones = _classifier.classify(cones, StateTracker::instance().dv_state().camera_detections, last_scan->frame_id());
-    cones = _classifier.classifyWithReflectivity(cones, last_scan->frame_id());
+    std::shared_ptr<dv_msgs::Cones> cones = _classifier.classifyWithReflectivity(unclassifiedCones, last_scan->frame_id());
     render_cones(cones, "filtered_cones", "os_sensor");
 
+    // Get odometry pose for the scan
+    const auto pose = StateTracker::instance().odom_pose(scan_ns, ODOM_TIMEOUT);
+    if (!pose) {
+      spdlog::warn("Autonomy: no odom pose for scan at {} ns, skipping SLAM", scan_ns);
+      continue;
+    }
+    
     // Perform SLAM update with the filtered cones
     const auto map = _slam->update(*cones, scan_ns, *pose, T_base_lidar);
     if (!map) continue;

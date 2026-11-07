@@ -9,6 +9,8 @@
 #include "StateTracker.hpp"
 #include "dv_msgs.pb.h"
 
+#include "LidarFilter.hpp"
+
 namespace perception {
 
   constexpr float CONE_HEIGHT_M = 0.23495f;
@@ -47,7 +49,7 @@ namespace perception {
                                                const std::string& frame_id);
 
 
-      std::shared_ptr<dv_msgs::Cones> classifyWithReflectivity(std::shared_ptr<dv_msgs::Cones> cones, const std::string& frame_id);
+      std::shared_ptr<dv_msgs::Cones> classifyWithReflectivity(const UnclassifiedCones& unclassifiedCones, const std::string& frame_id);
 
 
 
