@@ -25,6 +25,12 @@ void Autonomy::start() {
   }
   _slam = std::make_unique<slam::Slam>();
   _controller = std::make_unique<control::PurePursuitController>();
+  if (!_controller->init()) {
+    spdlog::error("Pure pursuit controller failed to init; autonomy not started");
+    _controller.reset();
+    _running = false;
+    return;
+  }
   _cone_classifier = std::make_unique<perception::ConeClassifier>("intrinsics");
   _thread = std::thread(&Autonomy::_run, this);
   spdlog::info("Autonomy stack started");
