@@ -22,6 +22,14 @@ bool control::PurePursuitController::init() {
     _max_speed = *max_speed;
     _max_lat_accel = *max_lat_accel;
     _torque_lim = *torque_lim;
+
+    _param_connection = foxglove.register_param_callback([this](const std::unordered_map<std::string, core::DBParam>& params) {
+        if (auto v = core::process_param_update<float>(params, "purepursuitcontroller/lookahead_dist_m")) _lookahead_dist = *v;
+        if (auto v = core::process_param_update<float>(params, "purepursuitcontroller/min_speed_mps")) _min_speed = *v;
+        if (auto v = core::process_param_update<float>(params, "purepursuitcontroller/max_speed_mps")) _max_speed = *v;
+        if (auto v = core::process_param_update<float>(params, "purepursuitcontroller/max_lat_accel_mps2")) _max_lat_accel = *v;
+        if (auto v = core::process_param_update<float>(params, "purepursuitcontroller/torque_lim_nm")) _torque_lim = *v;
+    });
     return true;
 }
 
@@ -35,7 +43,7 @@ ControllerOutput control::PurePursuitController::step(const VehicleState& in) {
     ControllerOutput out = {};
     auto steering = path ? _steering(in, *path) : std::nullopt;
     if (steering) {
-        const float speed = std::clamp(std::sqrt(_max_lat_accel / std::max(std::fabs(steering->curvature), 1e-3f)), _min_speed, _max_speed);
+        const float speed = std::clamp(std::sqrt(_max_lat_accel / std::max(std::fabs(steering->curvature), 1e-3f)), _min_speed.load(), _max_speed.load());
         const float rpm = speed * constants::METERS_PER_SECOND_TO_RPM;
         speed_out.desired_rpms = {rpm, rpm, rpm, rpm};
         out.desired_steering_deg = steering->angle_rad * 180.0f / M_PI;

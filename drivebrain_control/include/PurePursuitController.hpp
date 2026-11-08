@@ -3,6 +3,9 @@
 #include <Controller.hpp>
 #include <StateTracker.hpp>
 
+#include <FoxgloveServer.hpp>
+
+#include <atomic>
 #include <optional>
 #include <vector>
 
@@ -30,11 +33,12 @@ private:
     /* Front-wheel angle (rad) that arcs onto the point one lookahead past the closest path point, and that point */
     std::optional<Steering> _steering(const VehicleState& in, const std::vector<xyz_vec<float>>& path) const;
 
-    float _lookahead_dist = 0.0f;
-    float _min_speed = 0.0f;
-    float _max_speed = 0.0f;
-    float _max_lat_accel = 0.0f;
-    float _torque_lim = 0.0f;
+    std::atomic<float> _lookahead_dist{0.0f};
+    std::atomic<float> _min_speed{0.0f};
+    std::atomic<float> _max_speed{0.0f};
+    std::atomic<float> _max_lat_accel{0.0f};
+    std::atomic<float> _torque_lim{0.0f};
+    boost::signals2::scoped_connection _param_connection;
 
 };
 
