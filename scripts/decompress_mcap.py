@@ -20,10 +20,10 @@ is kept beside the output. Recovery may discard unreadable records.
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 import shutil
 import subprocess
-import sys
 
 from foxglove_schemas_protobuf.PackedElementField_pb2 import PackedElementField
 from foxglove_schemas_protobuf.PointCloud_pb2 import PointCloud
@@ -302,12 +302,14 @@ def convert(input_path: Path, output_path: Path, *, decode_video=False) -> dict[
 
 
 def main(*, decode_video=False):
-    if len(sys.argv) != 2:
-        print(f"Usage: {Path(sys.argv[0]).name} INPUT.mcap")
-        return
+    parser = argparse.ArgumentParser()
+    parser.add_argument("input", metavar="INPUT.mcap", type=Path)
+    parser.add_argument("--video", action="store_true", help="Decode H.264 video frames")
+    args = parser.parse_args()
+    decode_video = decode_video or args.video
     try:
         # parse input args
-        input_path = Path(sys.argv[1])
+        input_path = args.input
         if not input_path.is_file():
             raise FileNotFoundError(input_path)
         output_path = input_path.with_name(f"{input_path.stem}_decompressed.mcap")
