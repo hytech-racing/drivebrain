@@ -1,13 +1,14 @@
 #pragma once
 
 #include <cstdio>
+#include <memory>
 #include <string>
 #include <thread>
-#include <unordered_map>
+#include "hytech_msgs.pb.h"
 
 namespace core {
 
-std::unordered_map<std::string, double> parse_tegrastats(const std::string& line);
+std::shared_ptr<hytech_msgs::TegraStats> parse_tegrastats(const std::string& line);
 
 class Tegrastats {
 public:

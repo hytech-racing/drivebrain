@@ -2,6 +2,8 @@
 #include "Telemetry.hpp"
 
 #include <cerrno>
+#include <algorithm>
+#include <cctype>
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
@@ -9,13 +11,12 @@
 #include <regex>
 #include <spawn.h>
 #include <sstream>
-#include <google/protobuf/wrappers.pb.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
 extern char** environ;
 
-std::unordered_map<std::string, double> core::parse_tegrastats(const std::string& line) {
+std::shared_ptr<hytech_msgs::TegraStats> core::parse_tegrastats(const std::string& line) {
     static const std::regex ram(R"(RAM (\d+)/(\d+)MB)");
     static const std::regex cpus(R"(CPU \[([^\]]+)\])");
     static const std::regex cpu(R"((\d+)%(@(\d+))?)");
@@ -24,14 +25,24 @@ std::unordered_map<std::string, double> core::parse_tegrastats(const std::string
     static const std::regex power(R"((\w+) (\d+(?:\.\d+)?)mW)");
 
     std::smatch match;
-    if (!std::regex_search(line, match, ram)) return {};
+    if (!std::regex_search(line, match, ram)) return nullptr;
     const double used_mb = std::stod(match[1]);
     const double total_mb = std::stod(match[2]);
-    if (total_mb <= 0) return {};
-    std::unordered_map<std::string, double> metrics{
-        {"ram_used_mb", used_mb},
-        {"ram_total_mb", total_mb},
-        {"ram_used_percent", 100.0 * used_mb / total_mb},
+    if (total_mb <= 0) return nullptr;
+    auto msg = std::make_shared<hytech_msgs::TegraStats>();
+    msg->set_ram_used_mb(used_mb);
+    msg->set_ram_total_mb(total_mb);
+    msg->set_ram_used_percent(100.0 * used_mb / total_mb);
+
+    // Core and sensor names correspond to flat fields in the shared schema.
+    auto set_field = [&](const std::string& name, double value) {
+        const auto* field = msg->GetDescriptor()->FindFieldByName(name);
+        if (!field) return;
+        if (field->cpp_type() == google::protobuf::FieldDescriptor::CPPTYPE_BOOL) {
+            msg->GetReflection()->SetBool(msg.get(), field, value != 0);
+        } else {
+            msg->GetReflection()->SetFloat(msg.get(), field, value);
+        }
     };
 
     if (std::regex_search(line, match, cpus)) {
@@ -39,24 +50,26 @@ std::unordered_map<std::string, double> core::parse_tegrastats(const std::string
         std::string entry;
         int index = 0;
         while (std::getline(entries, entry, ',')) {
-            const std::string prefix = "cpu/" + std::to_string(index++) + "/";
-            metrics[prefix + "online"] = 0;
+            const std::string prefix = "cpu" + std::to_string(index++);
             if (std::regex_search(entry, match, cpu)) {
-                metrics[prefix + "online"] = 1;
-                metrics[prefix + "usage_percent"] = std::stod(match[1]);
-                if (match[3].matched) metrics[prefix + "frequency_mhz"] = std::stod(match[3]);
+                set_field(prefix + "online", true);
+                set_field(prefix + "usage_percent", std::stod(match[1]));
+                if (match[3].matched) set_field(prefix + "frequency_mhz", std::stod(match[3]));
             }
         }
     }
-    if (std::regex_search(line, match, gpu)) metrics["gpu_usage_percent"] = std::stod(match[1]);
+    if (std::regex_search(line, match, gpu)) msg->set_gpu_usage_percent(std::stod(match[1]));
     // The first slash-separated value is the instantaneous reading.
     for (std::sregex_iterator it(line.begin(), line.end(), temperature), end; it != end; ++it) {
-        metrics["temperature_c/" + (*it)[1].str()] = std::stod((*it)[2]);
+        set_field((*it)[1].str() + "_temp_c", std::stod((*it)[2]));
     }
     for (std::sregex_iterator it(line.begin(), line.end(), power), end; it != end; ++it) {
-        metrics["power_mw/" + (*it)[1].str()] = std::stod((*it)[2]);
+        std::string rail = (*it)[1].str();
+        std::transform(rail.begin(), rail.end(), rail.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        set_field(rail + "_mw", std::stod((*it)[2]));
     }
-    return metrics;
+    return msg;
 }
 
 core::Tegrastats::Tegrastats() {
@@ -96,11 +109,7 @@ core::Tegrastats::Tegrastats() {
         size_t capacity = 0;
         while (getline(&line, &capacity, _output) != -1) {
             try {
-                for (const auto& [name, value] : parse_tegrastats(line)) {
-                    auto msg = std::make_shared<google::protobuf::DoubleValue>();
-                    msg->set_value(value);
-                    core::log(msg, "tegrastats/" + name);
-                }
+                if (auto msg = parse_tegrastats(line)) core::log(msg);
             } catch (const std::exception& e) {
                 spdlog::warn("Cannot log tegrastats sample: {}", e.what());
             }
