@@ -1,4 +1,5 @@
 #include "ConeClassifier.hpp"
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <regex>
@@ -156,6 +157,16 @@ namespace {
         return Eigen::Vector2f(x, y);
     }
 
+    Eigen::Vector2f CameraModel::project(const Eigen::Vector3f& point) const {
+        const auto [k1, k2, p1, p2, k3, k4, k5, k6] = dist;
+        const float x = point.x() / point.z(), y = point.y() / point.z();
+        const float r2 = x * x + y * y, r4 = r2 * r2, r6 = r4 * r2;
+        const float radial = (1 + k1 * r2 + k2 * r4 + k3 * r6) / (1 + k4 * r2 + k5 * r4 + k6 * r6);
+        const float xd = x * radial + 2 * p1 * x * y + p2 * (r2 + 2 * x * x);
+        const float yd = y * radial + p1 * (r2 + 2 * y * y) + 2 * p2 * x * y;
+        return Eigen::Vector2f(fx * xd + cx, fy * yd + cy);
+    }
+
     CameraModel load_camera_model(const std::string& path) {
         std::ifstream file(path);
         if (!file) throw std::runtime_error("failed to open " + path);
@@ -212,29 +223,40 @@ namespace {
         for (const auto& [name, dets] : detections) {
             const auto cam_it = _cameras.find(name);
             if (cam_it == _cameras.end() || !dets) continue;
-            const std::vector<CameraCone> placed = place_detections(cam_it->second, camera_from_lidar(name), *dets);
+            const auto& cam = cam_it->second;
+            const Eigen::Isometry3f T_cam_lidar = camera_from_lidar(name);
+            // Ground-plane placements are retained only for the existing 3D debug visualization.
+            const std::vector<CameraCone> placed = place_detections(cam, T_cam_lidar, *dets);
             render_camera_cones(name, placed, cones->timestamp_us(), frame_id);
 
-            // (distance, cone, detection) for every pair within the match distance
+            // Project measured LiDAR centroids into the image; only boxes containing the pixel can match.
             std::vector<std::tuple<float, int, int>> pairs;
             for (int i = 0; i < cones->cones_size(); ++i) {
                 const auto& pos = cones->cones(i).position();
-                for (int j = 0; j < static_cast<int>(placed.size()); ++j) {
-                    const float dist = (placed[j].xy - Eigen::Vector2f(pos.x(), pos.y())).norm();
-                    if (dist < MATCH_DISTANCE_M) pairs.emplace_back(dist, i, j);
+                const Eigen::Vector3f camera_pos = T_cam_lidar * Eigen::Vector3f(pos.x(), pos.y(), pos.z());
+                if (!camera_pos.allFinite() || camera_pos.z() <= 0) continue;
+                const Eigen::Vector2f pixel = cam.project(camera_pos);
+                if (!pixel.allFinite() || pixel.x() < 0 || pixel.x() >= cam.width ||
+                    pixel.y() < 0 || pixel.y() >= cam.height) continue;
+                for (int j = 0; j < static_cast<int>(dets->size()); ++j) {
+                    const auto& d = (*dets)[j];
+                    if (d.x1 <= d.x0 || d.y1 <= d.y0) continue;
+                    if (pixel.x() < d.x0 || pixel.x() > d.x1 || pixel.y() < d.y0 || pixel.y() > d.y1) continue;
+                    const Eigen::Vector2f center((d.x0 + d.x1) / 2, (d.y0 + d.y1) / 2);
+                    pairs.emplace_back((pixel - center).squaredNorm(), i, j);
                 }
             }
 
             // Greedy one-to-one matching, closest pairs first
             std::sort(pairs.begin(), pairs.end());
-            std::vector<bool> cone_used(cones->cones_size()), det_used(placed.size());
+            std::vector<bool> cone_used(cones->cones_size()), det_used(dets->size());
             for (const auto& [dist, i, j] : pairs) {
                 if (cone_used[i] || det_used[j]) continue;
                 cone_used[i] = det_used[j] = true;
-                if (placed[j].score > best_score[i]) {
-                    best_score[i] = placed[j].score;
-                    cones->mutable_cones(i)->set_color(placed[j].color);
-                    cones->mutable_cones(i)->set_color_confidence(placed[j].score);
+                if ((*dets)[j].score > best_score[i]) {
+                    best_score[i] = (*dets)[j].score;
+                    cones->mutable_cones(i)->set_color((*dets)[j].color);
+                    cones->mutable_cones(i)->set_color_confidence((*dets)[j].score);
                 }
             }
         }
