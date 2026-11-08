@@ -18,6 +18,7 @@
 #include "hytech_msgs.pb.h"
 #include <BlackflyComms.hpp>
 #include "PurePursuitController.hpp"
+#include "Tegrastats.hpp"
 
 enum class DrivingMode { DRIVERED, DRIVERLESS, TELEOP };
 
@@ -69,6 +70,7 @@ private:
   std::thread _camera_init_thread;
   std::thread _loop_thread;
   std::thread _io_context_thread;
+  std::unique_ptr<core::Tegrastats> _tegrastats;
 
   /* Config paths */
   const std::string _json_params_path;
