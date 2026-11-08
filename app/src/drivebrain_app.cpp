@@ -33,6 +33,7 @@ DrivebrainApp::DrivebrainApp(const std::string& json_param_path, const std::stri
 
 DrivebrainApp::~DrivebrainApp() {
   running = false;
+  _tegrastats.reset();
   _autonomy.stop();
 
   /* Threads that call core::log outlive run(), so they must stop before the sinks go away. */
@@ -74,6 +75,7 @@ void DrivebrainApp::run() {
   core::MCAPLogger::instance().init_logging();
 
   spdlog::info("Constructed logging singletons");
+  _tegrastats = std::make_unique<core::Tegrastats>();
 
   _acu_core_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::ACUCoreData>>(_io_context, 7777);
   _acu_eth_driver = std::make_unique<comms::ETHRecvComms<hytech_msgs::ACUAllData>>(_io_context, 7766);
@@ -122,7 +124,7 @@ void DrivebrainApp::run() {
   // _aux_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("aux_can_device").value(), _dbc_path);
   spdlog::info("Initialized CAN drivers");
 
-#if JETSON_ENABLED
+  #if JETSON_ENABLED
   _camera_init_thread = std::thread([this]() {
     try {
       // start every GigE camera aravis can find
@@ -256,10 +258,10 @@ void DrivebrainApp::_actuate(const core::ControllerOutput& out) {
     desired_torque_msg->set_drivebrain_torque_fr(torqueControl->desired_torques_nm.FR);
     desired_torque_msg->set_drivebrain_torque_rl(torqueControl->desired_torques_nm.RL);
     desired_torque_msg->set_drivebrain_torque_rr(torqueControl->desired_torques_nm.RR);
-
+    
 #if !JETSON_ENABLED
-    _telem_can->send_message(desired_torque_msg);
-    // _aux_can->send_message(desired_torque_msg);
+_telem_can->send_message(desired_torque_msg);
+// _aux_can->send_message(desired_torque_msg);
 #endif
 
     core::log(desired_torque_msg);
