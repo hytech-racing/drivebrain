@@ -1,5 +1,6 @@
 #include "ConeClassifier.hpp"
 #include <algorithm>
+#include <foxglove/ImageAnnotations.pb.h>
 #include <filesystem>
 #include <fstream>
 #include <regex>
@@ -187,10 +188,6 @@ namespace {
         cam.width = static_cast<int>(size[0]);
         cam.height = static_cast<int>(size[1]);
 
-        cam.cx = cam.width - 1 - cam.cx;
-        cam.cy = cam.height - 1 - cam.cy;
-        cam.dist[2] = -cam.dist[2];
-        cam.dist[3] = -cam.dist[3];
         return cam;
     }
 
@@ -230,6 +227,7 @@ namespace {
             render_camera_cones(name, placed, cones->timestamp_us(), frame_id);
 
             // Project measured LiDAR centroids into the image; only boxes containing the pixel can match.
+            auto projections = std::make_shared<foxglove::ImageAnnotations>();
             std::vector<std::tuple<float, int, int>> pairs;
             for (int i = 0; i < cones->cones_size(); ++i) {
                 const auto& pos = cones->cones(i).position();
@@ -238,14 +236,43 @@ namespace {
                 const Eigen::Vector2f pixel = cam.project(camera_pos);
                 if (!pixel.allFinite() || pixel.x() < 0 || pixel.x() >= cam.width ||
                     pixel.y() < 0 || pixel.y() >= cam.height) continue;
+                // Small white diamond at the projected centroid, including unmatched cones.
+                auto* marker = projections->add_points();
+                marker->mutable_timestamp()->set_seconds(cones->timestamp_us() / 1000000);
+                marker->mutable_timestamp()->set_nanos((cones->timestamp_us() % 1000000) * 1000);
+                marker->set_type(foxglove::PointsAnnotation::LINE_LOOP);
+                marker->set_thickness(2);
+                auto* color = marker->mutable_outline_color();
+                color->set_r(1); color->set_g(1); color->set_b(1); color->set_a(1);
+                for (const Eigen::Vector2f& offset : {Eigen::Vector2f(-6, 0), Eigen::Vector2f(0, -6),
+                                                     Eigen::Vector2f(6, 0), Eigen::Vector2f(0, 6)}) {
+                    auto* point = marker->add_points();
+                    point->set_x(pixel.x() + offset.x());
+                    point->set_y(pixel.y() + offset.y());
+                }
                 for (int j = 0; j < static_cast<int>(dets->size()); ++j) {
                     const auto& d = (*dets)[j];
                     if (d.x1 <= d.x0 || d.y1 <= d.y0) continue;
-                    if (pixel.x() < d.x0 || pixel.x() > d.x1 || pixel.y() < d.y0 || pixel.y() > d.y1) continue;
+                    // Full-resolution coordinates: 4 pixels equals 2 pixels in the live feed.
+                    const float margin_x = std::max(0.15f * (d.x1 - d.x0), 4.0f);
+                    const float margin_y = std::max(0.15f * (d.y1 - d.y0), 4.0f);
+                    if (pixel.x() < d.x0 - margin_x || pixel.x() > d.x1 + margin_x ||
+                        pixel.y() < d.y0 - margin_y || pixel.y() > d.y1 + margin_y) continue;
                     const Eigen::Vector2f center((d.x0 + d.x1) / 2, (d.y0 + d.y1) / 2);
                     pairs.emplace_back((pixel - center).squaredNorm(), i, j);
                 }
             }
+
+            // Recorded video is full resolution; the live compressed feed is half resolution.
+            core::log_mcap_only(projections, name + "/lidar_projections");
+            auto live_projections = std::make_shared<foxglove::ImageAnnotations>(*projections);
+            for (auto& marker : *live_projections->mutable_points()) {
+                for (auto& point : *marker.mutable_points()) {
+                    point.set_x(point.x() / 2);
+                    point.set_y(point.y() / 2);
+                }
+            }
+            core::log_foxglove_only(live_projections, name + "/lidar_projections");
 
             // Greedy one-to-one matching, closest pairs first
             std::sort(pairs.begin(), pairs.end());
