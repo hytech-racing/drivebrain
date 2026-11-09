@@ -65,13 +65,6 @@ void Autonomy::_run() {
     last_scan = scan;
     const uint64_t scan_ns = google::protobuf::util::TimeUtil::TimestampToNanoseconds(last_scan->timestamp());
 
-    // Get odometry pose for the scan
-    const auto pose = StateTracker::instance().odom_pose(scan_ns, ODOM_TIMEOUT);
-    if (!pose) {
-      spdlog::warn("Autonomy: no odom pose for scan at {} ns, skipping SLAM", scan_ns);
-      continue;
-    }
-
     // Deskew the point cloud
     const Eigen::Isometry3d& T_base_lidar = StateTracker::instance().T_base_lidar();
     publish_transform("base_link", "os_sensor", scan_ns, T_base_lidar);
@@ -82,6 +75,13 @@ void Autonomy::_run() {
     cones = _classifier.classify(cones, StateTracker::instance().dv_state().camera_detections, last_scan->frame_id());
     perception::color_cones_from_sim_ground_truth(*cones, T_base_lidar);
     render_cones(cones, "filtered_cones", "os_sensor");
+
+        // Get odometry pose for the scan
+    const auto pose = StateTracker::instance().odom_pose(scan_ns, ODOM_TIMEOUT);
+    if (!pose) {
+      spdlog::warn("Autonomy: no odom pose for scan at {} ns, skipping SLAM", scan_ns);
+      continue;
+    }
 
     // Perform SLAM update with the filtered cones
     const auto map = _slam->update(*cones, scan_ns, *pose, T_base_lidar);
