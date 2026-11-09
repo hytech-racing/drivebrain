@@ -21,6 +21,10 @@ FzEstimator::FzEstimator() {
 
     _Q = fz_state_covariance::Identity() * Q_gain.value();
     _R = fz_measurement_covariance::Identity() * R_gain.value();
+    if (interpolation_scalar.value() < -0.05) {
+        spdlog::error("FzEstimator: interpolation_scalar < 0");
+        throw std::runtime_error("FzEstimator: interpolation_scalar < 0");
+    }
     _interpolation_scalar = (double) interpolation_scalar.value();
 
     _B <<
@@ -68,7 +72,7 @@ void FzEstimator::update(double load_cell_fl, double load_cell_fr, double load_c
     fz_measurement_covariance covariance_scalar = fz_measurement_covariance::Identity();
     for (int i = 0; i < 4; i++) {
         double interp_dist = interp_distances[i];
-        covariance_scalar(i, i) = interp_dist > MAX_INTERPOLATION_DISTANCE ? 1000 : (1 + interp_dist * _interpolation_scalar);
+        covariance_scalar(i, i) = interp_dist > MAX_INTERPOLATION_DISTANCE ? 5 : (1 + interp_dist * _interpolation_scalar);
     }
 
     fz_measurement_vector z;
