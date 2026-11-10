@@ -27,7 +27,6 @@ No production `.proto` change is needed.
 ## Commands
 
 ```cpp
-#include "DrivetrainUARTCommand.hpp"
 #include "UARTComms.hpp"
 
 auto command = comms::make_drivetrain_uart_command(
