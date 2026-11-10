@@ -24,7 +24,7 @@ private:
 
     float _lookahead_dist = 2.5f;
     float _wheelbase = 1.53f;
-    float _target_speed = 3.0f; 
+    float _target_speed = 1.79f;
     float _torque_lim = 5.0f;
 
 };

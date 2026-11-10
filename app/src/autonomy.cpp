@@ -96,6 +96,7 @@ void Autonomy::_run() {
       log(map_pose, "slam/vehicle_pose");                                  // MCAP + Foxglove
       render_pose(map_pose, "vehicle_pose_map");                           // box in the 3D panel, map frame
       StateTracker::instance().handle_receive_protobuf_message(map_pose);  // planner + pure pursuit
+      StateTracker::instance().set_pose_map_from_odom(_slam->map_state->pose_map_from_odom);
     }
 
     // Update the state tracker with the new cone observations and plan a path
