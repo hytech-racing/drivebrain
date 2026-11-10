@@ -10,7 +10,7 @@ services:
       - /tmp:/tmp
       # - ../HT_proto:/HT_proto
     environment:
-      - SIM_HOST=host.docker.internal
+      - SIM_HOST=127.0.0.1
     working_dir: /app
     tty: true
     stdin_open: true

@@ -1,4 +1,4 @@
-from mcap.reader import NonSeekingReader
+from mcap.reader import make_reader
 import zmq, time
 import sys
 from foxglove_schemas_protobuf.PointCloud_pb2 import PointCloud
@@ -29,16 +29,22 @@ lidar_sock.bind(f"{ENDPOINT_PREFIX}{LIDAR_SOCKET_PORT}")
 if (len(sys.argv) != 2): 
     sys.exit("Error: Expected usage python3 mcap_replay.py mcap/<mcap-name>.mcap")
 
+no_schema_topics = []
 mcap_path = sys.argv[1]
 
 input("drivebrain up? press enter to start replay...")
 
 with open(mcap_path, "rb") as f:
     # read front to back like Foxglove, so recordings cut off before their summary still replay
-    reader = NonSeekingReader(f)
+    reader = make_reader(f)
     wall_start = time.monotonic()
     mcap_start = None
     for schema, channel, message in reader.iter_messages():
+        if schema is None:
+            if channel.topic not in no_schema_topics:
+                no_schema_topics.append(channel.topic)
+                print("Topic " + channel.topic + " has no schema, it won't be replayed")
+            continue
         if channel.message_encoding != "protobuf":
             continue
         if channel.topic in BLACKLIST:
