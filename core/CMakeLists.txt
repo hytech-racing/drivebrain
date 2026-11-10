@@ -17,6 +17,7 @@ add_library(drivebrain_core
     src/MCAPLogger.cpp
     src/StateTracker.cpp
     src/DrivebrainControllerInterface.cpp
+    src/Tegrastats.cpp
 )
 
 target_include_directories(drivebrain_core PUBLIC
