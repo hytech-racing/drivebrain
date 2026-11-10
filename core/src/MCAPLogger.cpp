@@ -229,18 +229,6 @@ void core::MCAPLogger::init_logging() {
     spdlog::info("Msg log thread spawned");
 }
 
-void core::MCAPLogger::stop_logging() {
-    {
-        std::unique_lock lock(_input_buffer_mutex);
-        _logging = false;
-    }
-
-    _input_buffer_cv.notify_one(); 
-    if (_msg_log_thread.joinable()) {
-        _msg_log_thread.join();
-    }
-}
-
 int core::MCAPLogger::log_msg(core::MsgType message, const std::string &topic) {
     mcap::Timestamp log_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     RawMessage_s new_message; 
