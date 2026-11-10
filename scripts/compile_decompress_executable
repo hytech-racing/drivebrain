@@ -1,0 +1,7 @@
+../.venv/bin/python -m PyInstaller --noconfirm --onefile \
+  --copy-metadata ouster-sdk \
+  --hidden-import ouster.sdk._bindings \
+  --collect-submodules rosbags.typesys.stores \
+  --add-data "ouster_calibration.json:." \
+  decompress_mcap.py
+
