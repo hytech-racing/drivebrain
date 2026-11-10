@@ -349,6 +349,7 @@ namespace core {
     };
 
 
+
     /**
      * Allows different communications interfaces
      * to update the internal state of drivebrain in a thread-safe manner
@@ -515,6 +516,8 @@ namespace core {
             /* Singleton move semantics */
             StateTracker(const StateTracker&) = delete; 
             StateTracker& operator=(const StateTracker&) = delete;
+
+            
 
             /* Singleton instance */
             inline static std::atomic<StateTracker*> _s_instance; 

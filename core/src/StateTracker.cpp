@@ -5,6 +5,7 @@
 #include <cmath>
 #include <foxglove/PointCloud.pb.h>
 #include <foxglove/websocket/parameter.hpp>
+#include <mutex>
 
 using namespace core;
 
