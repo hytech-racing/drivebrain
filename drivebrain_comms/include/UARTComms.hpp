@@ -26,13 +26,37 @@ public:
     using Message = google::protobuf::Message;
     using ReceiveHandler = std::function<void(std::shared_ptr<const Message>)>;
 
+    using LogHandler = std::function<void(std::shared_ptr<const Message>, const std::string&)>;
+
     struct Config {
         std::string device_name;
         unsigned int baud_rate = 115200;
         std::size_t max_payload_bytes = 4096;
         std::size_t max_outstanding_tx_bytes = 64 * 1024;
         std::string receive_topic; // Empty generates uart/<lowercase message name>/rx.
+        LogHandler logger; // Optional; runs on the UART worker, must not block or call start/stop.
     };
+
+    // Cumulative since construction. Snapshot counters may advance independently.
+    struct Stats {
+        uint64_t tx_accepted_frames = 0;
+        uint64_t tx_completed_frames = 0;
+        uint64_t tx_bytes = 0;
+        uint64_t send_rejections = 0;
+        uint64_t rx_bytes = 0;
+        uint64_t rx_frames = 0;
+        uint64_t cobs_errors = 0;
+        uint64_t crc_errors = 0;
+        uint64_t oversize_errors = 0;
+        uint64_t protobuf_errors = 0;
+        uint64_t callback_errors = 0;
+        uint64_t logger_errors = 0;
+        uint64_t io_errors = 0;
+        std::size_t outstanding_tx_bytes = 0;
+        std::size_t tx_high_water_bytes = 0;
+    };
+
+    Stats stats() const;
 
     // Stores an empty prototype of the receive type; does not open the port or start I/O.
     UARTComms(Config config, const Message& receive_prototype, ReceiveHandler handler);
@@ -45,7 +69,6 @@ public:
 
     // Call from the owning application thread, outside receive callbacks.
     // Repeated calls are safe. After an I/O failure, call stop() before restarting.
-    // Initialize MCAPLogger and FoxgloveServer before starting RX.
     // start() throws if opening or configuring fails.
     void start();
     void stop(); // Cancels I/O and joins the worker before returning.
@@ -57,6 +80,8 @@ public:
     bool send(const Message& message);
 
 private:
+    enum class DecodeError { None, COBS, CRC, Oversize };
+
     friend struct UARTCodecTestAccess;
     friend struct UARTLifecycleTestAccess;
 
@@ -80,7 +105,8 @@ private:
         const std::vector<uint8_t>& payload, std::size_t max_payload_bytes);
     // The receive loop removes the trailing zero delimiter before decoding.
     static std::optional<std::vector<uint8_t>> _decode_uart_frame(
-        const std::vector<uint8_t>& encoded, std::size_t max_payload_bytes);
+        const std::vector<uint8_t>& encoded, std::size_t max_payload_bytes,
+        DecodeError* error = nullptr);
 
     Config _config;
     std::unique_ptr<Message> _receive_prototype;
@@ -102,9 +128,27 @@ private:
     bool _write_in_progress = false;
 
     // Includes posted frames, queued frames, and the active write.
-    std::mutex _submission_mutex;
+    mutable std::mutex _submission_mutex;
     bool _accepting_sends = false;
     std::size_t _outstanding_tx_bytes = 0;
+    std::size_t _tx_high_water_bytes = 0;
+
+    struct AtomicStats {
+        std::atomic<uint64_t> tx_accepted_frames{0};
+        std::atomic<uint64_t> tx_completed_frames{0};
+        std::atomic<uint64_t> tx_bytes{0};
+        std::atomic<uint64_t> send_rejections{0};
+        std::atomic<uint64_t> rx_bytes{0};
+        std::atomic<uint64_t> rx_frames{0};
+        std::atomic<uint64_t> cobs_errors{0};
+        std::atomic<uint64_t> crc_errors{0};
+        std::atomic<uint64_t> oversize_errors{0};
+        std::atomic<uint64_t> protobuf_errors{0};
+        std::atomic<uint64_t> callback_errors{0};
+        std::atomic<uint64_t> logger_errors{0};
+        std::atomic<uint64_t> io_errors{0};
+    };
+    mutable AtomicStats _stats;
 };
 
 } // namespace comms

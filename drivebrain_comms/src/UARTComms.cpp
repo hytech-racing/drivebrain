@@ -5,8 +5,7 @@
 #include <boost/asio/write.hpp>
 #include <spdlog/spdlog.h>
 
-#include "Telemetry.hpp"
-
+#include <algorithm>
 #include <limits>
 #include <stdexcept>
 #include <utility>
@@ -25,7 +24,8 @@ UARTComms::UARTComms(Config config, const Message& receive_prototype, ReceiveHan
         throw std::invalid_argument("UART payload limit exceeds protobuf's array API limit");
     }
     if (_config.receive_topic.empty()) {
-        std::string name = _receive_prototype->GetDescriptor()->name();
+        const auto descriptor_name = _receive_prototype->GetDescriptor()->name();
+        std::string name(descriptor_name.data(), descriptor_name.size());
         for (char& character : name) {
             if (character >= 'A' && character <= 'Z') {
                 character = static_cast<char>(character - 'A' + 'a');
@@ -107,15 +107,38 @@ bool UARTComms::is_running() const noexcept {
     return _running.load();
 }
 
+UARTComms::Stats UARTComms::stats() const {
+    Stats out;
+    out.tx_accepted_frames = _stats.tx_accepted_frames.load(std::memory_order_relaxed);
+    out.tx_completed_frames = _stats.tx_completed_frames.load(std::memory_order_relaxed);
+    out.tx_bytes = _stats.tx_bytes.load(std::memory_order_relaxed);
+    out.send_rejections = _stats.send_rejections.load(std::memory_order_relaxed);
+    out.rx_bytes = _stats.rx_bytes.load(std::memory_order_relaxed);
+    out.rx_frames = _stats.rx_frames.load(std::memory_order_relaxed);
+    out.cobs_errors = _stats.cobs_errors.load(std::memory_order_relaxed);
+    out.crc_errors = _stats.crc_errors.load(std::memory_order_relaxed);
+    out.oversize_errors = _stats.oversize_errors.load(std::memory_order_relaxed);
+    out.protobuf_errors = _stats.protobuf_errors.load(std::memory_order_relaxed);
+    out.callback_errors = _stats.callback_errors.load(std::memory_order_relaxed);
+    out.logger_errors = _stats.logger_errors.load(std::memory_order_relaxed);
+    out.io_errors = _stats.io_errors.load(std::memory_order_relaxed);
+    std::lock_guard lock(_submission_mutex);
+    out.outstanding_tx_bytes = _outstanding_tx_bytes;
+    out.tx_high_water_bytes = _tx_high_water_bytes;
+    return out;
+}
+
 bool UARTComms::send(const Message& message) {
     auto frame = _encode_message(message);
     const std::size_t size = frame.size();
 
     std::lock_guard lock(_submission_mutex);
     if (!_accepting_sends || size > _config.max_outstanding_tx_bytes - _outstanding_tx_bytes) {
+        ++_stats.send_rejections;
         return false;
     }
     _outstanding_tx_bytes += size;
+    _tx_high_water_bytes = std::max(_tx_high_water_bytes, _outstanding_tx_bytes);
     try {
         boost::asio::post(_io_context, [this, frame = std::move(frame)]() mutable {
             const std::size_t size = frame.size();
@@ -129,6 +152,7 @@ bool UARTComms::send(const Message& message) {
                 _write_queue.push_back(std::move(frame));
             } catch (const std::exception& error) {
                 _release_tx_bytes(size);
+                ++_stats.io_errors;
                 spdlog::error("UART {} could not queue a write: {}", _config.device_name, error.what());
                 _halt_io();
                 return;
@@ -141,6 +165,7 @@ bool UARTComms::send(const Message& message) {
         _outstanding_tx_bytes -= size; // Posting failed; the frame was never submitted.
         throw;
     }
+    ++_stats.tx_accepted_frames;
     return true;
 }
 
@@ -182,12 +207,14 @@ void UARTComms::_start_write() {
             });
     } catch (const std::exception& error) {
         _write_in_progress = false;
+        ++_stats.io_errors;
         spdlog::error("UART {} could not start writing: {}", _config.device_name, error.what());
         _halt_io();
     }
 }
 
 void UARTComms::_handle_write(const boost::system::error_code& error, std::size_t size) {
+    _stats.tx_bytes += size;
     const std::size_t expected = _write_queue.front().size();
     _write_in_progress = false;
     _release_tx_bytes(expected);
@@ -198,11 +225,13 @@ void UARTComms::_handle_write(const boost::system::error_code& error, std::size_
         return;
     }
     if (error || size != expected) {
+        ++_stats.io_errors;
         spdlog::error("UART {} write failed after {} of {} bytes: {}", _config.device_name,
                       size, expected, error ? error.message() : "incomplete write");
         _halt_io();
         return;
     }
+    ++_stats.tx_completed_frames;
     _start_write();
 }
 
@@ -216,6 +245,7 @@ void UARTComms::_start_receive() {
                 _handle_receive(error, size);
             });
     } catch (const std::exception& error) {
+        ++_stats.io_errors;
         spdlog::error("UART {} could not start reading: {}", _config.device_name, error.what());
         _halt_io();
     }
@@ -226,11 +256,13 @@ void UARTComms::_handle_receive(const boost::system::error_code& error, std::siz
         return; // Includes the cancellation completion during normal shutdown.
     }
     if (error) {
+        ++_stats.io_errors;
         spdlog::error("UART {} read failed: {}", _config.device_name, error.message());
         _halt_io();
         return;
     }
 
+    _stats.rx_bytes += size;
     const std::size_t decoded_limit = _config.max_payload_bytes + 2; // Include CRC.
     const std::size_t encoded_limit = decoded_limit + decoded_limit / 254 + 1;
     for (std::size_t index = 0; index < size && _running.load(); ++index) {
@@ -240,6 +272,7 @@ void UARTComms::_handle_receive(const boost::system::error_code& error, std::siz
                 if (_encoded_frame.size() == encoded_limit) {
                     _encoded_frame.clear();
                     _discarding_frame = true;
+                    ++_stats.oversize_errors;
                 } else {
                     _encoded_frame.push_back(byte);
                 }
@@ -260,10 +293,14 @@ void UARTComms::_handle_receive(const boost::system::error_code& error, std::siz
 
         // Logging failures must not prevent application delivery.
         try {
-            core::log(message, _config.receive_topic);
+            if (_config.logger) {
+                _config.logger(message, _config.receive_topic);
+            }
         } catch (const std::exception& exception) {
+            ++_stats.logger_errors;
             spdlog::error("UART RX logging failed: {}", exception.what());
         } catch (...) {
+            ++_stats.logger_errors;
             spdlog::error("UART RX logging failed with an unknown exception");
         }
         if (!_running.load()) {
@@ -272,8 +309,10 @@ void UARTComms::_handle_receive(const boost::system::error_code& error, std::siz
         try {
             _handler(message);
         } catch (const std::exception& exception) {
+            ++_stats.callback_errors;
             spdlog::error("UART receive handler failed: {}", exception.what());
         } catch (...) {
+            ++_stats.callback_errors;
             spdlog::error("UART receive handler failed with an unknown exception");
         }
     }
@@ -281,20 +320,22 @@ void UARTComms::_handle_receive(const boost::system::error_code& error, std::siz
 }
 
 std::vector<uint8_t> UARTComms::_encode_message(const Message& message) const {
+    const auto protobuf_name = message.GetTypeName();
+    const std::string type_name(protobuf_name.data(), protobuf_name.size());
     if (!message.IsInitialized()) {
-        throw std::invalid_argument("Cannot encode UART message " + message.GetTypeName() +
+        throw std::invalid_argument("Cannot encode UART message " + type_name +
                                     ": missing required fields: " + message.InitializationErrorString());
     }
     const std::size_t size = message.ByteSizeLong();
     if (size > _config.max_payload_bytes) {
-        throw std::length_error("Cannot encode UART message " + message.GetTypeName() +
+        throw std::length_error("Cannot encode UART message " + type_name +
                                 ": payload is " + std::to_string(size) + " bytes; maximum is " +
                                 std::to_string(_config.max_payload_bytes));
     }
 
     std::vector<uint8_t> payload(size);
     if (!message.SerializeToArray(payload.data(), static_cast<int>(size))) {
-        throw std::runtime_error("Cannot encode UART message " + message.GetTypeName() +
+        throw std::runtime_error("Cannot encode UART message " + type_name +
                                  ": protobuf serialization failed");
     }
     return _encode_uart_frame(payload, _config.max_payload_bytes);
@@ -302,15 +343,24 @@ std::vector<uint8_t> UARTComms::_encode_message(const Message& message) const {
 
 std::shared_ptr<UARTComms::Message> UARTComms::_decode_message(
     const std::vector<uint8_t>& encoded) const {
-    auto payload = _decode_uart_frame(encoded, _config.max_payload_bytes);
+    DecodeError error = DecodeError::None;
+    auto payload = _decode_uart_frame(encoded, _config.max_payload_bytes, &error);
     if (!payload) {
+        switch (error) {
+            case DecodeError::COBS: ++_stats.cobs_errors; break;
+            case DecodeError::CRC: ++_stats.crc_errors; break;
+            case DecodeError::Oversize: ++_stats.oversize_errors; break;
+            case DecodeError::None: break;
+        }
         return nullptr;
     }
 
     auto message = std::shared_ptr<Message>(_receive_prototype->New());
     if (!message->ParseFromArray(payload->data(), static_cast<int>(payload->size()))) {
+        ++_stats.protobuf_errors;
         return nullptr;
     }
+    ++_stats.rx_frames;
     return message;
 }
 
@@ -361,13 +411,18 @@ std::vector<uint8_t> UARTComms::_encode_uart_frame(const std::vector<uint8_t>& p
     return encoded;
 }
 
-std::optional<std::vector<uint8_t>> UARTComms::_decode_uart_frame(const std::vector<uint8_t>& encoded, std::size_t max_payload_bytes) {
-    if (max_payload_bytes > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+std::optional<std::vector<uint8_t>> UARTComms::_decode_uart_frame(const std::vector<uint8_t>& encoded, std::size_t max_payload_bytes, DecodeError* error) {
+    if (error) *error = DecodeError::None;
+    const auto reject = [error](DecodeError reason) -> std::optional<std::vector<uint8_t>> {
+        if (error) *error = reason;
         return std::nullopt;
+    };
+    if (max_payload_bytes > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+        return reject(DecodeError::Oversize);
     }
     const std::size_t decoded_limit = max_payload_bytes + 2; // Payload plus CRC.
-    if (encoded.empty() || encoded.size() > decoded_limit + decoded_limit / 254 + 1) {
-        return std::nullopt;
+    if (encoded.size() > decoded_limit + decoded_limit / 254 + 1) {
+        return reject(DecodeError::Oversize);
     }
 
     std::vector<uint8_t> decoded;
@@ -375,31 +430,32 @@ std::optional<std::vector<uint8_t>> UARTComms::_decode_uart_frame(const std::vec
     for (std::size_t position = 0; position < encoded.size();) {
         const uint8_t code = encoded[position++];
         if (code == 0 || code - 1u > encoded.size() - position) {
-            return std::nullopt;
+            return reject(DecodeError::COBS);
         }
         for (unsigned int index = 1; index < code; ++index) {
             const uint8_t byte = encoded[position++];
-            if (byte == 0 || decoded.size() == decoded_limit) {
-                return std::nullopt;
+            if (byte == 0) return reject(DecodeError::COBS);
+            if (decoded.size() == decoded_limit) {
+                return reject(DecodeError::Oversize);
             }
             decoded.push_back(byte);
         }
         if (code != 0xFF && position < encoded.size()) {
             if (decoded.size() == decoded_limit) {
-                return std::nullopt;
+                return reject(DecodeError::Oversize);
             }
             decoded.push_back(0);
         }
     }
 
     if (decoded.size() < 2) {
-        return std::nullopt;
+        return reject(DecodeError::COBS);
     }
     const std::size_t payload_size = decoded.size() - 2;
     const uint16_t checksum = static_cast<uint16_t>(decoded[payload_size]) |
                               (static_cast<uint16_t>(decoded[payload_size + 1]) << 8);
     if (_crc16(decoded, payload_size) != checksum) {
-        return std::nullopt;
+        return reject(DecodeError::CRC);
     }
     decoded.resize(payload_size);
     return decoded;

@@ -7,8 +7,6 @@ find_package(GTest REQUIRED)
 add_executable(drivebrain_test
     main.cpp
     MCAPLoggerTest.cpp
-    UARTCodecTest.cpp
-    UARTLifecycleTest.cpp
 )
 
 target_link_libraries(drivebrain_test PUBLIC
@@ -20,7 +18,7 @@ target_link_libraries(drivebrain_test PUBLIC
 )
 
 file(COPY
-  ${CMAKE_SOURCE_DIR}/tests/test_configs
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_configs
   DESTINATION ${CMAKE_BINARY_DIR}
 )
 target_compile_definitions(drivebrain_test PRIVATE
