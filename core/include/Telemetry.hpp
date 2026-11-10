@@ -3,6 +3,8 @@
 #include <array>
 
 #include "StateTracker.hpp"
+#include <spdlog/spdlog.h>
+#include <DebugLogFields.hpp>
 #include <MCAPLogger.hpp>
 #include <FoxgloveServer.hpp>
 #include <foxglove/SceneUpdate.pb.h>
@@ -43,6 +45,34 @@ inline void log_mcap_only(std::shared_ptr<const google::protobuf::Message> msg, 
  */
 inline void log_foxglove_only(std::shared_ptr<const google::protobuf::Message> msg, const std::string &topic = "") {
     FoxgloveServer::instance().send_live_telem_msg(msg, topic);
+}
+
+/**
+ * Logs a number as a field of the DebugLogFields topic, without needing a protobuf message.
+ * The field must be listed under "debug_log_fields.numeric" in the drivebrain config.
+ *
+ * @param field name of the field to log
+ * @param value the value to log
+ */
+inline void log_debug_number(const std::string& field, float value) {
+    nlohmann::json msg;
+    msg[field] = value;
+    MCAPLogger::instance().log_json(msg, DEBUG_LOG_FIELDS_TOPIC);
+    FoxgloveServer::instance().send_live_telem_json(msg, DEBUG_LOG_FIELDS_TOPIC);
+}
+
+/**
+ * Logs a boolean as a field of the DebugLogFields topic, without needing a protobuf message.
+ * The field must be listed under "debug_log_fields.boolean" in the drivebrain config.
+ *
+ * @param field name of the field to log
+ * @param value the value to log
+ */
+inline void log_debug_bool(const std::string& field, bool value) {
+    nlohmann::json msg;
+    msg[field] = value;
+    MCAPLogger::instance().log_json(msg, DEBUG_LOG_FIELDS_TOPIC);
+    FoxgloveServer::instance().send_live_telem_json(msg, DEBUG_LOG_FIELDS_TOPIC);
 }
 
 /**

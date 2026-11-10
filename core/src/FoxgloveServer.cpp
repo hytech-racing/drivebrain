@@ -1,3 +1,4 @@
+#include <DebugLogFields.hpp>
 #include <FoxgloveServer.hpp>
 #include <StateTracker.hpp>
 #include <foxglove/websocket/parameter.hpp>
@@ -229,6 +230,16 @@ core::FoxgloveServer::FoxgloveServer(std::string file_name) {
         }
     }
 
+    /* Values logged with core::log_number/log_bool share this JSON channel, whose schema
+       is built from the debug_log_fields section of the config */
+    foxglove::ChannelWithoutId debug_log_channel;
+    debug_log_channel.topic = core::DEBUG_LOG_FIELDS_TOPIC;
+    debug_log_channel.encoding = "json";
+    debug_log_channel.schemaName = "jsonschema";
+    debug_log_channel.schema = foxglove::base64Encode(debug_log_fields_schema(init_param_data).dump());
+    _name_to_id_map[debug_log_channel.topic] = running_index;
+    channels.push_back(debug_log_channel);
+
     auto res_ids = _server->addChannels(channels);
 
     _server->setHandlers(std::move(hdlrs));
@@ -339,6 +350,34 @@ void core::FoxgloveServer::send_live_telem_msg(std::shared_ptr<const google::pro
     out.channel_id = msg_chan_id;
     out.timestamp = nanosecondsSinceEpoch();
     out.data = msg->SerializeAsString();
+    _send_msg(std::move(out));
+}
+
+void core::FoxgloveServer::send_live_telem_json(const nlohmann::json& msg, const std::string& topic) {
+    foxglove::ChannelId msg_chan_id;
+    {
+        std::unique_lock lock(_channel_mutex);
+        auto channel = _name_to_id_map.find(topic);
+        if (channel == _name_to_id_map.end()) {
+            // first message on this topic, advertise a channel for it
+            foxglove::ChannelWithoutId server_channel;
+            server_channel.topic = topic;
+            server_channel.encoding = "json";
+            server_channel.schemaName = "jsonschema";
+            server_channel.schema = foxglove::base64Encode(nlohmann::json{{"type", "object"}}.dump());
+            channel = _name_to_id_map.emplace(topic, _server->addChannels({server_channel})[0]).first;
+        }
+        msg_chan_id = channel->second;
+    }
+
+    OutgoingMsg out;
+    out.channel_id = msg_chan_id;
+    out.timestamp = nanosecondsSinceEpoch();
+    out.data = msg.dump();
+    _send_msg(std::move(out));
+}
+
+void core::FoxgloveServer::_send_msg(core::OutgoingMsg out) {
     {
         std::unique_lock lock(_send_mutex);
         if (_send_queue.size() >= MAX_SEND_QUEUE) {

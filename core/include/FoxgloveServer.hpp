@@ -107,6 +107,14 @@ namespace core {
             void send_live_telem_msg(std::shared_ptr<const google::protobuf::Message> msg, const std::string& topic = { });
 
             /**
+             * Queues a JSON message for broadcast to Foxglove
+             *
+             * @param msg the JSON message to be sent
+             * @param topic topic to send on
+             */
+            void send_live_telem_json(const nlohmann::json& msg, const std::string& topic);
+
+            /**
              * Registers a callback function to be run whenever a parameter is updated in Foxglove.
              * @param The function to be reigstered, which takes the form of (const string, param) -> void
              * @return The newly created boost connection
@@ -145,6 +153,9 @@ namespace core {
 
         private:
             FoxgloveServer(std::string parameters_file);
+
+            /** Sends a raw message over foxglove */
+            void _send_msg(OutgoingMsg out);
 
             /* Registers JSON params on init. Recursively called to support multi-level JSON */
             void _init_params(const nlohmann::json &json_obj, const std::string &prefix);
