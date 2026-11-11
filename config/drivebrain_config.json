@@ -7,8 +7,8 @@
         "port": 51000
     },
     "debug_log_fields": {
-        "numeric": ["abc", "def", "ghi"],
-        "boolean": ["ghi/jdk"]
+        "numeric": [],
+        "boolean": []
     },
     "SimpleSpeedController": {
         "max_torque": 21.0,
