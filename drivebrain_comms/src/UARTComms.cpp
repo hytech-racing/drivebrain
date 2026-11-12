@@ -129,7 +129,10 @@ UARTComms::Stats UARTComms::stats() const {
 }
 
 bool UARTComms::send(const Message& message) {
-    auto frame = _encode_message(message);
+    return _submit_frame(_encode_message(message));
+}
+
+bool UARTComms::_submit_frame(std::vector<uint8_t> frame) {
     const std::size_t size = frame.size();
 
     std::lock_guard lock(_submission_mutex);
