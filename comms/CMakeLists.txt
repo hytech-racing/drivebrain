@@ -21,6 +21,7 @@ set(DRIVEBRAIN_COMMS_SRCS
     src/VNComms.cpp
     src/ETHSendComms.cpp
     src/OMSComms.cpp
+    src/UARTComms.cpp
     src/OusterComms.cpp
     src/BlackflyComms.cpp
     src/ImageCompression.cpp

@@ -1,0 +1,24 @@
+syntax = "proto3";
+package uart_bench;
+import "hytech_msgs.proto";
+
+// Test metadata is deliberately separate from production MCUCommandData.
+message Request {
+  fixed64 run_id = 1;
+  uint64 sequence = 2;
+  uint32 version = 3;
+  oneof body {
+    hytech_msgs.MCUCommandData command = 4;
+    bytes pattern = 5;
+  }
+}
+message Reply {
+  fixed64 run_id = 1;
+  uint64 sequence = 2;
+  uint32 version = 3;
+  oneof body {
+    hytech_msgs.MCUCommandData command = 4;
+    bytes pattern = 5;
+  }
+  uint32 processing_us = 6;
+}

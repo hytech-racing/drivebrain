@@ -1,0 +1,55 @@
+{
+  "baud": 921600,
+  "seed": 1979,
+  "phases": [
+    {
+      "name": "command-50hz",
+      "kind": "command",
+      "rate": 50,
+      "seconds": 30
+    },
+    {
+      "name": "command-100hz",
+      "kind": "command",
+      "rate": 100,
+      "seconds": 30
+    },
+    {
+      "name": "command-250hz",
+      "kind": "command",
+      "rate": 250,
+      "seconds": 30
+    },
+    {
+      "name": "command-500hz",
+      "kind": "command",
+      "rate": 500,
+      "seconds": 30
+    },
+    {
+      "name": "command-1000hz",
+      "kind": "command",
+      "rate": 1000,
+      "seconds": 30
+    },
+    {
+      "name": "soak-idle",
+      "kind": "command",
+      "rate": 250,
+      "seconds": 120
+    },
+    {
+      "name": "soak-cpu",
+      "kind": "command",
+      "rate": 250,
+      "seconds": 120,
+      "cpu_workers": 2
+    },
+    {
+      "name": "intentional-overload",
+      "kind": "overload",
+      "rate": 20000,
+      "seconds": 10
+    }
+  ]
+}

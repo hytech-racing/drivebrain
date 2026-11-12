@@ -1,0 +1,2 @@
+uart_bench.Request.pattern max_size:1024
+uart_bench.Reply.pattern max_size:1024
