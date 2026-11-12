@@ -24,7 +24,7 @@ uv run tests/hil/uart/tester/uart_bench.py run --suite-id 1 --start-at command-5
 # Equivalent: --start-at 4
 ```
 
-A fresh raw-message preflight runs before each invocation. The selected phase and every subsequent phase run again. Each phase replaces the same-named record as it starts; earlier phases and later phases not yet restarted retain their saved results. The run is complete only when all profile phases and the final recovery check have passed. A suite ID must reuse the same profile, baud, Teensy port, seed, and protocol schema; use a new ID for a different configuration.
+A fresh raw-message preflight runs before each invocation. The selected phase and every subsequent phase run again. Each phase replaces the same-named record as it starts; earlier phases and later phases not yet restarted retain their saved results. The suite passes only when every profile phase, preflight, and final recovery check has passed. A suite ID must reuse the same profile, baud, Teensy port, seed, and protocol schema; use a new ID for a different configuration.
 
 Reports are under `.cache/uart-bench/reports/<suite-id>/`: `report.json` contains the current per-phase results and latest live snapshots, `report.md` is a summary, and `events.jsonl` appends timestamped events with attempt and phase identifiers. JSON reports are atomically updated throughout the run. Events preserve historical attempts even when a phase's current result is replaced. A disconnected or interrupted phase is marked aborted and can be restarted. The dashboard shows trends normalized to each recent window; RTT is the Pi-measured round trip, not one-way latency.
 
