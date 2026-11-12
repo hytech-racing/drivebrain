@@ -12,6 +12,8 @@ uv run tests/hil/uart/tester/uart_bench.py setup --no-flash
 
 Start a suite and choose an ID that you can reuse:
 
+The default idle and CPU-load soak phases each run for 120 seconds.
+
 ```sh
 uv run tests/hil/uart/tester/uart_bench.py run --suite-id 1
 ```
