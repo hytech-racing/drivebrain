@@ -1,0 +1,18 @@
+# Python caches and test runner output
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Locally generated CMake/build artifacts
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+*.o
+*.a
+*.d
+.DS_Store
