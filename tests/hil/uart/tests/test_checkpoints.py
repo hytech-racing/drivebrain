@@ -64,6 +64,10 @@ class CheckpointTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'profile differs'):
             Report(output, {**self.metadata, 'profile': {'phases': []}})
 
+    def test_command_phases_select_direct_production_payload(self):
+        for kind in ('command', 'raw', 'overload'):
+            self.assertEqual(bench.wire_mode(kind), 'raw')
+
     def test_live_snapshot_survives_reopening_an_interrupted_phase(self):
         output = self.root / 'suite'
         report = Report(output, self.metadata)

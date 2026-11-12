@@ -1,6 +1,6 @@
 # UART bench
 
-The laptop coordinates the Pi over SSH and the Teensy over USB. The Pi and Teensy exchange UART test messages. Connect the Pi's GPIO 14 TX (header pin 8) to Teensy Serial1 RX (pin 0), GPIO 15 RX (header pin 10) to Serial1 TX (pin 1), and a ground pin to Teensy ground. Leave the Teensy connected to the laptop over USB.
+The laptop coordinates the Pi over SSH and the Teensy over USB. The default rate sweeps, soak, and overload phases send direct `MCUCommandData` messages over UART, without the bench Request envelope. The bench Teensy echoes commands so the Pi can verify them and measure round-trip time. For correlation, the test places a sequence number in `prev_MCU_recv_millis`; it is not a real timestamp during this test. The wire encoding is UART framing and Protobuf, rather than CAN frames. Connect the Pi's GPIO 14 TX (header pin 8) to Teensy Serial1 RX (pin 0), GPIO 15 RX (header pin 10) to Serial1 TX (pin 1), and a ground pin to Teensy ground. Leave the Teensy connected to the laptop over USB.
 
 From the Drivebrain root, prepare the coordinator once:
 
