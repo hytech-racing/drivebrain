@@ -55,9 +55,10 @@ namespace core {
               spdlog::info("Destructing mcap logger");
               {
                 std::lock_guard lock(_input_buffer_mutex);
-              _logging = false;
+                _logging = false;
               }
 
+              close_active_mcap();
               _s_instance.store(nullptr, std::memory_order_release);
               spdlog::info("Msg logger singleton instance released");
 
@@ -98,12 +99,6 @@ namespace core {
             void init_logging();
 
             /**
-             * Stops logging to the current file.
-             * To not be confused with halting, which stops logging and running the MCAPLogger entirely.
-            */
-            void stop_logging();
-
-            /**
              * Logs a protobuf message to the current MCAP file
              * 
              * @param message the message to be logged
@@ -120,7 +115,7 @@ namespace core {
              */
             int log_params(nlohmann::json params);
 
-        private: 
+        private:
           
             /* Private constructor to be called by init method */
             MCAPLogger(const std::string &base_dir, const mcap::McapWriterOptions &options, const std::string &params_file);
@@ -129,7 +124,14 @@ namespace core {
              * Spawned by thread, loops until end of program life or error occurs. 
              * Logs all queued messages to a file. 
              */
-            void _handle_log_to_file();     
+            void _handle_log_to_file();  
+            
+            /**
+             * Logs the git metadata of the running build to the GitMetadata topic
+             *
+             * @return 0 on success, negative err code on failure
+             */
+            int _log_git_metadata();
 
             /* Singleton move semantics */
             MCAPLogger(const MCAPLogger&) = delete;

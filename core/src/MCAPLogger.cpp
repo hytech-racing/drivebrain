@@ -4,6 +4,7 @@
 #include <fstream>
 
 #include <MCAPLogger.hpp>
+#include "version.h"
 
 #if JETSON_ENABLED
 #define RECORDINGS_DIR "/mnt/ssd/recordings"
@@ -86,6 +87,15 @@ std::tuple<std::string, bool> core::MCAPLogger::status() {
 }
 }
 
+static nlohmann::json git_metadata() {
+    return {
+        {"git_hash", Version::GIT_HASH},
+        {"git_branch", Version::GIT_BRANCH},
+        {"git_date", Version::GIT_DATE},
+        {"has_uncommitted_changes", Version::HAS_UNCOMMITTED_CHANGES},
+    };
+}
+
 static nlohmann::json generate_json_schema(const nlohmann::json& obj) {
     nlohmann::json schema;
     
@@ -158,7 +168,7 @@ int core::MCAPLogger::open_new_mcap() {
 
     std::vector<std::string> proto_names = {"hytech_msgs.proto", "ht_can.proto", "dv_msgs.proto",
                                             "foxglove/PointCloud.proto", "foxglove/SceneUpdate.proto", "foxglove/FrameTransform.proto",
-                                            "foxglove/CompressedImage.proto", "foxglove/RawImage.proto", "foxglove/ImageAnnotations.proto"};
+                                            "foxglove/CompressedVideo.proto", "foxglove/CompressedImage.proto", "foxglove/RawImage.proto", "foxglove/ImageAnnotations.proto"};
 
     auto descriptors = get_pb_descriptors(proto_names);
 
@@ -181,10 +191,23 @@ int core::MCAPLogger::open_new_mcap() {
     mcap::Channel config_channel("drivebrain_configuration", "json", config_schema.id);
     _writer.addChannel(config_channel);
     _name_to_id_map["drivebrain_configuration"] = config_channel.id;
+    _type_to_schema_id_map["drivebrain_configuration"] = config_schema.id;
 
     log_params(_initial_params);
 
     spdlog::info("Successfully added params schema");
+
+    const nlohmann::json git_metadata_json = git_metadata();
+    mcap::Schema git_schema("GitMetadata", "jsonschema", generate_json_schema(git_metadata_json).dump());
+    _writer.addSchema(git_schema);
+    mcap::Channel git_channel("GitMetadata", "json", git_schema.id);
+    _writer.addChannel(git_channel);
+    _name_to_id_map["GitMetadata"] = git_channel.id;
+    _type_to_schema_id_map["GitMetadata"] = git_schema.id;
+
+    _log_git_metadata();
+
+    spdlog::info("Successfully added git metadata schema");
     
     return 0;
 }
@@ -204,18 +227,6 @@ void core::MCAPLogger::init_logging() {
     }
     _msg_log_thread = std::thread([this]() { _handle_log_to_file(); });
     spdlog::info("Msg log thread spawned");
-}
-
-void core::MCAPLogger::stop_logging() {
-    {
-        std::unique_lock lock(_input_buffer_mutex);
-        _logging = false;
-    }
-
-    _input_buffer_cv.notify_one(); 
-    if (_msg_log_thread.joinable()) {
-        _msg_log_thread.join();
-    }
 }
 
 int core::MCAPLogger::log_msg(core::MsgType message, const std::string &topic) {
@@ -288,6 +299,23 @@ int core::MCAPLogger::log_params(nlohmann::json params) {
     msg.log_time = log_time;
     msg.serialized_data = params.dump();
     msg.message_name = "drivebrain_configuration";
+    {
+        std::unique_lock lock(_input_buffer_mutex);
+        _input_buffer.push_back(std::move(msg));
+        _input_buffer_cv.notify_one();
+    }
+
+    return 0;
+}
+
+int core::MCAPLogger::_log_git_metadata() {
+    mcap::Timestamp log_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+
+    RawMessage_s msg;
+    msg.log_time = log_time;
+    msg.serialized_data = git_metadata().dump();
+    msg.type_name = "GitMetadata";
+    msg.message_name = "GitMetadata";
     {
         std::unique_lock lock(_input_buffer_mutex);
         _input_buffer.push_back(std::move(msg));

@@ -22,9 +22,9 @@ add_custom_command(OUTPUT ${GENERATED}/base_msgs.pb.cc ${GENERATED}/base_msgs.pb
     COMMAND protobuf::protoc --cpp_out=${GENERATED} -I ${HT_PROTO_DIR}
         -I ${CMAKE_CURRENT_SOURCE_DIR}/proto ${PROTOS}
     DEPENDS ${PROTOS} VERBATIM)
-add_library(uart_bench_transport ../../../drivebrain_comms/src/UARTComms.cpp
+add_library(uart_bench_transport ../../../comms/src/UARTComms.cpp
     ${GENERATED}/base_msgs.pb.cc ${GENERATED}/hytech_msgs.pb.cc ${GENERATED}/uart_bench.pb.cc)
-target_include_directories(uart_bench_transport PUBLIC ../../../drivebrain_comms/include ${GENERATED})
+target_include_directories(uart_bench_transport PUBLIC ../../../comms/include ${GENERATED})
 target_link_libraries(uart_bench_transport PUBLIC protobuf::libprotobuf Boost::headers spdlog::spdlog Threads::Threads)
 add_executable(uart_stress_peer pi/uart_stress_peer.cpp)
 target_link_libraries(uart_stress_peer PRIVATE uart_bench_transport)

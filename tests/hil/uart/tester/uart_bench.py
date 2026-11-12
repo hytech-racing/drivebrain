@@ -195,7 +195,7 @@ def identity_check(identity, digest):
 
 
 def source_archive(ht_proto):
-    files = [DB / "drivebrain_comms/include/UARTComms.hpp", DB / "drivebrain_comms/src/UARTComms.cpp"]
+    files = [DB / "comms/include/UARTComms.hpp", DB / "comms/src/UARTComms.cpp"]
     files += [p for p in BENCH.rglob("*") if p.is_file() and "__pycache__" not in p.parts]
     files += [ht_proto / name for name in ("base_msgs.proto", "hytech_msgs.proto", "hytech_msgs.options") if (ht_proto / name).exists()]
     digest = hashlib.sha256()

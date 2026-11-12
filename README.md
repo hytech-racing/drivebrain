@@ -57,8 +57,10 @@ and pass in whatever flags you see fit.
 Inside the container, execute:
 
 ```bash
-./scripts/build_script.sh
+./scripts/build_script.sh --jetson
 ```
+
+If you run into any package / dependency errors, run `docker compose build dev` and then re-enter the container to run the build script.
 
 This script will build the DriveBrain software using the cross-compilation toolchain for the target platform.
 The first time you run it, it will take some time because it needs to compile all the dependencies. However, future builds past the first one take <1 minute because dependencies are cached. Once finished, the `drivebrain` binary will be in `build-arm/`
@@ -145,5 +147,12 @@ Ubuntu shell at `~/drivebrain`:
 ```bash
 docker build -t kkittur/drivebrain_cross_compile .   # once
 docker compose run dev
-./scripts/build_script.sh
+./scripts/build_script.sh --jetson
 ```
+
+# Deploying Code
+
+To deploy the code to the drivebrain, connect to the jetson through the `ht11` wifi, through an ethernet cable,
+or through an ubiquiti AC bullet. Then, run `./scripts/deploy_script.sh` outside of the drivebrain container.
+
+If you get a `zsh: permission denied` message, simply run `chmod +x ./scripts/deploy_script.sh`.
