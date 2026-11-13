@@ -11,6 +11,7 @@
 #include <Geometry.hpp>
 #include "hytech_msgs.pb.h"
 #include "dv_msgs.pb.h"
+#include "google/protobuf/struct.pb.h"
 
 namespace core {
 
@@ -249,5 +250,22 @@ inline void render_segments(const std::vector<xyz_vec<float>>& points, std::stri
     color->set_a(0.35);
 
     log(scene);
+}
+
+/**
+ * Adds a vector containing doubles or ints to a dynamically-defined 
+ * protobuf::Struct message.
+ *
+ * @param pb_struct The struct to add the vector to
+ * @param key The key that the vector lies under
+ * @param vec the vector to add
+ */
+template <typename T>
+inline void add_double_vector(google::protobuf::Struct* pb_struct, const std::string& key, const std::vector<T>& vec) {
+    google::protobuf::Value* field_val = &(*pb_struct->mutable_fields())[key];
+    google::protobuf::ListValue* list_val = field_val->mutable_list_value();
+    for (const auto& item : vec) {
+        list_val->add_values()->set_number_value(static_cast<double>(item));
+    }
 }
 }
