@@ -42,6 +42,8 @@ namespace {
     Eigen::Isometry3f camera_from_lidar(const std::string& camera) {
         float yaw_deg = core::FoxgloveServer::instance().get_param<float>("ConeClassifier/" + camera + "/yaw_deg").value_or(0.0f);
         float pitch_deg = core::FoxgloveServer::instance().get_param<float>("ConeClassifier/" + camera + "/pitch_deg").value_or(0.0f);
+        yaw_deg += core::FoxgloveServer::instance().get_param<float>("ConeClassifier/" + camera + "/yaw_offset_deg").value_or(0.0f);
+        pitch_deg += core::FoxgloveServer::instance().get_param<float>("ConeClassifier/" + camera + "/pitch_offset_deg").value_or(0.0f);
         float roll_deg = core::FoxgloveServer::instance().get_param<float>("ConeClassifier/" + camera + "/roll_deg").value_or(0.0f);
         float forward_m = core::FoxgloveServer::instance().get_param<float>("ConeClassifier/" + camera + "/forward_m").value_or(0.0f);
         float left_m = core::FoxgloveServer::instance().get_param<float>("ConeClassifier/" + camera + "/left_m").value_or(0.0f);
