@@ -44,6 +44,7 @@
         "min_speed_mps": 1.5,
         "max_speed_mps": 5.0,
         "max_lat_accel_mps2": 3.0,
+        "max_brake_mps2": 4.0,
         "torque_lim_nm": 5.0
     },
     "vn_driver": {
