@@ -161,7 +161,7 @@ void BlackflyComms::_aravis_receive_loop() {
                         cone_detections->push_back({2.0f * r.x, 2.0f * r.y, 2.0f * (r.x + r.width), 2.0f * (r.y + r.height),
                                                     core::cone_color_from_name(_detector->cone_name(det.class_id)), det.score});
                     }
-                    core::StateTracker::instance().set_camera_detections(_name, cone_detections);
+                    core::StateTracker::instance().set_camera_detections(_name, timestamp_ns, cone_detections);
 
                     auto make_annotations = [&](float scale, bool unrotate) {
                         auto annotations = std::make_shared<foxglove::ImageAnnotations>();
