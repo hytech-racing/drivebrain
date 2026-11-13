@@ -3,7 +3,7 @@
 #include <mutex>
 #include <fstream>
 
-#include <DebugLogFields.hpp>
+#include <ProtoNames.hpp>
 #include <MCAPLogger.hpp>
 #include "version.h"
 
@@ -167,11 +167,7 @@ int core::MCAPLogger::open_new_mcap() {
         return -1;
     }
 
-    std::vector<std::string> proto_names = {"hytech_msgs.proto", "ht_can.proto", "dv_msgs.proto",
-                                            "foxglove/PointCloud.proto", "foxglove/SceneUpdate.proto", "foxglove/FrameTransform.proto",
-                                            "foxglove/CompressedVideo.proto", "foxglove/CompressedImage.proto", "foxglove/RawImage.proto", "foxglove/ImageAnnotations.proto"};
-
-    auto descriptors = get_pb_descriptors(proto_names);
+    auto descriptors = get_pb_descriptors(core::PROTO_NAMES);
 
     for (const auto &file_descriptor : descriptors) {
         for (int i = 0; i < file_descriptor->message_type_count(); i++) {
@@ -190,9 +186,6 @@ int core::MCAPLogger::open_new_mcap() {
     _register_json_schema("drivebrain_configuration", _params_schema_json);
     log_params(_initial_params);
     spdlog::info("Successfully added params schema");
-
-    _register_json_schema(core::DEBUG_LOG_FIELDS_TOPIC, _debug_log_fields_schema_json);
-    spdlog::info("Successfully added debug log fields schema");
 
     _register_json_schema("GitMetadata", generate_json_schema(git_metadata()));
     _log_git_metadata();
@@ -229,17 +222,6 @@ int core::MCAPLogger::log_msg(core::MsgType message, const std::string &topic) {
     return _enqueue_message(std::move(new_message), false);
 }
 
-int core::MCAPLogger::log_json(const nlohmann::json &message, const std::string &topic) {
-    mcap::Timestamp log_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-    RawMessage_s new_message;
-    new_message.log_time = log_time;
-    new_message.serialized_data = message.dump();
-    new_message.type_name = topic;
-    new_message.message_name = topic;
-
-    return _enqueue_message(std::move(new_message), false);
-}
-
 /****************************************************************
  * PRIVATE CLASS METHOD IMPLEMENTATIONS
  ****************************************************************/
@@ -248,7 +230,6 @@ core::MCAPLogger::MCAPLogger(const std::string &base_dir, const mcap::McapWriter
     nlohmann::json params_config = nlohmann::json::parse(raw_param_file);
     _initial_params = params_config; // Used in open_new_mcap to log initial params
     _params_schema_json = generate_json_schema(params_config);
-    _debug_log_fields_schema_json = debug_log_fields_schema(params_config);
 }
 
 int core::MCAPLogger::_enqueue_message(RawMessage_s message, bool log_when_inactive) {

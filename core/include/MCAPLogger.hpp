@@ -108,15 +108,6 @@ namespace core {
             int log_msg(MsgType message, const std::string &topic = "");
 
             /**
-             * Logs a JSON message to the current MCAP file
-             *
-             * @param message the JSON message to be logged
-             * @param topic topic to log on, which must have been registered when the file was opened
-             * @return 0 on success, negative err code on failure
-             */
-            int log_json(const nlohmann::json &message, const std::string &topic);
-
-            /**
              * Logs the json params to the current MCAP file
              *
              * @param The parameters to be logged, in JSON format
@@ -182,7 +173,6 @@ namespace core {
             
             /* State */
             nlohmann::json _params_schema_json;
-            nlohmann::json _debug_log_fields_schema_json;
             nlohmann::json _initial_params;
             std::unordered_map<std::string, uint32_t> _name_to_id_map;
             std::unordered_map<std::string, uint16_t> _type_to_schema_id_map;
