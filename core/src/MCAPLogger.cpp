@@ -3,6 +3,7 @@
 #include <mutex>
 #include <fstream>
 
+#include <ProtoNames.hpp>
 #include <MCAPLogger.hpp>
 #include "version.h"
 
@@ -83,7 +84,7 @@ static std::string serialize_fd_set(const google::protobuf::Descriptor *toplevel
 std::tuple<std::string, bool> core::MCAPLogger::status() {
     {
         std::lock_guard lock(_input_buffer_mutex);
-    return std::make_tuple(_log_name, _logging);
+    return std::make_tuple(_log_name, _logging.load());
 }
 }
 
@@ -166,11 +167,7 @@ int core::MCAPLogger::open_new_mcap() {
         return -1;
     }
 
-    std::vector<std::string> proto_names = {"hytech_msgs.proto", "ht_can.proto", "dv_msgs.proto",
-                                            "foxglove/PointCloud.proto", "foxglove/SceneUpdate.proto", "foxglove/FrameTransform.proto",
-                                            "foxglove/CompressedVideo.proto", "foxglove/CompressedImage.proto", "foxglove/RawImage.proto", "foxglove/ImageAnnotations.proto"};
-
-    auto descriptors = get_pb_descriptors(proto_names);
+    auto descriptors = get_pb_descriptors(core::PROTO_NAMES);
 
     for (const auto &file_descriptor : descriptors) {
         for (int i = 0; i < file_descriptor->message_type_count(); i++) {
@@ -186,27 +183,12 @@ int core::MCAPLogger::open_new_mcap() {
 
     spdlog::info("Successfully added message descriptions to mcap");
 
-    mcap::Schema config_schema("drivebrain_configuration", "jsonschema", _params_schema_json.dump());
-    _writer.addSchema(config_schema);
-    mcap::Channel config_channel("drivebrain_configuration", "json", config_schema.id);
-    _writer.addChannel(config_channel);
-    _name_to_id_map["drivebrain_configuration"] = config_channel.id;
-    _type_to_schema_id_map["drivebrain_configuration"] = config_schema.id;
-
+    _register_json_schema("drivebrain_configuration", _params_schema_json);
     log_params(_initial_params);
-
     spdlog::info("Successfully added params schema");
 
-    const nlohmann::json git_metadata_json = git_metadata();
-    mcap::Schema git_schema("GitMetadata", "jsonschema", generate_json_schema(git_metadata_json).dump());
-    _writer.addSchema(git_schema);
-    mcap::Channel git_channel("GitMetadata", "json", git_schema.id);
-    _writer.addChannel(git_channel);
-    _name_to_id_map["GitMetadata"] = git_channel.id;
-    _type_to_schema_id_map["GitMetadata"] = git_schema.id;
-
+    _register_json_schema("GitMetadata", generate_json_schema(git_metadata()));
     _log_git_metadata();
-
     spdlog::info("Successfully added git metadata schema");
     
     return 0;
@@ -236,14 +218,8 @@ int core::MCAPLogger::log_msg(core::MsgType message, const std::string &topic) {
     new_message.serialized_data = message->SerializeAsString(); 
     new_message.type_name = message->GetDescriptor()->name();
     new_message.message_name = topic.empty() ? new_message.type_name : topic;
-    {
-        std::unique_lock lock(_input_buffer_mutex);
-        if (!_logging) return -1; // Logging is not active, return an error code
-        _input_buffer.push_back(std::move(new_message)); 
-        _input_buffer_cv.notify_one(); 
-   }
 
-    return 0;
+    return _enqueue_message(std::move(new_message), false);
 }
 
 /****************************************************************
@@ -254,6 +230,23 @@ core::MCAPLogger::MCAPLogger(const std::string &base_dir, const mcap::McapWriter
     nlohmann::json params_config = nlohmann::json::parse(raw_param_file);
     _initial_params = params_config; // Used in open_new_mcap to log initial params
     _params_schema_json = generate_json_schema(params_config);
+}
+
+int core::MCAPLogger::_enqueue_message(RawMessage_s message, bool log_when_inactive) {
+    std::unique_lock lock(_input_buffer_mutex);
+    if (!log_when_inactive && !_logging) return -1;
+    _input_buffer.push_back(std::move(message));
+    _input_buffer_cv.notify_one();
+    return 0;
+}
+
+void core::MCAPLogger::_register_json_schema(const std::string &name, const nlohmann::json &schema_json) {
+    mcap::Schema schema(name, "jsonschema", schema_json.dump());
+    _writer.addSchema(schema);
+    mcap::Channel channel(name, "json", schema.id);
+    _writer.addChannel(channel);
+    _name_to_id_map[name] = channel.id;
+    _type_to_schema_id_map[name] = schema.id;
 }
 
 void core::MCAPLogger::_handle_log_to_file() {
@@ -299,13 +292,8 @@ int core::MCAPLogger::log_params(nlohmann::json params) {
     msg.log_time = log_time;
     msg.serialized_data = params.dump();
     msg.message_name = "drivebrain_configuration";
-    {
-        std::unique_lock lock(_input_buffer_mutex);
-        _input_buffer.push_back(std::move(msg));
-        _input_buffer_cv.notify_one();
-    }
 
-    return 0;
+    return _enqueue_message(std::move(msg), true);
 }
 
 int core::MCAPLogger::_log_git_metadata() {
@@ -316,12 +304,7 @@ int core::MCAPLogger::_log_git_metadata() {
     msg.serialized_data = git_metadata().dump();
     msg.type_name = "GitMetadata";
     msg.message_name = "GitMetadata";
-    {
-        std::unique_lock lock(_input_buffer_mutex);
-        _input_buffer.push_back(std::move(msg));
-        _input_buffer_cv.notify_one();
-    }
 
-    return 0;
+    return _enqueue_message(std::move(msg), true);
 }
 

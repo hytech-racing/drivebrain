@@ -3,6 +3,7 @@
 #include <foxglove/websocket/parameter.hpp>
 #include <nlohmann/detail/value_t.hpp>
 #include <fstream>
+#include <ProtoNames.hpp>
 #include <spdlog/spdlog.h>
 
 static std::string to_lowercase(std::string s) {
@@ -204,11 +205,7 @@ core::FoxgloveServer::FoxgloveServer(std::string file_name) {
         _server->publishParameterValues(clientHandle, foxglove_params, request_id);
     };
 
-    std::vector<std::string> proto_names = {"hytech_msgs.proto", "ht_can.proto", "dv_msgs.proto",
-                                            "foxglove/PointCloud.proto", "foxglove/SceneUpdate.proto", "foxglove/FrameTransform.proto",
-                                            "foxglove/CompressedImage.proto", "foxglove/RawImage.proto"};
-
-    auto descriptors = get_pb_descriptors(proto_names);
+    auto descriptors = get_pb_descriptors(core::PROTO_NAMES);
     std::vector<foxglove::ChannelWithoutId> channels;
 
     int running_index = 1;
