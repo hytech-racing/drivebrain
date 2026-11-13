@@ -3,13 +3,11 @@
 #include <array>
 
 #include "StateTracker.hpp"
-#include <spdlog/spdlog.h>
 #include <MCAPLogger.hpp>
 #include <FoxgloveServer.hpp>
 #include <foxglove/SceneUpdate.pb.h>
 #include <foxglove/FrameTransform.pb.h>
 #include <Geometry.hpp>
-#include "hytech_msgs.pb.h"
 #include "dv_msgs.pb.h"
 #include "google/protobuf/struct.pb.h"
 

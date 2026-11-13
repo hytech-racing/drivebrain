@@ -146,9 +146,6 @@ namespace core {
         private:
             FoxgloveServer(std::string parameters_file);
 
-            /** Sends a raw message over foxglove */
-            void _send_msg(OutgoingMsg out);
-
             /* Registers JSON params on init. Recursively called to support multi-level JSON */
             void _init_params(const nlohmann::json &json_obj, const std::string &prefix);
 
