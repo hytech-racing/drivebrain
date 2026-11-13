@@ -12,8 +12,9 @@ bool control::PurePursuitController::init() {
     auto min_speed = foxglove.get_param<float>("purepursuitcontroller/min_speed_mps");
     auto max_speed = foxglove.get_param<float>("purepursuitcontroller/max_speed_mps");
     auto max_lat_accel = foxglove.get_param<float>("purepursuitcontroller/max_lat_accel_mps2");
+    auto max_brake = foxglove.get_param<float>("purepursuitcontroller/max_brake_mps2");
     auto torque_lim = foxglove.get_param<float>("purepursuitcontroller/torque_lim_nm");
-    if (!lookahead || !min_speed || !max_speed || !max_lat_accel || !torque_lim) {
+    if (!lookahead || !min_speed || !max_speed || !max_lat_accel || !max_brake || !torque_lim) {
         spdlog::error("Couldn't load all params for pure pursuit controller.");
         return false;
     }
@@ -21,6 +22,7 @@ bool control::PurePursuitController::init() {
     _min_speed = *min_speed;
     _max_speed = *max_speed;
     _max_lat_accel = *max_lat_accel;
+    _max_brake = *max_brake;
     _torque_lim = *torque_lim;
 
     _param_connection = foxglove.register_param_callback([this](const std::unordered_map<std::string, core::DBParam>& params) {
@@ -28,6 +30,7 @@ bool control::PurePursuitController::init() {
         if (auto v = core::process_param_update<float>(params, "purepursuitcontroller/min_speed_mps")) _min_speed = *v;
         if (auto v = core::process_param_update<float>(params, "purepursuitcontroller/max_speed_mps")) _max_speed = *v;
         if (auto v = core::process_param_update<float>(params, "purepursuitcontroller/max_lat_accel_mps2")) _max_lat_accel = *v;
+        if (auto v = core::process_param_update<float>(params, "purepursuitcontroller/max_brake_mps2")) _max_brake = *v;
         if (auto v = core::process_param_update<float>(params, "purepursuitcontroller/torque_lim_nm")) _torque_lim = *v;
     });
     return true;
@@ -43,8 +46,7 @@ ControllerOutput control::PurePursuitController::step(const VehicleState& in) {
     ControllerOutput out = {};
     auto steering = path ? _steering(in, *path) : std::nullopt;
     if (steering) {
-        const float speed = std::clamp(std::sqrt(_max_lat_accel / std::max(std::fabs(steering->curvature), 1e-3f)), _min_speed.load(), _max_speed.load());
-        const float rpm = speed * constants::METERS_PER_SECOND_TO_RPM;
+        const float rpm = _profile_speed(*path) * constants::METERS_PER_SECOND_TO_RPM;
         speed_out.desired_rpms = {rpm, rpm, rpm, rpm};
         out.desired_steering_deg = steering->angle_rad * 180.0f / M_PI;
         spdlog::info("steer deg: {}", out.desired_steering_deg.value());
@@ -91,5 +93,33 @@ std::optional<control::PurePursuitController::Steering> control::PurePursuitCont
     }
     const float lateral = heading.x * dy - heading.y * dx;
     const float curvature = 2.0f * lateral / dist_sq;
-    return Steering{std::atan(curvature * WHEELBASE_M), curvature, target};
+    return Steering{std::atan(curvature * WHEELBASE_M), target};
+}
+
+float control::PurePursuitController::_profile_speed(const std::vector<xyz_vec<float>>& path) const {
+    auto dist = [&](size_t a, size_t b) { return std::hypot(path[b].x - path[a].x, path[b].y - path[a].y); };
+
+    float speed = _max_speed;
+    float dist_along_path = 0.0f;
+    for (size_t i = 1; i + 1 < path.size(); ++i) {
+        const auto& prev = path[i - 1];
+        const auto& curr = path[i];
+        const auto& next = path[i + 1];
+        const float prev_to_curr = dist(i - 1, i);
+        const float curr_to_next = dist(i, i + 1);
+        const float prev_to_next = dist(i - 1, i + 1);
+        dist_along_path += prev_to_curr;
+        if (prev_to_curr < 1e-3f || curr_to_next < 1e-3f || prev_to_next < 1e-3f) continue; // avoid divide by zero
+
+        // How sharply the path bends at curr: 1 / radius of the circle through prev, curr and next
+        const float twice_triangle_area = std::fabs((curr.x - prev.x) * (next.y - curr.y) - (curr.y - prev.y) * (next.x - curr.x));
+        const float curvature = 2.0f * twice_triangle_area / (prev_to_curr * curr_to_next * prev_to_next);
+
+        // Fastest speed through this curve without exceeding max_lat_accel (lateral accel = speed^2 * curvature)
+        const float corner_speed = std::clamp(std::sqrt(_max_lat_accel / std::max(curvature, 1e-3f)), _min_speed.load(), _max_speed.load());
+
+        // Fastest speed now that can still brake down to corner_speed by the time the car gets there
+        speed = std::min(speed, std::sqrt(corner_speed * corner_speed + 2.0f * _max_brake * dist_along_path));
+    }
+    return speed;
 }
