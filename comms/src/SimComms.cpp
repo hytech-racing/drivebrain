@@ -210,7 +210,9 @@ void SimComms::_veh_recv_loop() {
                 std::sscanf(ann.texts(i).text().c_str(), "%15s %f", name, &score);
                 detections->push_back({W - p[2].x(), H - p[2].y(), W - p[0].x(), H - p[0].y(), core::cone_color_from_name(name), score});
             }
-            core::StateTracker::instance().set_camera_detections(topic.substr(0, topic.find('/')), detections);
+            const uint64_t capture_ns = ann.points_size()
+                ? google::protobuf::util::TimeUtil::TimestampToNanoseconds(ann.points(0).timestamp()) : 0;
+            core::StateTracker::instance().set_camera_detections(topic.substr(0, topic.find('/')), capture_ns, detections);
             core::log(msg, topic);
         } else {
             core::log(msg, topic);

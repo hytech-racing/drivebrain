@@ -132,7 +132,9 @@
             "up_m": 0.452827,
             "roll_deg": 0.0, 
             "pitch_deg": 0.0, 
-            "yaw_deg": 17.0
+            "yaw_deg": 17.0,
+            "pitch_offset_deg": 0.0,
+            "yaw_offset_deg": 0.0
         },
         "blackfly_26291609": {
             "forward_m": -1.561, 
@@ -140,7 +142,9 @@
             "up_m": 0.452827,
             "roll_deg": 0.0, 
             "pitch_deg": 0.0, 
-            "yaw_deg": -17.0
+            "yaw_deg": -17.0,
+            "pitch_offset_deg": 0.0,
+            "yaw_offset_deg": 0.0
         }
     }
 }

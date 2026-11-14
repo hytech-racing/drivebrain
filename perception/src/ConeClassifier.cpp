@@ -1,4 +1,6 @@
 #include "ConeClassifier.hpp"
+#include <algorithm>
+#include <foxglove/ImageAnnotations.pb.h>
 #include <filesystem>
 #include <fstream>
 #include <regex>
@@ -40,6 +42,8 @@ namespace {
     Eigen::Isometry3f camera_from_lidar(const std::string& camera) {
         float yaw_deg = core::FoxgloveServer::instance().get_param<float>("ConeClassifier/" + camera + "/yaw_deg").value_or(0.0f);
         float pitch_deg = core::FoxgloveServer::instance().get_param<float>("ConeClassifier/" + camera + "/pitch_deg").value_or(0.0f);
+        yaw_deg += core::FoxgloveServer::instance().get_param<float>("ConeClassifier/" + camera + "/yaw_offset_deg").value_or(0.0f);
+        pitch_deg += core::FoxgloveServer::instance().get_param<float>("ConeClassifier/" + camera + "/pitch_offset_deg").value_or(0.0f);
         float roll_deg = core::FoxgloveServer::instance().get_param<float>("ConeClassifier/" + camera + "/roll_deg").value_or(0.0f);
         float forward_m = core::FoxgloveServer::instance().get_param<float>("ConeClassifier/" + camera + "/forward_m").value_or(0.0f);
         float left_m = core::FoxgloveServer::instance().get_param<float>("ConeClassifier/" + camera + "/left_m").value_or(0.0f);
@@ -156,6 +160,16 @@ namespace {
         return Eigen::Vector2f(x, y);
     }
 
+    Eigen::Vector2f CameraModel::project(const Eigen::Vector3f& point) const {
+        const auto [k1, k2, p1, p2, k3, k4, k5, k6] = dist;
+        const float x = point.x() / point.z(), y = point.y() / point.z();
+        const float r2 = x * x + y * y, r4 = r2 * r2, r6 = r4 * r2;
+        const float radial = (1 + k1 * r2 + k2 * r4 + k3 * r6) / (1 + k4 * r2 + k5 * r4 + k6 * r6);
+        const float xd = x * radial + 2 * p1 * x * y + p2 * (r2 + 2 * x * x);
+        const float yd = y * radial + p1 * (r2 + 2 * y * y) + 2 * p2 * x * y;
+        return Eigen::Vector2f(fx * xd + cx, fy * yd + cy);
+    }
+
     CameraModel load_camera_model(const std::string& path) {
         std::ifstream file(path);
         if (!file) throw std::runtime_error("failed to open " + path);
@@ -176,10 +190,6 @@ namespace {
         cam.width = static_cast<int>(size[0]);
         cam.height = static_cast<int>(size[1]);
 
-        cam.cx = cam.width - 1 - cam.cx;
-        cam.cy = cam.height - 1 - cam.cy;
-        cam.dist[2] = -cam.dist[2];
-        cam.dist[3] = -cam.dist[3];
         return cam;
     }
 
@@ -212,29 +222,70 @@ namespace {
         for (const auto& [name, dets] : detections) {
             const auto cam_it = _cameras.find(name);
             if (cam_it == _cameras.end() || !dets) continue;
-            const std::vector<CameraCone> placed = place_detections(cam_it->second, camera_from_lidar(name), *dets);
+            const auto& cam = cam_it->second;
+            const Eigen::Isometry3f T_cam_lidar = camera_from_lidar(name);
+            // Ground-plane placements are retained only for the existing 3D debug visualization.
+            const std::vector<CameraCone> placed = place_detections(cam, T_cam_lidar, *dets);
             render_camera_cones(name, placed, cones->timestamp_us(), frame_id);
 
-            // (distance, cone, detection) for every pair within the match distance
+            // Project measured LiDAR centroids into the image; only boxes containing the pixel can match.
+            auto projections = std::make_shared<foxglove::ImageAnnotations>();
             std::vector<std::tuple<float, int, int>> pairs;
             for (int i = 0; i < cones->cones_size(); ++i) {
                 const auto& pos = cones->cones(i).position();
-                for (int j = 0; j < static_cast<int>(placed.size()); ++j) {
-                    const float dist = (placed[j].xy - Eigen::Vector2f(pos.x(), pos.y())).norm();
-                    if (dist < MATCH_DISTANCE_M) pairs.emplace_back(dist, i, j);
+                const Eigen::Vector3f camera_pos = T_cam_lidar * Eigen::Vector3f(pos.x(), pos.y(), pos.z());
+                if (!camera_pos.allFinite() || camera_pos.z() <= 0) continue;
+                const Eigen::Vector2f pixel = cam.project(camera_pos);
+                if (!pixel.allFinite() || pixel.x() < 0 || pixel.x() >= cam.width ||
+                    pixel.y() < 0 || pixel.y() >= cam.height) continue;
+                // Small white diamond at the projected centroid, including unmatched cones.
+                auto* marker = projections->add_points();
+                marker->mutable_timestamp()->set_seconds(cones->timestamp_us() / 1000000);
+                marker->mutable_timestamp()->set_nanos((cones->timestamp_us() % 1000000) * 1000);
+                marker->set_type(foxglove::PointsAnnotation::LINE_LOOP);
+                marker->set_thickness(2);
+                auto* color = marker->mutable_outline_color();
+                color->set_r(1); color->set_g(1); color->set_b(1); color->set_a(1);
+                for (const Eigen::Vector2f& offset : {Eigen::Vector2f(-6, 0), Eigen::Vector2f(0, -6),
+                                                     Eigen::Vector2f(6, 0), Eigen::Vector2f(0, 6)}) {
+                    auto* point = marker->add_points();
+                    point->set_x(pixel.x() + offset.x());
+                    point->set_y(pixel.y() + offset.y());
+                }
+                for (int j = 0; j < static_cast<int>(dets->size()); ++j) {
+                    const auto& d = (*dets)[j];
+                    if (d.x1 <= d.x0 || d.y1 <= d.y0) continue;
+                    // Full-resolution coordinates: 4 pixels equals 2 pixels in the live feed.
+                    const float margin_x = std::max(0.15f * (d.x1 - d.x0), 4.0f);
+                    const float margin_y = std::max(0.15f * (d.y1 - d.y0), 4.0f);
+                    if (pixel.x() < d.x0 - margin_x || pixel.x() > d.x1 + margin_x ||
+                        pixel.y() < d.y0 - margin_y || pixel.y() > d.y1 + margin_y) continue;
+                    const Eigen::Vector2f center((d.x0 + d.x1) / 2, (d.y0 + d.y1) / 2);
+                    pairs.emplace_back((pixel - center).squaredNorm(), i, j);
                 }
             }
 
+            // Recorded video is full resolution; the live compressed feed is half resolution.
+            core::log_mcap_only(projections, name + "/lidar_projections");
+            auto live_projections = std::make_shared<foxglove::ImageAnnotations>(*projections);
+            for (auto& marker : *live_projections->mutable_points()) {
+                for (auto& point : *marker.mutable_points()) {
+                    point.set_x(point.x() / 2);
+                    point.set_y(point.y() / 2);
+                }
+            }
+            core::log_foxglove_only(live_projections, name + "/lidar_projections");
+
             // Greedy one-to-one matching, closest pairs first
             std::sort(pairs.begin(), pairs.end());
-            std::vector<bool> cone_used(cones->cones_size()), det_used(placed.size());
+            std::vector<bool> cone_used(cones->cones_size()), det_used(dets->size());
             for (const auto& [dist, i, j] : pairs) {
                 if (cone_used[i] || det_used[j]) continue;
                 cone_used[i] = det_used[j] = true;
-                if (placed[j].score > best_score[i]) {
-                    best_score[i] = placed[j].score;
-                    cones->mutable_cones(i)->set_color(placed[j].color);
-                    cones->mutable_cones(i)->set_color_confidence(placed[j].score);
+                if ((*dets)[j].score > best_score[i]) {
+                    best_score[i] = (*dets)[j].score;
+                    cones->mutable_cones(i)->set_color((*dets)[j].color);
+                    cones->mutable_cones(i)->set_color_confidence((*dets)[j].score);
                 }
             }
         }

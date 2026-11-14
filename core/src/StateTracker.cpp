@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 
 #include <StateTracker.hpp>
@@ -197,9 +198,36 @@ void StateTracker::set_ground_truth_cones(std::shared_ptr<const dv_msgs::Cones> 
     _dv_state.ground_truth_cones = std::move(cones);
 }
 
-void StateTracker::set_camera_detections(const std::string& camera, std::shared_ptr<const std::vector<ConeDetection>> detections) {
-    std::unique_lock lk(_dv_state_mutex);
-    _dv_state.camera_detections[camera] = std::move(detections);
+void StateTracker::set_camera_detections(const std::string& camera, uint64_t capture_ns,
+                                         std::shared_ptr<const std::vector<ConeDetection>> detections) {
+    if (!capture_ns || !detections) return;
+    {
+        std::lock_guard lock(_dv_state_mutex);
+        auto& history = _camera_history[camera];
+        history[capture_ns] = std::move(detections);
+        while (history.size() > 64) history.erase(history.begin());
+    }
+    _dv_state_cv.notify_all();
+}
+
+core::CameraDetections StateTracker::camera_detections_at(uint64_t scan_ns) {
+    std::unique_lock lock(_dv_state_mutex);
+    _dv_state_cv.wait_for(lock, std::chrono::milliseconds(100), [&] {
+        return !_camera_history.empty() && std::all_of(_camera_history.begin(), _camera_history.end(),
+            [&](const auto& camera) { return camera.second.rbegin()->first >= scan_ns; });
+    });
+    CameraDetections matched;
+    for (const auto& [camera, history] : _camera_history) {
+        uint64_t best_delta = 50'000'001;
+        for (const auto& [capture_ns, detections] : history) {
+            const uint64_t delta = capture_ns > scan_ns ? capture_ns - scan_ns : scan_ns - capture_ns;
+            if (delta < best_delta) {
+                best_delta = delta;
+                matched[camera] = detections;
+            }
+        }
+    }
+    return matched;
 }
 
 static constexpr std::chrono::milliseconds TELEOP_TIMEOUT(500);
