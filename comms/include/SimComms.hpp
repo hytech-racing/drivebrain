@@ -28,7 +28,12 @@ class SimComms {
 
         static void destroy();
 
-    private: 
+        /**
+         * Stops the receive threads and closes the sockets.
+         */
+        ~SimComms();
+
+    private:
         SimComms();
 
         SimComms(const SimComms&) = delete;
