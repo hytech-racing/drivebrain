@@ -58,14 +58,14 @@ namespace core {
                 _logging = false;
               }
 
-              close_active_mcap();
-              _s_instance.store(nullptr, std::memory_order_release);
-              spdlog::info("Msg logger singleton instance released");
-
               _param_cv.notify_all();
               _input_buffer_cv.notify_all();
               if(_param_log_thread.joinable()) _param_log_thread.join();
               if(_msg_log_thread.joinable()) _msg_log_thread.join();
+
+              close_active_mcap();
+              _s_instance.store(nullptr, std::memory_order_release);
+              spdlog::info("Msg logger singleton instance released");
             }
             
             /**

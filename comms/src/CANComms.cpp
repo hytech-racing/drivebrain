@@ -38,6 +38,17 @@ comms::CANComms::CANComms(const std::string &device_name, const std::string &dbc
 #endif
 }
 
+comms::CANComms::~CANComms() {
+    _running = false;
+    if (_reader_thread.joinable()) {
+        _reader_thread.join();
+    }
+    if (_socket >= 0) {
+        close(_socket);
+        _socket = -1;
+    }
+}
+
 void comms::CANComms::send_message(std::shared_ptr<google::protobuf::Message> message) {
 #if HOOTL_ENABLED
     comms::SimComms::instance().send_message(message);
@@ -85,6 +96,7 @@ int comms::CANComms::_init( const std::string &dbc_file_path) {
     if (ioctl(_socket, SIOCGIFINDEX, &ifr) < 0) {
         std::cerr << "Failed to get interface index for " << _device_name << ": " << strerror(errno) << std::endl;
         close(_socket);
+        _socket = -1;
         return -1;
     }
 
@@ -94,6 +106,7 @@ int comms::CANComms::_init( const std::string &dbc_file_path) {
     if (bind(_socket, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         std::cerr << "Failed to bind CAN socket: " << strerror(errno) << std::endl;
         close(_socket);
+        _socket = -1;
         return -1;
     }
 
@@ -102,6 +115,7 @@ int comms::CANComms::_init( const std::string &dbc_file_path) {
     if (flags < 0 || fcntl(_socket, F_SETFL, flags | O_NONBLOCK) < 0) {
         std::cerr << "Failed to set CAN socket non-blocking: " << strerror(errno) << std::endl;
         close(_socket);
+        _socket = -1;
         return -1;
     }
 
@@ -119,6 +133,7 @@ int comms::CANComms::_init( const std::string &dbc_file_path) {
     if (!_net) {
         std::cerr << "Failed to parse DBC file: " << dbc_file_path << std::endl;
         close(_socket);
+        _socket = -1;
         return -1;
     }
 
@@ -128,6 +143,7 @@ int comms::CANComms::_init( const std::string &dbc_file_path) {
     }
 
     // Spawn reader thread
+    _running = true;
     _reader_thread = std::thread(&comms::CANComms::_receive_handler, this);
 
     spdlog::info("Successfully initialized CAN driver {}", _device_name);
@@ -137,7 +153,7 @@ int comms::CANComms::_init( const std::string &dbc_file_path) {
 void comms::CANComms::_receive_handler() {
     int nbytes;
 
-    while(true) {
+    while(_running) {
         nbytes = read(_socket, &_frame, sizeof(can_frame));
 
         if (nbytes < 0) {
