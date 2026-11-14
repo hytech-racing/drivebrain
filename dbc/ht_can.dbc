@@ -1,4 +1,4 @@
-VERSION "344"
+VERSION "374"
 
 
 NS_ : 
@@ -336,118 +336,118 @@ BO_ 118 INV4_TEMPS: 6 ECU
  SG_ inverter_temp : 16|16@1- (0.1,0) [-3276.8|3276.7000000000003] "C" Vector__XXX
  SG_ igbt_temp : 32|16@1- (0.1,0) [-3276.8|3276.7000000000003] "C" Vector__XXX
 
-BO_ 1060 LF_TTPMS_1: 8 ECU
- SG_ LF_TTPMS_SN : 7|16@0+ (1,0) [0|65535] "" Vector__XXX
- SG_ LF_TTPMS_BAT_V : 23|16@0+ (1,0) [0|65535] "mV" Vector__XXX
- SG_ LF_TTPMS_P : 39|16@0+ (0.1,3000) [3000.0|9553.5] "mbar" Vector__XXX
- SG_ LF_TTPMS_P_GAUGE : 55|16@0+ (1,0) [0|65535] "mbar" Vector__XXX
+BO_ 1060 FL_TTPMS_1: 8 ECU
+ SG_ FL_TTPMS_SN : 7|16@0+ (1,0) [0|65535] "" Vector__XXX
+ SG_ FL_TTPMS_BAT_V : 23|16@0+ (1,0) [0|65535] "mV" Vector__XXX
+ SG_ FL_TTPMS_P : 39|16@0- (0.1,3000) [-276.8000000000002|6276.700000000001] "mbar" Vector__XXX
+ SG_ FL_TTPMS_P_GAUGE : 55|16@0+ (1,0) [0|65535] "mbar" Vector__XXX
 
-BO_ 1061 LF_TTPMS_2: 8 ECU
- SG_ LF_TTPMS_T1 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ LF_TTPMS_T2 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ LF_TTPMS_T3 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ LF_TTPMS_T4 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+BO_ 1061 FL_TTPMS_2: 8 ECU
+ SG_ FL_TTPMS_T1 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ FL_TTPMS_T2 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ FL_TTPMS_T3 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ FL_TTPMS_T4 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
 
-BO_ 1062 LF_TTPMS_3: 8 ECU
- SG_ LF_TTPMS_T5 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ LF_TTPMS_T6 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ LF_TTPMS_T7 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ LF_TTPMS_T8 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+BO_ 1062 FL_TTPMS_3: 8 ECU
+ SG_ FL_TTPMS_T5 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ FL_TTPMS_T6 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ FL_TTPMS_T7 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ FL_TTPMS_T8 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
 
-BO_ 1063 LF_TTPMS_4: 8 ECU
- SG_ LF_TTPMS_T9 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ LF_TTPMS_T10 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ LF_TTPMS_T11 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ LF_TTPMS_T12 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+BO_ 1063 FL_TTPMS_4: 8 ECU
+ SG_ FL_TTPMS_T9 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ FL_TTPMS_T10 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ FL_TTPMS_T11 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ FL_TTPMS_T12 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
 
-BO_ 1064 LF_TTPMS_5: 8 ECU
- SG_ LF_TTPMS_T13 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ LF_TTPMS_T14 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ LF_TTPMS_T15 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ LF_TTPMS_T16 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+BO_ 1064 FL_TTPMS_5: 8 ECU
+ SG_ FL_TTPMS_T13 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ FL_TTPMS_T14 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ FL_TTPMS_T15 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ FL_TTPMS_T16 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
 
-BO_ 1065 LF_TTPMS_6: 8 ECU
- SG_ LF_TTPMS_TC : 7|16@0+ (1,0) [0|65535] "" Vector__XXX
- SG_ LF_TTPMS_RSSI : 23|16@0- (1,0) [-32768|32767] "dBm" Vector__XXX
- SG_ LF_TTPMS_T : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ LF_TTPMS_NODE_ID : 55|16@0+ (1,0) [0|65535] "" Vector__XXX
+BO_ 1065 FL_TTPMS_6: 8 ECU
+ SG_ FL_TTPMS_TC : 7|16@0+ (1,0) [0|65535] "" Vector__XXX
+ SG_ FL_TTPMS_RSSI : 23|16@0- (1,0) [-32768|32767] "dBm" Vector__XXX
+ SG_ FL_TTPMS_T : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ FL_TTPMS_NODE_ID : 55|16@0+ (1,0) [0|65535] "" Vector__XXX
 
-BO_ 1066 RF_TTPMS_1: 8 ECU
- SG_ RF_TTPMS_SN : 7|16@0+ (1,0) [0|65535] "" Vector__XXX
- SG_ RF_TTPMS_BAT_V : 23|16@0+ (1,0) [0|65535] "mV" Vector__XXX
- SG_ RF_TTPMS_P : 39|16@0+ (0.1,3000) [3000.0|9553.5] "mbar" Vector__XXX
- SG_ RF_TTPMS_P_GAUGE : 55|16@0+ (1,0) [0|65535] "mbar" Vector__XXX
+BO_ 1066 FR_TTPMS_1: 8 ECU
+ SG_ FR_TTPMS_SN : 7|16@0+ (1,0) [0|65535] "" Vector__XXX
+ SG_ FR_TTPMS_BAT_V : 23|16@0+ (1,0) [0|65535] "mV" Vector__XXX
+ SG_ FR_TTPMS_P : 39|16@0- (0.1,3000) [-276.8000000000002|6276.700000000001] "mbar" Vector__XXX
+ SG_ FR_TTPMS_P_GAUGE : 55|16@0+ (1,0) [0|65535] "mbar" Vector__XXX
 
-BO_ 1067 RF_TTPMS_2: 8 ECU
- SG_ RF_TTPMS_T1 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ RF_TTPMS_T2 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ RF_TTPMS_T3 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ RF_TTPMS_T4 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+BO_ 1067 FR_TTPMS_2: 8 ECU
+ SG_ FR_TTPMS_T1 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ FR_TTPMS_T2 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ FR_TTPMS_T3 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ FR_TTPMS_T4 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
 
-BO_ 1068 RF_TTPMS_3: 8 ECU
- SG_ RF_TTPMS_T5 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ RF_TTPMS_T6 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ RF_TTPMS_T7 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ RF_TTPMS_T8 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+BO_ 1068 FR_TTPMS_3: 8 ECU
+ SG_ FR_TTPMS_T5 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ FR_TTPMS_T6 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ FR_TTPMS_T7 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ FR_TTPMS_T8 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
 
-BO_ 1069 RF_TTPMS_4: 8 ECU
- SG_ RF_TTPMS_T9 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ RF_TTPMS_T10 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ RF_TTPMS_T11 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ RF_TTPMS_T12 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+BO_ 1069 FR_TTPMS_4: 8 ECU
+ SG_ FR_TTPMS_T9 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ FR_TTPMS_T10 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ FR_TTPMS_T11 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ FR_TTPMS_T12 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
 
-BO_ 1070 RF_TTPMS_5: 8 ECU
- SG_ RF_TTPMS_T13 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ RF_TTPMS_T14 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ RF_TTPMS_T15 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ RF_TTPMS_T16 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+BO_ 1070 FR_TTPMS_5: 8 ECU
+ SG_ FR_TTPMS_T13 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ FR_TTPMS_T14 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ FR_TTPMS_T15 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ FR_TTPMS_T16 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
 
-BO_ 1071 RF_TTPMS_6: 8 ECU
- SG_ RF_TTPMS_TC : 7|16@0+ (1,0) [0|65535] "" Vector__XXX
- SG_ RF_TTPMS_RSSI : 23|16@0- (1,0) [-32768|32767] "dBm" Vector__XXX
- SG_ RF_TTPMS_T : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ RF_TTPMS_NODE_ID : 55|16@0+ (1,0) [0|65535] "" Vector__XXX
+BO_ 1071 FR_TTPMS_6: 8 ECU
+ SG_ FR_TTPMS_TC : 7|16@0+ (1,0) [0|65535] "" Vector__XXX
+ SG_ FR_TTPMS_RSSI : 23|16@0- (1,0) [-32768|32767] "dBm" Vector__XXX
+ SG_ FR_TTPMS_T : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ FR_TTPMS_NODE_ID : 55|16@0+ (1,0) [0|65535] "" Vector__XXX
 
-BO_ 1072 LR_TTPMS_1: 8 ECU
- SG_ LR_TTPMS_SN : 7|16@0+ (1,0) [0|65535] "" Vector__XXX
- SG_ LR_TTPMS_BAT_V : 23|16@0+ (1,0) [0|65535] "mV" Vector__XXX
- SG_ LR_TTPMS_P : 39|16@0+ (0.1,3000) [3000.0|9553.5] "mbar" Vector__XXX
- SG_ LR_TTPMS_P_GAUGE : 55|16@0+ (1,0) [0|65535] "mbar" Vector__XXX
+BO_ 1072 RL_TTPMS_1: 8 ECU
+ SG_ RL_TTPMS_SN : 7|16@0+ (1,0) [0|65535] "" Vector__XXX
+ SG_ RL_TTPMS_BAT_V : 23|16@0+ (1,0) [0|65535] "mV" Vector__XXX
+ SG_ RL_TTPMS_P : 39|16@0- (0.1,3000) [-276.8000000000002|6276.700000000001] "mbar" Vector__XXX
+ SG_ RL_TTPMS_P_GAUGE : 55|16@0+ (1,0) [0|65535] "mbar" Vector__XXX
 
-BO_ 1073 LR_TTPMS_2: 8 ECU
- SG_ LR_TTPMS_T1 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ LR_TTPMS_T2 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ LR_TTPMS_T3 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ LR_TTPMS_T4 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+BO_ 1073 RL_TTPMS_2: 8 ECU
+ SG_ RL_TTPMS_T1 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ RL_TTPMS_T2 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ RL_TTPMS_T3 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ RL_TTPMS_T4 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
 
-BO_ 1074 LR_TTPMS_3: 8 ECU
- SG_ LR_TTPMS_T5 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ LR_TTPMS_T6 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ LR_TTPMS_T7 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ LR_TTPMS_T8 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+BO_ 1074 RL_TTPMS_3: 8 ECU
+ SG_ RL_TTPMS_T5 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ RL_TTPMS_T6 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ RL_TTPMS_T7 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ RL_TTPMS_T8 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
 
-BO_ 1075 LR_TTPMS_4: 8 ECU
- SG_ LR_TTPMS_T9 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ LR_TTPMS_T10 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ LR_TTPMS_T11 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ LR_TTPMS_T12 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+BO_ 1075 RL_TTPMS_4: 8 ECU
+ SG_ RL_TTPMS_T9 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ RL_TTPMS_T10 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ RL_TTPMS_T11 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ RL_TTPMS_T12 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
 
-BO_ 1076 LR_TTPMS_5: 8 ECU
- SG_ LR_TTPMS_T13 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ LR_TTPMS_T14 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ LR_TTPMS_T15 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ LR_TTPMS_T16 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+BO_ 1076 RL_TTPMS_5: 8 ECU
+ SG_ RL_TTPMS_T13 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ RL_TTPMS_T14 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ RL_TTPMS_T15 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ RL_TTPMS_T16 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
 
-BO_ 1077 LR_TTPMS_6: 8 ECU
- SG_ LR_TTPMS_TC : 7|16@0+ (1,0) [0|65535] "" Vector__XXX
- SG_ LR_TTPMS_RSSI : 23|16@0- (1,0) [-32768|32767] "dBm" Vector__XXX
- SG_ LR_TTPMS_T : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
- SG_ LR_TTPMS_NODE_ID : 55|16@0+ (1,0) [0|65535] "" Vector__XXX
+BO_ 1077 RL_TTPMS_6: 8 ECU
+ SG_ RL_TTPMS_TC : 7|16@0+ (1,0) [0|65535] "" Vector__XXX
+ SG_ RL_TTPMS_RSSI : 23|16@0- (1,0) [-32768|32767] "dBm" Vector__XXX
+ SG_ RL_TTPMS_T : 39|16@0+ (0.1,-100) [-100.0|6453.5] "°C" Vector__XXX
+ SG_ RL_TTPMS_NODE_ID : 55|16@0+ (1,0) [0|65535] "" Vector__XXX
 
 BO_ 1078 RR_TTPMS_1: 8 ECU
  SG_ RR_TTPMS_SN : 7|16@0+ (1,0) [0|65535] "" Vector__XXX
  SG_ RR_TTPMS_BAT_V : 23|16@0+ (1,0) [0|65535] "mV" Vector__XXX
- SG_ RR_TTPMS_P : 39|16@0+ (0.1,3000) [3000.0|9553.5] "mbar" Vector__XXX
+ SG_ RR_TTPMS_P : 39|16@0- (0.1,3000) [-276.8000000000002|6276.700000000001] "mbar" Vector__XXX
  SG_ RR_TTPMS_P_GAUGE : 55|16@0+ (1,0) [0|65535] "mbar" Vector__XXX
 
 BO_ 1079 RR_TTPMS_2: 8 ECU
@@ -539,59 +539,104 @@ BO_ 519 CAR_STATES: 3 ECU
  SG_ drivetrain_state : 8|8@1+ (1,0) [0|255] "" Vector__XXX
  SG_ drivebrain_in_control : 16|1@1+ (1,0) [0|1] "" Vector__XXX
 
-BO_ 1220 FL_BRAKE_ROTOR_TEMP_CH1_CH4: 8 ECU
- SG_ brake_temp_channel_1 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
- SG_ brake_temp_channel_2 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
- SG_ brake_temp_channel_3 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
- SG_ brake_temp_channel_4 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+BO_ 1220 FL_IR_TEMP_CH1_CH4: 8 ECU
+ SG_ ir_temp_channel_1 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_2 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_3 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_4 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
 
-BO_ 1221 FL_BRAKE_ROTOR_TEMP_CH5_CH8: 8 ECU
- SG_ brake_temp_channel_5 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
- SG_ brake_temp_channel_6 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
- SG_ brake_temp_channel_7 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
- SG_ brake_temp_channel_8 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+BO_ 1221 FL_IR_TEMP_CH5_CH8: 8 ECU
+ SG_ ir_temp_channel_5 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_6 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_7 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_8 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
 
-BO_ 1222 FL_BRAKE_ROTOR_TEMP_CH9_CH12: 8 ECU
- SG_ brake_temp_channel_9 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
- SG_ brake_temp_channel_10 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
- SG_ brake_temp_channel_11 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
- SG_ brake_temp_channel_12 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+BO_ 1222 FL_IR_TEMP_CH9_CH12: 8 ECU
+ SG_ ir_temp_channel_9 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_10 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_11 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_12 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
 
-BO_ 1224 FL_BRAKE_ROTOR_SENSOR_TEMP: 8 ECU
- SG_ brake_rotor_sensor_temp : 7|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+BO_ 1223 FL_IR_TEMP_CH13_CH16: 8 ECU
+ SG_ ir_temp_channel_13 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_14 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_15 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_16 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
 
-BO_ 1223 FL_BRAKE_ROTOR_TEMP_CH13_CH16: 8 ECU
- SG_ brake_temp_channel_13 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
- SG_ brake_temp_channel_14 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
- SG_ brake_temp_channel_15 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
- SG_ brake_temp_channel_16 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+BO_ 1224 FR_IR_TEMP_CH1_CH4: 8 ECU
+ SG_ ir_temp_channel_1 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_2 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_3 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_4 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
 
-BO_ 1225 FR_BRAKE_ROTOR_TEMP_CH1_CH4: 8 ECU
- SG_ brake_temp_channel_1 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
- SG_ brake_temp_channel_2 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
- SG_ brake_temp_channel_3 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
- SG_ brake_temp_channel_4 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+BO_ 1225 FR_IR_TEMP_CH5_CH8: 8 ECU
+ SG_ ir_temp_channel_5 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_6 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_7 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_8 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
 
-BO_ 1226 FR_BRAKE_ROTOR_TEMP_CH5_CH8: 8 ECU
- SG_ brake_temp_channel_5 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
- SG_ brake_temp_channel_6 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
- SG_ brake_temp_channel_7 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
- SG_ brake_temp_channel_8 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+BO_ 1226 FR_IR_TEMP_CH9_CH12: 8 ECU
+ SG_ ir_temp_channel_9 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_10 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_11 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_12 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
 
-BO_ 1227 FR_BRAKE_ROTOR_TEMP_CH9_CH12: 8 ECU
- SG_ brake_temp_channel_9 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
- SG_ brake_temp_channel_10 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
- SG_ brake_temp_channel_11 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
- SG_ brake_temp_channel_12 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+BO_ 1227 FR_IR_TEMP_CH13_CH16: 8 ECU
+ SG_ ir_temp_channel_13 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_14 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_15 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_16 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
 
-BO_ 1229 FR_BRAKE_ROTOR_SENSOR_TEMP: 8 ECU
- SG_ brake_rotor_sensor_temp : 7|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+BO_ 1228 RL_IR_TEMP_CH1_CH4: 8 ECU
+ SG_ ir_temp_channel_1 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_2 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_3 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_4 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
 
-BO_ 1228 FR_BRAKE_ROTOR_TEMP_CH13_CH16: 8 ECU
- SG_ brake_temp_channel_13 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
- SG_ brake_temp_channel_14 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
- SG_ brake_temp_channel_15 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
- SG_ brake_temp_channel_16 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+BO_ 1229 RL_IR_TEMP_CH5_CH8: 8 ECU
+ SG_ ir_temp_channel_5 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_6 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_7 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_8 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+
+BO_ 1230 RL_IR_TEMP_CH9_CH12: 8 ECU
+ SG_ ir_temp_channel_9 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_10 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_11 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_12 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+
+BO_ 1231 RL_IR_TEMP_CH13_CH16: 8 ECU
+ SG_ ir_temp_channel_13 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_14 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_15 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_16 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+
+BO_ 1232 RR_IR_TEMP_CH1_CH4: 8 ECU
+ SG_ ir_temp_channel_1 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_2 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_3 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_4 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+
+BO_ 1233 RR_IR_TEMP_CH5_CH8: 8 ECU
+ SG_ ir_temp_channel_5 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_6 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_7 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_8 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+
+BO_ 1234 RR_IR_TEMP_CH9_CH12: 8 ECU
+ SG_ ir_temp_channel_9 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_10 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_11 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_12 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+
+BO_ 1235 RR_IR_TEMP_CH13_CH16: 8 ECU
+ SG_ ir_temp_channel_13 : 7|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_14 : 23|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_15 : 39|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+ SG_ ir_temp_channel_16 : 55|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
+
+BO_ 1236 RR_IR_TEMP_SENSOR_TEMP: 8 ECU
+ SG_ ir_temp_sensor_temp : 7|16@0+ (0.1,-100) [-100.0|6453.5] "deg C" Vector__XXX
 
 BO_ 1008 AERO_PRESSURE_SENSOR_11: 8 ECU
  SG_ aero_channel_0 : 7|16@0+ (0.14285714285,-53000) [-53000.0|-43637.85714332525] "uBar" Vector__XXX
@@ -708,10 +753,11 @@ BO_ 555 EBS_DATA: 8 ECU
  SG_ ebs_solenoid_1_on : 19|1@1+ (1,0) [0|1] "" Vector__XXX
  SG_ ebs_solenoid_2_on : 20|1@1+ (1,0) [0|1] "" Vector__XXX
 
-BO_ 554 DRIVERLESS_SYSTEM_STATUS: 8 ECU
+BO_ 554 DRIVERLESS_STATUS_AND_STARTUP: 8 ECU
  SG_ activate_ebs_solenoid_1 : 0|1@1+ (1,0) [0|1] "" Vector__XXX
  SG_ activate_ebs_solenoid_2 : 1|1@1+ (1,0) [0|1] "" Vector__XXX
- SG_ driverless_state : 2|3@1+ (1,0) [0|7] "" Vector__XXX
+ SG_ continue_toggle_supervisor : 2|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ driverless_state : 3|3@1+ (1,0) [0|7] "" Vector__XXX
 
 BO_ 556 FDC_DRIVERLESS_MISSION: 8 ECU
  SG_ driverless_mission : 0|3@1+ (1,0) [0|7] "" Vector__XXX
@@ -724,13 +770,27 @@ BO_ 0 SET_OPERATING_MODE: 2 ECU
  SG_ target_node : 8|8@1+ (1,0) [0|255] "" Vector__XXX
 
 BO_ 401 RSS_STATUS: 8 ECU
- SG_ emergency_stop_not_pressed_1 : 0|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ emergency_stop_pressed_1 : 0|1@1+ (1,0) [0|1] "" Vector__XXX
  SG_ switch_k2_pressed : 1|1@1+ (1,0) [0|1] "" Vector__XXX
  SG_ button_k3_pressed : 2|1@1+ (1,0) [0|1] "" Vector__XXX
- SG_ emergency_stop_not_pressed_2 : 31|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ emergency_stop_pressed_2 : 31|1@1+ (1,0) [0|1] "" Vector__XXX
  SG_ radio_link_quality : 48|8@1+ (1,0) [0|255] "%" Vector__XXX
  SG_ pre_alarm_warning : 62|1@1+ (1,0) [0|1] "" Vector__XXX
  SG_ correct_mode_selected : 63|1@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 1240 STRAIN_GAUGES_FRONT: 8 ECU
+ SG_ F_LowerForeAA_F : 0|12@1+ (1,0) [0|4095] "Newtons" Vector__XXX
+ SG_ F_LowerAftAA_F : 12|12@1+ (1,0) [0|4095] "Newtons" Vector__XXX
+ SG_ F_UpperForeAA_F : 24|12@1+ (1,0) [0|4095] "Newtons" Vector__XXX
+ SG_ F_UpperAftAA_F : 36|12@1+ (1,0) [0|4095] "Newtons" Vector__XXX
+ SG_ F_ToeRod_F : 48|12@1+ (1,0) [0|4095] "Newtons" Vector__XXX
+
+BO_ 1241 STRAIN_GAUGES_REAR: 8 ECU
+ SG_ F_LowerForeAA_R : 0|12@1+ (1,0) [0|4095] "Newtons" Vector__XXX
+ SG_ F_LowerAftAA_R : 12|12@1+ (1,0) [0|4095] "Newtons" Vector__XXX
+ SG_ F_UpperForeAA_R : 24|12@1+ (1,0) [0|4095] "Newtons" Vector__XXX
+ SG_ F_UpperAftAA_R : 36|12@1+ (1,0) [0|4095] "Newtons" Vector__XXX
+ SG_ F_ToeRod_R : 48|12@1+ (1,0) [0|4095] "Newtons" Vector__XXX
 
 BO_ 1538 PitchAndRoll: 4 SensoricSolutionsOMSRace
  SG_ Roll : 0|16@1- (0.003,0) [-90|90] "°"  SensoricSolutionsOMSRace
@@ -1043,95 +1103,95 @@ CM_ SG_ 118 igbt_temp "";
 CM_ SG_ 118 inverter_temp "";
 CM_ SG_ 118 motor_temp "";
 CM_ BO_ 1060 "";
-CM_ SG_ 1060 LF_TTPMS_P_GAUGE "";
-CM_ SG_ 1060 LF_TTPMS_P "";
-CM_ SG_ 1060 LF_TTPMS_BAT_V "";
-CM_ SG_ 1060 LF_TTPMS_SN "";
+CM_ SG_ 1060 FL_TTPMS_P_GAUGE "";
+CM_ SG_ 1060 FL_TTPMS_P "";
+CM_ SG_ 1060 FL_TTPMS_BAT_V "";
+CM_ SG_ 1060 FL_TTPMS_SN "";
 CM_ BO_ 1061 "";
-CM_ SG_ 1061 LF_TTPMS_T4 "";
-CM_ SG_ 1061 LF_TTPMS_T3 "";
-CM_ SG_ 1061 LF_TTPMS_T2 "";
-CM_ SG_ 1061 LF_TTPMS_T1 "";
+CM_ SG_ 1061 FL_TTPMS_T4 "";
+CM_ SG_ 1061 FL_TTPMS_T3 "";
+CM_ SG_ 1061 FL_TTPMS_T2 "";
+CM_ SG_ 1061 FL_TTPMS_T1 "";
 CM_ BO_ 1062 "";
-CM_ SG_ 1062 LF_TTPMS_T8 "";
-CM_ SG_ 1062 LF_TTPMS_T7 "";
-CM_ SG_ 1062 LF_TTPMS_T6 "";
-CM_ SG_ 1062 LF_TTPMS_T5 "";
+CM_ SG_ 1062 FL_TTPMS_T8 "";
+CM_ SG_ 1062 FL_TTPMS_T7 "";
+CM_ SG_ 1062 FL_TTPMS_T6 "";
+CM_ SG_ 1062 FL_TTPMS_T5 "";
 CM_ BO_ 1063 "";
-CM_ SG_ 1063 LF_TTPMS_T12 "";
-CM_ SG_ 1063 LF_TTPMS_T11 "";
-CM_ SG_ 1063 LF_TTPMS_T10 "";
-CM_ SG_ 1063 LF_TTPMS_T9 "";
+CM_ SG_ 1063 FL_TTPMS_T12 "";
+CM_ SG_ 1063 FL_TTPMS_T11 "";
+CM_ SG_ 1063 FL_TTPMS_T10 "";
+CM_ SG_ 1063 FL_TTPMS_T9 "";
 CM_ BO_ 1064 "";
-CM_ SG_ 1064 LF_TTPMS_T16 "";
-CM_ SG_ 1064 LF_TTPMS_T15 "";
-CM_ SG_ 1064 LF_TTPMS_T14 "";
-CM_ SG_ 1064 LF_TTPMS_T13 "";
+CM_ SG_ 1064 FL_TTPMS_T16 "";
+CM_ SG_ 1064 FL_TTPMS_T15 "";
+CM_ SG_ 1064 FL_TTPMS_T14 "";
+CM_ SG_ 1064 FL_TTPMS_T13 "";
 CM_ BO_ 1065 "";
-CM_ SG_ 1065 LF_TTPMS_NODE_ID "";
-CM_ SG_ 1065 LF_TTPMS_T "";
-CM_ SG_ 1065 LF_TTPMS_RSSI "";
-CM_ SG_ 1065 LF_TTPMS_TC "";
+CM_ SG_ 1065 FL_TTPMS_NODE_ID "";
+CM_ SG_ 1065 FL_TTPMS_T "";
+CM_ SG_ 1065 FL_TTPMS_RSSI "";
+CM_ SG_ 1065 FL_TTPMS_TC "";
 CM_ BO_ 1066 "";
-CM_ SG_ 1066 RF_TTPMS_P_GAUGE "";
-CM_ SG_ 1066 RF_TTPMS_P "";
-CM_ SG_ 1066 RF_TTPMS_BAT_V "";
-CM_ SG_ 1066 RF_TTPMS_SN "";
+CM_ SG_ 1066 FR_TTPMS_P_GAUGE "";
+CM_ SG_ 1066 FR_TTPMS_P "";
+CM_ SG_ 1066 FR_TTPMS_BAT_V "";
+CM_ SG_ 1066 FR_TTPMS_SN "";
 CM_ BO_ 1067 "";
-CM_ SG_ 1067 RF_TTPMS_T4 "";
-CM_ SG_ 1067 RF_TTPMS_T3 "";
-CM_ SG_ 1067 RF_TTPMS_T2 "";
-CM_ SG_ 1067 RF_TTPMS_T1 "";
+CM_ SG_ 1067 FR_TTPMS_T4 "";
+CM_ SG_ 1067 FR_TTPMS_T3 "";
+CM_ SG_ 1067 FR_TTPMS_T2 "";
+CM_ SG_ 1067 FR_TTPMS_T1 "";
 CM_ BO_ 1068 "";
-CM_ SG_ 1068 RF_TTPMS_T8 "";
-CM_ SG_ 1068 RF_TTPMS_T7 "";
-CM_ SG_ 1068 RF_TTPMS_T6 "";
-CM_ SG_ 1068 RF_TTPMS_T5 "";
+CM_ SG_ 1068 FR_TTPMS_T8 "";
+CM_ SG_ 1068 FR_TTPMS_T7 "";
+CM_ SG_ 1068 FR_TTPMS_T6 "";
+CM_ SG_ 1068 FR_TTPMS_T5 "";
 CM_ BO_ 1069 "";
-CM_ SG_ 1069 RF_TTPMS_T12 "";
-CM_ SG_ 1069 RF_TTPMS_T11 "";
-CM_ SG_ 1069 RF_TTPMS_T10 "";
-CM_ SG_ 1069 RF_TTPMS_T9 "";
+CM_ SG_ 1069 FR_TTPMS_T12 "";
+CM_ SG_ 1069 FR_TTPMS_T11 "";
+CM_ SG_ 1069 FR_TTPMS_T10 "";
+CM_ SG_ 1069 FR_TTPMS_T9 "";
 CM_ BO_ 1070 "";
-CM_ SG_ 1070 RF_TTPMS_T16 "";
-CM_ SG_ 1070 RF_TTPMS_T15 "";
-CM_ SG_ 1070 RF_TTPMS_T14 "";
-CM_ SG_ 1070 RF_TTPMS_T13 "";
+CM_ SG_ 1070 FR_TTPMS_T16 "";
+CM_ SG_ 1070 FR_TTPMS_T15 "";
+CM_ SG_ 1070 FR_TTPMS_T14 "";
+CM_ SG_ 1070 FR_TTPMS_T13 "";
 CM_ BO_ 1071 "";
-CM_ SG_ 1071 RF_TTPMS_NODE_ID "";
-CM_ SG_ 1071 RF_TTPMS_T "";
-CM_ SG_ 1071 RF_TTPMS_RSSI "";
-CM_ SG_ 1071 RF_TTPMS_TC "";
+CM_ SG_ 1071 FR_TTPMS_NODE_ID "";
+CM_ SG_ 1071 FR_TTPMS_T "";
+CM_ SG_ 1071 FR_TTPMS_RSSI "";
+CM_ SG_ 1071 FR_TTPMS_TC "";
 CM_ BO_ 1072 "";
-CM_ SG_ 1072 LR_TTPMS_P_GAUGE "";
-CM_ SG_ 1072 LR_TTPMS_P "";
-CM_ SG_ 1072 LR_TTPMS_BAT_V "";
-CM_ SG_ 1072 LR_TTPMS_SN "Serial Number";
+CM_ SG_ 1072 RL_TTPMS_P_GAUGE "";
+CM_ SG_ 1072 RL_TTPMS_P "";
+CM_ SG_ 1072 RL_TTPMS_BAT_V "";
+CM_ SG_ 1072 RL_TTPMS_SN "Serial Number";
 CM_ BO_ 1073 "";
-CM_ SG_ 1073 LR_TTPMS_T4 "";
-CM_ SG_ 1073 LR_TTPMS_T3 "";
-CM_ SG_ 1073 LR_TTPMS_T2 "";
-CM_ SG_ 1073 LR_TTPMS_T1 "";
+CM_ SG_ 1073 RL_TTPMS_T4 "";
+CM_ SG_ 1073 RL_TTPMS_T3 "";
+CM_ SG_ 1073 RL_TTPMS_T2 "";
+CM_ SG_ 1073 RL_TTPMS_T1 "";
 CM_ BO_ 1074 "";
-CM_ SG_ 1074 LR_TTPMS_T8 "";
-CM_ SG_ 1074 LR_TTPMS_T7 "";
-CM_ SG_ 1074 LR_TTPMS_T6 "";
-CM_ SG_ 1074 LR_TTPMS_T5 "";
+CM_ SG_ 1074 RL_TTPMS_T8 "";
+CM_ SG_ 1074 RL_TTPMS_T7 "";
+CM_ SG_ 1074 RL_TTPMS_T6 "";
+CM_ SG_ 1074 RL_TTPMS_T5 "";
 CM_ BO_ 1075 "";
-CM_ SG_ 1075 LR_TTPMS_T12 "";
-CM_ SG_ 1075 LR_TTPMS_T11 "";
-CM_ SG_ 1075 LR_TTPMS_T10 "";
-CM_ SG_ 1075 LR_TTPMS_T9 "";
+CM_ SG_ 1075 RL_TTPMS_T12 "";
+CM_ SG_ 1075 RL_TTPMS_T11 "";
+CM_ SG_ 1075 RL_TTPMS_T10 "";
+CM_ SG_ 1075 RL_TTPMS_T9 "";
 CM_ BO_ 1076 "";
-CM_ SG_ 1076 LR_TTPMS_T16 "";
-CM_ SG_ 1076 LR_TTPMS_T15 "";
-CM_ SG_ 1076 LR_TTPMS_T14 "";
-CM_ SG_ 1076 LR_TTPMS_T13 "";
+CM_ SG_ 1076 RL_TTPMS_T16 "";
+CM_ SG_ 1076 RL_TTPMS_T15 "";
+CM_ SG_ 1076 RL_TTPMS_T14 "";
+CM_ SG_ 1076 RL_TTPMS_T13 "";
 CM_ BO_ 1077 "";
-CM_ SG_ 1077 LR_TTPMS_NODE_ID "";
-CM_ SG_ 1077 LR_TTPMS_T "";
-CM_ SG_ 1077 LR_TTPMS_RSSI "";
-CM_ SG_ 1077 LR_TTPMS_TC "";
+CM_ SG_ 1077 RL_TTPMS_NODE_ID "";
+CM_ SG_ 1077 RL_TTPMS_T "";
+CM_ SG_ 1077 RL_TTPMS_RSSI "";
+CM_ SG_ 1077 RL_TTPMS_TC "";
 CM_ BO_ 1078 "";
 CM_ SG_ 1078 RR_TTPMS_P_GAUGE "";
 CM_ SG_ 1078 RR_TTPMS_P "";
@@ -1213,49 +1273,87 @@ CM_ SG_ 519 drivebrain_in_control "";
 CM_ SG_ 519 drivetrain_state "";
 CM_ SG_ 519 vehicle_state "";
 CM_ BO_ 1220 "";
-CM_ SG_ 1220 brake_temp_channel_4 "brake rotor temp sensor channel reading in degrees C";
-CM_ SG_ 1220 brake_temp_channel_3 "brake rotor temp sensor channel reading in degrees C";
-CM_ SG_ 1220 brake_temp_channel_2 "brake rotor temp sensor channel reading in degrees C";
-CM_ SG_ 1220 brake_temp_channel_1 "brake rotor temp sensor channel reading in degrees C";
+CM_ SG_ 1220 ir_temp_channel_4 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1220 ir_temp_channel_3 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1220 ir_temp_channel_2 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1220 ir_temp_channel_1 "IR temp sensor channel reading in degrees C";
 CM_ BO_ 1221 "";
-CM_ SG_ 1221 brake_temp_channel_8 "brake rotor temp sensor channel reading in degrees C";
-CM_ SG_ 1221 brake_temp_channel_7 "brake rotor temp sensor channel reading in degrees C";
-CM_ SG_ 1221 brake_temp_channel_6 "brake rotor temp sensor channel reading in degrees C";
-CM_ SG_ 1221 brake_temp_channel_5 "brake rotor temp sensor channel reading in degrees C";
+CM_ SG_ 1221 ir_temp_channel_8 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1221 ir_temp_channel_7 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1221 ir_temp_channel_6 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1221 ir_temp_channel_5 "IR temp sensor channel reading in degrees C";
 CM_ BO_ 1222 "";
-CM_ SG_ 1222 brake_temp_channel_12 "brake rotor temp sensor channel reading in degrees C";
-CM_ SG_ 1222 brake_temp_channel_11 "brake rotor temp sensor channel reading in degrees C";
-CM_ SG_ 1222 brake_temp_channel_10 "brake rotor temp sensor channel reading in degrees C";
-CM_ SG_ 1222 brake_temp_channel_9 "brake rotor temp sensor channel reading in degrees C";
-CM_ BO_ 1224 "";
-CM_ SG_ 1224 brake_rotor_sensor_temp "temperature internal to the sensor degrees C";
+CM_ SG_ 1222 ir_temp_channel_12 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1222 ir_temp_channel_11 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1222 ir_temp_channel_10 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1222 ir_temp_channel_9 "IR temp sensor channel reading in degrees C";
 CM_ BO_ 1223 "";
-CM_ SG_ 1223 brake_temp_channel_16 "brake rotor temp sensor channel reading in degrees C";
-CM_ SG_ 1223 brake_temp_channel_15 "brake rotor temp sensor channel reading in degrees C";
-CM_ SG_ 1223 brake_temp_channel_14 "brake rotor temp sensor channel reading in degrees C";
-CM_ SG_ 1223 brake_temp_channel_13 "brake rotor temp sensor channel reading in degrees C";
+CM_ SG_ 1223 ir_temp_channel_16 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1223 ir_temp_channel_15 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1223 ir_temp_channel_14 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1223 ir_temp_channel_13 "IR temp sensor channel reading in degrees C";
+CM_ BO_ 1224 "";
+CM_ SG_ 1224 ir_temp_channel_4 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1224 ir_temp_channel_3 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1224 ir_temp_channel_2 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1224 ir_temp_channel_1 "IR temp sensor channel reading in degrees C";
 CM_ BO_ 1225 "";
-CM_ SG_ 1225 brake_temp_channel_4 "brake rotor temp sensor channel reading in degrees C";
-CM_ SG_ 1225 brake_temp_channel_3 "brake rotor temp sensor channel reading in degrees C";
-CM_ SG_ 1225 brake_temp_channel_2 "brake rotor temp sensor channel reading in degrees C";
-CM_ SG_ 1225 brake_temp_channel_1 "brake rotor temp sensor channel reading in degrees C";
+CM_ SG_ 1225 ir_temp_channel_8 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1225 ir_temp_channel_7 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1225 ir_temp_channel_6 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1225 ir_temp_channel_5 "IR temp sensor channel reading in degrees C";
 CM_ BO_ 1226 "";
-CM_ SG_ 1226 brake_temp_channel_8 "brake rotor temp sensor channel reading in degrees C";
-CM_ SG_ 1226 brake_temp_channel_7 "brake rotor temp sensor channel reading in degrees C";
-CM_ SG_ 1226 brake_temp_channel_6 "brake rotor temp sensor channel reading in degrees C";
-CM_ SG_ 1226 brake_temp_channel_5 "brake rotor temp sensor channel reading in degrees C";
+CM_ SG_ 1226 ir_temp_channel_12 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1226 ir_temp_channel_11 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1226 ir_temp_channel_10 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1226 ir_temp_channel_9 "IR temp sensor channel reading in degrees C";
 CM_ BO_ 1227 "";
-CM_ SG_ 1227 brake_temp_channel_12 "brake rotor temp sensor channel reading in degrees C";
-CM_ SG_ 1227 brake_temp_channel_11 "brake rotor temp sensor channel reading in degrees C";
-CM_ SG_ 1227 brake_temp_channel_10 "brake rotor temp sensor channel reading in degrees C";
-CM_ SG_ 1227 brake_temp_channel_9 "brake rotor temp sensor channel reading in degrees C";
-CM_ BO_ 1229 "";
-CM_ SG_ 1229 brake_rotor_sensor_temp "temperature internal to the sensor degrees C";
+CM_ SG_ 1227 ir_temp_channel_16 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1227 ir_temp_channel_15 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1227 ir_temp_channel_14 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1227 ir_temp_channel_13 "IR temp sensor channel reading in degrees C";
 CM_ BO_ 1228 "";
-CM_ SG_ 1228 brake_temp_channel_16 "brake rotor temp sensor channel reading in degrees C";
-CM_ SG_ 1228 brake_temp_channel_15 "brake rotor temp sensor channel reading in degrees C";
-CM_ SG_ 1228 brake_temp_channel_14 "brake rotor temp sensor channel reading in degrees C";
-CM_ SG_ 1228 brake_temp_channel_13 "brake rotor temp sensor channel reading in degrees C";
+CM_ SG_ 1228 ir_temp_channel_4 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1228 ir_temp_channel_3 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1228 ir_temp_channel_2 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1228 ir_temp_channel_1 "IR temp sensor channel reading in degrees C";
+CM_ BO_ 1229 "";
+CM_ SG_ 1229 ir_temp_channel_8 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1229 ir_temp_channel_7 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1229 ir_temp_channel_6 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1229 ir_temp_channel_5 "IR temp sensor channel reading in degrees C";
+CM_ BO_ 1230 "";
+CM_ SG_ 1230 ir_temp_channel_12 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1230 ir_temp_channel_11 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1230 ir_temp_channel_10 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1230 ir_temp_channel_9 "IR temp sensor channel reading in degrees C";
+CM_ BO_ 1231 "";
+CM_ SG_ 1231 ir_temp_channel_16 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1231 ir_temp_channel_15 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1231 ir_temp_channel_14 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1231 ir_temp_channel_13 "IR temp sensor channel reading in degrees C";
+CM_ BO_ 1232 "";
+CM_ SG_ 1232 ir_temp_channel_4 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1232 ir_temp_channel_3 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1232 ir_temp_channel_2 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1232 ir_temp_channel_1 "IR temp sensor channel reading in degrees C";
+CM_ BO_ 1233 "";
+CM_ SG_ 1233 ir_temp_channel_8 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1233 ir_temp_channel_7 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1233 ir_temp_channel_6 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1233 ir_temp_channel_5 "IR temp sensor channel reading in degrees C";
+CM_ BO_ 1234 "";
+CM_ SG_ 1234 ir_temp_channel_12 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1234 ir_temp_channel_11 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1234 ir_temp_channel_10 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1234 ir_temp_channel_9 "IR temp sensor channel reading in degrees C";
+CM_ BO_ 1235 "";
+CM_ SG_ 1235 ir_temp_channel_16 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1235 ir_temp_channel_15 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1235 ir_temp_channel_14 "IR temp sensor channel reading in degrees C";
+CM_ SG_ 1235 ir_temp_channel_13 "IR temp sensor channel reading in degrees C";
+CM_ BO_ 1236 "Izze IRTS-V3 brake sensor (datasheet Rev.D) internal package temperature. Keep below 85 deg C";
+CM_ SG_ 1236 ir_temp_sensor_temp "IR temp sensor internal package temperature in degrees C";
 CM_ BO_ 1008 "";
 CM_ SG_ 1008 aero_channel_3 "";
 CM_ SG_ 1008 aero_channel_2 "";
@@ -1352,6 +1450,7 @@ CM_ SG_ 555 ebs_air_pressure_2 "";
 CM_ SG_ 555 ebs_air_pressure_1 "";
 CM_ BO_ 554 "";
 CM_ SG_ 554 driverless_state "";
+CM_ SG_ 554 continue_toggle_supervisor "";
 CM_ SG_ 554 activate_ebs_solenoid_2 "";
 CM_ SG_ 554 activate_ebs_solenoid_1 "";
 CM_ BO_ 556 "";
@@ -1365,10 +1464,22 @@ CM_ BO_ 401 "Status of the RSS";
 CM_ SG_ 401 correct_mode_selected "Correct mode selected";
 CM_ SG_ 401 pre_alarm_warning "Pre-alarm warning triggered 200ms in advance of a shutdown";
 CM_ SG_ 401 radio_link_quality "Radio link quality";
-CM_ SG_ 401 emergency_stop_not_pressed_2 "Emergency stop button pressed (second location)";
+CM_ SG_ 401 emergency_stop_pressed_2 "Emergency stop button pressed (second location)";
 CM_ SG_ 401 button_k3_pressed "Button K2 pressed";
 CM_ SG_ 401 switch_k2_pressed "Switch K2 pressed";
-CM_ SG_ 401 emergency_stop_not_pressed_1 "Emergency stop button pressed (first location)";
+CM_ SG_ 401 emergency_stop_pressed_1 "Emergency stop button pressed (first location)";
+CM_ BO_ 1240 "Front strain gauge measurements";
+CM_ SG_ 1240 F_ToeRod_F "Force on the front toe rod";
+CM_ SG_ 1240 F_UpperAftAA_F "Force on the front upper aft A arm";
+CM_ SG_ 1240 F_UpperForeAA_F "Force on the front upper fore A arm";
+CM_ SG_ 1240 F_LowerAftAA_F "Force on the front lower aft A arm";
+CM_ SG_ 1240 F_LowerForeAA_F "Force on the front lower fore A arm";
+CM_ BO_ 1241 "Rear strain gauge measurements";
+CM_ SG_ 1241 F_ToeRod_R "Force on the rear toe rod";
+CM_ SG_ 1241 F_UpperAftAA_R "Force on the rear upper aft A arm";
+CM_ SG_ 1241 F_UpperForeAA_R "Force on the rear upper fore A arm";
+CM_ SG_ 1241 F_LowerAftAA_R "Force on the rear lower aft A arm";
+CM_ SG_ 1241 F_LowerForeAA_R "Force on the rear lower fore A arm";
 BA_DEF_ BO_  "GenMsgCycleTimeus" INT 100 60000000;
 BA_DEF_DEF_  "GenMsgCycleTimeus" 1000;
 BA_ "GenMsgCycleTimeus" BO_ 1538 1000;
