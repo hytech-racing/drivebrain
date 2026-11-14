@@ -67,6 +67,10 @@ bool SimComms::start() {
     return true;
 }
 
+SimComms::~SimComms() {
+    close();
+}
+
 bool SimComms::close() {
     if (!_running.exchange(false)) return false;
     if (_veh_recv_thread.joinable()) _veh_recv_thread.join();

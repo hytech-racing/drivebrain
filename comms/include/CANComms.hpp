@@ -44,6 +44,11 @@ class CANComms {
         CANComms(const std::string &device_name, const std::string &dbc_file_path);
 
         /**
+         * Stops the receive thread and closes the socket.
+         */
+        ~CANComms();
+
+        /**
          * Sends a prootbuf message over CAN
          * 
          * @param message the message to be sent
@@ -90,10 +95,11 @@ class CANComms {
 
     public: 
 
-    private: 
-        int _socket; 
+    private:
+        int _socket = -1;
         can_frame _frame;
-        std::thread _reader_thread; 
+        std::thread _reader_thread;
+        std::atomic<bool> _running{false};
         std::unordered_map<uint64_t, const dbcppp::IMessage*> _messages;
         std::unordered_map<std::string, uint64_t> _names_to_can_id;
         std::unique_ptr<dbcppp::INetwork> _net;

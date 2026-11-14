@@ -65,6 +65,12 @@ private:
   */
   core::ControllerOutput _teleop_command(const core::TeleopCommand& command);
 
+  /**
+   * Stops every driver thread that can log telemetry. Call this before destroying
+   * the logging singletons.
+   */
+  void _stop_producers();
+
 private:
   boost::asio::io_context _io_context;
 
