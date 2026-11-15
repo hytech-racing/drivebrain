@@ -3,19 +3,7 @@
 
 Camera <name>/raw messages become ordinary foxglove.RawImage Bayer RGGB8
 messages. Ouster range images become foxglove.PointCloud messages on
-ouster/points. When a recording has no Ouster calibration message, the
-metadata captured in 235.mcap is used. All other messages, plus attachments
-and metadata, are copied.
-
-Install Python dependencies with:
-    python3 -m pip install -r requirements.txt
-Install the MCAP CLI separately, then run:
-    ./scripts/decompress_mcap.py recording.mcap
-
-This writes recording_decompressed.mcap next to the input.
-
-The input is never modified. If MCAP recovery is needed, the recovered copy
-is kept beside the output. Recovery may discard unreadable records.
+ouster/points.
 """
 
 from __future__ import annotations
@@ -24,6 +12,7 @@ import argparse
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 
 from foxglove_schemas_protobuf.PackedElementField_pb2 import PackedElementField
 from foxglove_schemas_protobuf.PointCloud_pb2 import PointCloud
@@ -39,6 +28,14 @@ import zstandard as zstd
 CAMERA_ENCODING = "bayer_rggb8"
 CALIBRATION_TOPIC = "ouster/calibration"
 FALLBACK_CALIBRATION = Path(__file__).with_name("ouster_calibration.json")
+
+
+def find_mcap_cli() -> str | None:
+    name = "mcap.exe" if sys.platform == "win32" else "mcap"
+    bundled = Path(__file__).resolve().parent / "vendor" / name
+    return str(bundled) if bundled.is_file() else shutil.which("mcap")
+
+
 RANGE_TOPIC = "ouster/range"
 POINTS_TOPIC = "ouster/points"
 MAX_FRAME_BYTES = 512 * 1024 * 1024
@@ -317,7 +314,7 @@ def main(*, decode_video=False):
             raise FileExistsError(output_path)
 
         # check if mcap cli is installed
-        mcap_cli = shutil.which("mcap")
+        mcap_cli = find_mcap_cli()
         if mcap_cli is None:
             raise RuntimeError("MCAP CLI not found; install it to check and recover files")
 
