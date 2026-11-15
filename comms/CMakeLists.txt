@@ -41,7 +41,7 @@ endif()
 
 add_library(drivebrain_comms ${DRIVEBRAIN_COMMS_SRCS})
 
-if(JETSON)
+if(NOT HOOTL)
     target_sources(drivebrain_comms PRIVATE src/Detector.cpp)
     target_link_libraries(drivebrain_comms PUBLIC TensorRT)
     target_compile_definitions(drivebrain_comms PUBLIC JETSON_ENABLED)
@@ -70,7 +70,7 @@ target_link_libraries(drivebrain_comms PUBLIC
     zstd::libzstd_static
 )
 
-if(JETSON)
+if(NOT HOOTL)
     target_link_libraries(drivebrain_comms PUBLIC TensorRT)
 endif()
 

@@ -16,7 +16,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Options
 #################################
 option(HOOTL "Build with HOOTL sim interface" OFF)
-option(JETSON "Build for the Jetson Orin (else Pi)" OFF)
 
 find_package(ht_proto CONFIG REQUIRED)
 find_package(ht_can CONFIG REQUIRED)
@@ -143,7 +142,7 @@ if(HOOTL)
     target_link_libraries(drivebrain PRIVATE cppzmq)
 endif()
 
-if(JETSON)
+if(NOT HOOTL)
     target_compile_definitions(drivebrain PRIVATE JETSON_ENABLED)
     target_compile_definitions(drivebrain_core PRIVATE JETSON_ENABLED)
     include(TensorRT)
@@ -176,7 +175,7 @@ target_link_libraries(drivebrain PUBLIC
     drivebrain_slam
 )
 
-if(JETSON)
+if(NOT HOOTL)
     target_link_libraries(drivebrain PUBLIC TensorRT)
 endif()
 
