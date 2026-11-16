@@ -9,7 +9,7 @@ hiddenimports += collect_submodules('rosbags.typesys.stores')
 
 
 a = Analysis(
-    ['decompress_mcap.py'],
+    ['hytech.py'],
     pathex=[],
     binaries=[],
     datas=datas,
@@ -29,7 +29,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='decompress_mcap',
+    name='hytech',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
