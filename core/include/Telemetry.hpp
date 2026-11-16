@@ -1,9 +1,6 @@
 #pragma once
 
-#include <algorithm>
 #include <array>
-#include <cmath>
-#include <variant>
 
 #include "StateTracker.hpp"
 #include <MCAPLogger.hpp>

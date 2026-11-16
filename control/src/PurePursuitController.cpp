@@ -63,5 +63,5 @@ std::optional<control::PurePursuitController::Steering> control::PurePursuitCont
         return std::nullopt;
     }
     const float lateral = heading.x * dy - heading.y * dx;
-    return Steering{std::atan(2.0f * lateral / dist_sq * WHEELBASE_M), target};
+    return Steering{std::atan(2.0f * lateral / dist_sq * _wheelbase), target};
 }

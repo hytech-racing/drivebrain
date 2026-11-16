@@ -281,11 +281,9 @@ void DrivebrainApp::_loop() {
       auto teleop_and_validity = core::StateTracker::instance().teleop_command();
       out_struct = _teleop_command(teleop_and_validity.first);
       command_is_valid = teleop_and_validity.second;
-
     } else {
       auto& controller_manager = ControllerManager<control::Controller<ControllerOutput, VehicleState>, constants::NUM_DRIVERED_CONTROLLERS>::instance();
       out_struct = controller_manager.step_active_controller(state_and_validity.first);
-      _autonomy.command(state_and_validity.first); 
       command_is_valid = state_and_validity.second;
     }
 
@@ -311,7 +309,6 @@ void DrivebrainApp::_loop() {
 
       _telem_can->send_message(desired_rpm_msg);
       _telem_can->send_message(torque_limit_msg);
-
     }
 
     // Log MCAP Info

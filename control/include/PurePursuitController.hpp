@@ -14,8 +14,6 @@ namespace control
 class PurePursuitController {
 
 public:
-    static constexpr float WHEELBASE_M = 1.53f;
-
     bool init();
     float get_dt_sec() { return 0.01f; }
     ControllerOutput step(const VehicleState& in);
@@ -30,6 +28,7 @@ private:
     std::optional<Steering> _steering(const VehicleState& in, const std::vector<xyz_vec<float>>& path) const;
 
     float _lookahead_dist = 2.5f;
+    float _wheelbase = 1.53f;
     float _target_speed = 1.79f; 
     float _torque_lim = 5.0f;
 
