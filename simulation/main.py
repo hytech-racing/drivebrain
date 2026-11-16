@@ -14,6 +14,7 @@ from sim.vehicle.dynamics import (
     X, Y, PSI, VX, VY, OMEGA, W_FL, W_RR, slip_angle,
 )
 from sim.vehicle.inverter import SpeedController
+from sim.vehicle.steering import SteeringActuator
 from sim.comms import SimComms
 from sim.scene import load_scene, LIDAR_X_M, LIDAR_Y_M, LIDAR_YAW, SENSOR_Z
 from sim.lidar import LidarSensor
@@ -60,6 +61,7 @@ def main():
     x0, y0, psi0 = [float(v) for v in scene.start_pose]
     state = dynamics.state(x=x0, y=y0, psi=psi0)
     inverters: SpeedController = SpeedController(params.gear_ratio, dt)
+    steering: SteeringActuator = SteeringActuator()
 
     if not args.logless:
         rr.init("vehicle_sim", spawn=True)
@@ -88,11 +90,12 @@ def main():
 
         wheel_omega: np.ndarray = np.asarray(state[W_FL:W_RR + 1])
         tau: np.ndarray = inverters.update(wheel_omega, cmd.speed_rpm, cmd.torque_lim)
+        steer_rad: float = steering.update(cmd.wheel_steer_rad, dt)
 
         u: jax.Array = dynamics.input(
             tau_fl=tau[0], tau_fr=tau[1],
             tau_rl=tau[2], tau_rr=tau[3],
-            steer=cmd.wheel_steer_rad,
+            steer=steer_rad,
         )
 
         state: jax.Array = step_rk4(state, u, params, dt)
@@ -131,7 +134,7 @@ def main():
                 slip=float(slip_angle(state)),
                 torque_fl=float(tau[0]), torque_fr=float(tau[1]),
                 torque_rl=float(tau[2]), torque_rr=float(tau[3]),
-                steering=cmd.wheel_steer_rad,
+                steering=steer_rad,
             )
 
         if step_i % gss_rate == 0:
