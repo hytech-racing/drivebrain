@@ -39,7 +39,7 @@ class VehicleParams(NamedTuple):
     h_cg: float = 0.29  # CG height, FZ_CG_Z in estimation/include/FzEstimator.h
     r_w: float = 0.2
     I_w: float = 0.094
-    gear_ratio: float = 11.83
+    gear_ratio: float = 11.841667
     f_n: float = 600.0  # average static load per tyre
     mu_a: float = 1.8
     mu_s: float = 1.5

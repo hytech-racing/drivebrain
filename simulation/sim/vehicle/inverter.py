@@ -4,6 +4,9 @@ Onboard inverter speed controller
 Drivebrain doesn't command torque directly: it sends a motor speed setpoint and a
 torque limit per wheel, and the inverters close the speed loop themselves. This
 mimics that with a per-wheel PI controller whose output is clamped to +/- the limit.
+
+Each motor follows the AMK torque-speed curve (peak torque, then constant power up to max speed), and the car's
+total power is capped like the MCU does.
 """
 
 import numpy as np
@@ -19,7 +22,10 @@ class SpeedControllerParams(NamedTuple):
     ki: float = 1.5
     # motor peak torque. commanded limits are capped to this so a garbage limit
     # can't spin a wheel up to inf and NaN the whole state
-    max_torque_nm: float = 21.0
+    max_torque_nm: float = 20.6
+    max_motor_rpm: float = 20000.0
+    motor_power_kw: float = 26.0  # estimate: inverter rated power
+    max_power_kw: float = 63.0    # whole car
 
 class SpeedController:
     def __init__(self, gear_ratio: float, dt: float,
@@ -31,10 +37,24 @@ class SpeedController:
 
     def update(self, wheel_omega: np.ndarray, speed_rpm: np.ndarray, torque_lim: np.ndarray) -> np.ndarray:
         """Motor torques (Nm) from wheel speeds (rad/s), motor speed setpoints (rpm) and torque limits (Nm)"""
-        lim: np.ndarray = np.minimum(np.abs(torque_lim), self._p.max_torque_nm)
-        err: np.ndarray = speed_rpm * RPM_TO_RAD_S - wheel_omega * self._gear_ratio
+        motor_omega: np.ndarray = wheel_omega * self._gear_ratio
+        err: np.ndarray = speed_rpm * RPM_TO_RAD_S - motor_omega
+
+        curve_lim: np.ndarray = np.minimum(self._p.max_torque_nm, self._p.motor_power_kw * 1000.0 / np.maximum(np.abs(motor_omega), 1e-3))
+        lim: np.ndarray = np.minimum(np.abs(torque_lim), curve_lim)
 
         # clamp the integrator to the limit so it can't wind up while saturated,
         # and so a zeroed limit (timeout) also resets it
         self._integral = np.clip(self._integral + self._p.ki * err * self._dt, -lim, lim)
-        return np.clip(self._p.kp * err + self._integral, -lim, lim)
+        tau: np.ndarray = np.clip(self._p.kp * err + self._integral, -lim, lim)
+
+        past_max_speed: np.ndarray = np.abs(motor_omega) >= self._p.max_motor_rpm * RPM_TO_RAD_S
+        tau = np.where(past_max_speed & (tau * motor_omega > 0.0), 0.0, tau)
+
+        power_w: float = float(np.sum(np.abs(tau * motor_omega)))
+        max_power_w: float = self._p.max_power_kw * 1000.0
+        if power_w > max_power_w:
+            scale: float = max_power_w / power_w
+            tau *= scale
+            self._integral = np.clip(self._integral, -lim * scale, lim * scale)
+        return tau
