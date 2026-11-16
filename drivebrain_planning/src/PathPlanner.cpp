@@ -10,6 +10,7 @@
 #include <delaunator.hpp>
 #include "FoxgloveServer.hpp"
 
+// TODO replace the planning logic that we ran at the first auton test with more thorough and tested logic
 namespace {
 
 //auto MAX_TRACK_WIDTH_SQ = core::FoxgloveServer::instance().get_param<float>("PathPlanning/max_track_width");
