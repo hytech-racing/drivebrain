@@ -15,6 +15,9 @@ LIDAR_Y_M: float = 0.0
 LIDAR_Z_M: float = 0.107
 LIDAR_YAW: float = math.radians(90.0)
 SENSOR_Z: float = CAR_Z + LIDAR_Z_M
+# car footprint around base_link, for cone contact. Width covers the tyres' outer edges
+CAR_HALF_LENGTH: float = 1.2
+CAR_HALF_WIDTH: float = 0.7
 
 CONE_BLUE: int = 1
 CONE_YELLOW: int = 2
@@ -33,6 +36,7 @@ class Scene(NamedTuple):
     cone_h: np.ndarray      # (M,)  f32 height
     cone_type: np.ndarray   # (M,)  i32 CONE_*
     start_pose: np.ndarray  # (3,)  f32 [x, y, psi]
+    timing_gates: np.ndarray  # (G,2,2) f32 timekeeping lines, each a pair of tk_device points
 
 
 def load_scene(track: str) -> Scene:
@@ -48,10 +52,12 @@ def load_scene(track: str) -> Scene:
             xy.append([float(c[0]), float(c[1])]); r.append(rr); h.append(hh); typ.append(tc)
 
     pose = d.get("starting_pose_front_wing", [0.0, 0.0, 0.0])
+    tk = d.get("tk_device") or []
     return Scene(
         cone_xy=np.asarray(xy, np.float32).reshape(-1, 2),
         cone_r=np.asarray(r, np.float32),
         cone_h=np.asarray(h, np.float32),
         cone_type=np.asarray(typ, np.int32),
         start_pose=np.asarray([float(pose[0]), float(pose[1]), float(pose[2])], np.float32),
+        timing_gates=np.asarray(tk, np.float32).reshape(-1, 2, 2),
     )
