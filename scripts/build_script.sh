@@ -33,7 +33,11 @@ pip install -r requirements.txt
 if ! conan remote list | grep -q "^artifactory:"; then
   conan remote add artifactory "$ARTIFACTORY_URL" --force
   echo "If you don't know the password, ask in software chat"
-  conan remote login artifactory user -p
+  if [ -n "$ARTIFACTORY_TOKEN" ]; then
+    conan remote login artifactory "$ARTIFACTORY_USERNAME" -p "$ARTIFACTORY_TOKEN"
+  else
+    conan remote login artifactory "${ARTIFACTORY_USERNAME:-user}"
+  fi
 fi
 # let cmake infer this
 unset CC
