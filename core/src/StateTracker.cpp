@@ -128,6 +128,12 @@ std::pair<core::VehicleState, bool> StateTracker::vehicle_state() {
         std::unique_lock lk(_state_mutex);
         _vehicle_state.state_is_valid = state_is_valid;
         current_state = _vehicle_state;
+        if (_pose_map_from_odom) {
+            const Eigen::Isometry2d pose_map = *_pose_map_from_odom * _odometry.latest_pose();
+            const float yaw = std::atan2(pose_map.linear()(1, 0), pose_map.linear()(0, 0));
+            current_state.vehicle_position_map_frame = {static_cast<float>(pose_map.translation().x()), static_cast<float>(pose_map.translation().y()), 0.0f};
+            current_state.vehicle_heading_map_frame_unit_vector = {std::cos(yaw), std::sin(yaw), 0.0f};
+        }
     }
 
     return {current_state, state_is_valid};
@@ -169,6 +175,11 @@ std::optional<Eigen::Isometry2d> StateTracker::odom_pose(uint64_t timestamp_ns, 
 
 Eigen::Vector3d StateTracker::odom_twist() {
     return _odometry.twist();
+}
+
+void StateTracker::set_pose_map_from_odom(const Eigen::Isometry2d& pose_map_from_odom) {
+    std::unique_lock lk(_state_mutex);
+    _pose_map_from_odom = pose_map_from_odom;
 }
 
 void StateTracker::set_dv_path(std::shared_ptr<const std::vector<xyz_vec<float>>> path) {
