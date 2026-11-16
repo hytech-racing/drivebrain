@@ -17,7 +17,7 @@
 
 namespace core {
 namespace {
-// Distance from the sim's car reference point (base_link) to its lidar, along the car. Matches MOUNT_FWD in xcel sim/scene.py
+// Distance from the sim's car reference point (base_link) to its lidar, along the car. Matches LIDAR_X_M in simulation/sim/scene.py
 // and static_transforms/lidar_x_m in the config
 constexpr double SIM_LIDAR_FORWARD_M = 1.244;
 constexpr double SIM_COLOR_MATCH_M = 0.6;
