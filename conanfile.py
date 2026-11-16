@@ -65,5 +65,6 @@ class DrivebrainSoftware(ConanFile):
         self.options["ouster_sdk"].build_osf = False
         self.options["ouster_sdk"].build_pcap = False
         self.options["ouster_sdk"].build_mapping = False
+        self.options["glib"].with_elf = False
 
         # TODO: we will need onettb at some point for fast parallelization, but it's annoying as fuck to build rn so idgaf
