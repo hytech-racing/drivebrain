@@ -59,46 +59,23 @@ void Autonomy::start() {
   }
   _slam = std::make_unique<slam::Slam>();
   _controller = std::make_unique<control::PurePursuitController>();
+  if (!_controller->init()) {
+    spdlog::error("Pure pursuit controller failed to init; autonomy not started");
+    _controller.reset();
+    _running = false;
+    return;
+  }
   _cone_classifier = std::make_unique<perception::ConeClassifier>("intrinsics");
 
-  auto& params = FoxgloveServer::instance();
-  planning::RacingLinePlanner::Config racing_line;
-  racing_line.enabled = params.get_param<bool>("racing_line/enabled").value_or(false);
-  if (const auto v = params.get_param<float>("racing_line/car_half_width_m")) racing_line.line.car_half_width_m = *v;
-  if (const auto v = params.get_param<float>("racing_line/cone_radius_m")) racing_line.line.cone_radius_m = *v;
-  if (const auto v = params.get_param<float>("racing_line/clearance_m")) racing_line.line.clearance_m = *v;
-  if (const auto v = params.get_param<float>("racing_line/gate_spacing_m")) racing_line.line.gate_spacing_m = *v;
-  if (const auto v = params.get_param<float>("racing_line/max_cone_gap_m")) racing_line.line.max_cone_gap_m = *v;
-  if (const auto v = params.get_param<float>("racing_line/replan_period_s")) racing_line.replan_period_s = *v;
-  if (const auto v = params.get_param<int>("racing_line/midline_laps_after_closure")) racing_line.midline_laps_after_closure = std::max(*v, 0);
-  if (const auto v = params.get_param<int>("racing_line/window_points")) racing_line.window_points = static_cast<std::size_t>(std::max(*v, 2));
-  // The speed held on the discovery lap (and throughout when the speed profile is off) comes from the config too
-  if (const auto v = params.get_param<float>("speed_profile/discovery_speed_mps"); v && *v > 0.0f) {
-    _controller->set_constant_speed(*v);
-    spdlog::info("Discovery lap speed {} m/s", *v);
-  } else {
-    spdlog::error("speed_profile/discovery_speed_mps is missing or not positive: the car will not move until it is set");
+  _racing_line = std::make_unique<planning::RacingLinePlanner>();
+  if (!_racing_line->init()) {
+    spdlog::error("Racing line planner failed to init; autonomy not started");
+    _racing_line.reset();
+    _controller.reset();
+    _running = false;
+    return;
   }
-  // Every value comes from the "speed_profile" config block; if any is missing or unusable the car keeps a constant speed
-  std::optional<control::SpeedProfileParams> speed_profile;
-  if (params.get_param<bool>("speed_profile/enabled").value_or(false)) {
-    const auto max_speed = params.get_param<float>("speed_profile/max_speed_mps");
-    const auto min_speed = params.get_param<float>("speed_profile/min_speed_mps");
-    const auto lat_accel = params.get_param<float>("speed_profile/max_lat_accel_mps2");
-    const auto brake = params.get_param<float>("speed_profile/max_brake_mps2");
-    const auto accel = params.get_param<float>("speed_profile/max_accel_mps2");
-    if (max_speed && min_speed && lat_accel && brake && accel && *min_speed > 0.0f && *max_speed >= *min_speed && *lat_accel > 0.0f && *brake > 0.0f &&
-        *accel > 0.0f) {
-      speed_profile = control::SpeedProfileParams{*max_speed, *min_speed, *lat_accel, *brake, *accel};
-    } else {
-      spdlog::warn("speed_profile/enabled is true but its values are missing or invalid (need max_speed_mps >= min_speed_mps > 0, max_lat_accel_mps2 > 0, max_brake_mps2 > 0, max_accel_mps2 > 0); using a constant speed");
-    }
-  }
-  _controller->set_speed_profile(speed_profile);
-  spdlog::info("Speed profile {}", speed_profile ? "enabled" : "disabled (constant speed)");
-  _racing_line = planning::RacingLinePlanner(racing_line);
-  spdlog::info("Racing line planner {}: 1 discovery lap, {} midline, then the racing line", racing_line.enabled ? "enabled" : "disabled",
-               racing_line.midline_laps_after_closure);
+
   _thread = std::thread(&Autonomy::_run, this);
   spdlog::info("Autonomy stack started");
 }
@@ -177,8 +154,8 @@ void Autonomy::_run() {
     StateTracker::instance().set_cone_observations(map);
     const auto midline = planning::plan_path(*map);
     render_path(midline, "midline_path", "map", {1.0, 0.5, 0.0, 1.0}, "scene/midline_path"); // orange
-    const auto racing_path = _racing_line.plan(*map, scan_ns);
-    _controller->set_track_closed(_racing_line.track_closed());  // before this the profile can only slow the car below the discovery speed
+    const auto racing_path = _racing_line->plan(*map, scan_ns);
+    _controller->set_track_closed(_racing_line->track_closed());  // lifts the discovery lap speed cap
     if (racing_path) render_path(*racing_path, "racing_line_path", "map", {0.2, 1.0, 0.1, 1.0}, "scene/racing_line_path"); // green
     const auto& path = racing_path ? *racing_path : midline;
     render_path(path, "planned_path", "map", {1.0, 0.0, 1.0, 1.0}, "scene/planned_path"); // magenta: what the controller follows, apart from the green trails

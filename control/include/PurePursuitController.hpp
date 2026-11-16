@@ -1,11 +1,11 @@
 #pragma once
 
 #include <Controller.hpp>
-#include "SpeedProfile.hpp"
 #include <StateTracker.hpp>
 
+#include <FoxgloveServer.hpp>
+
 #include <atomic>
-#include <chrono>
 #include <optional>
 #include <vector>
 
@@ -21,33 +21,31 @@ public:
     float get_dt_sec() { return 0.01f; }
     ControllerOutput step(const VehicleState& in);
 
-    /* Speed cap until the track is closed (the discovery lap), and the speed held for the whole run if there is no speed profile */
-    void set_constant_speed(float speed_mps) { _constant_speed = speed_mps; }
-
-    /* Corner-dependent target speed (see SpeedProfile.hpp); nullopt keeps the constant speed */
-    void set_speed_profile(std::optional<SpeedProfileParams> params) { _speed_profile = params; }
-
-    /* Until the track is closed (the discovery lap) the speed profile can only slow the car below the constant speed; after that it sets the speed */
+    /* Until the track is closed (the discovery lap) the speed is capped at discovery_max_speed instead of max_speed */
     void set_track_closed(bool closed) { _track_closed = closed; }
 
 private:
     struct Steering {
         float angle_rad;
         xyz_vec<float> target;
-        size_t closest;  // index of the path point nearest the car
     };
 
     /* Front-wheel angle (rad) that arcs onto the point one lookahead past the closest path point, and that point */
     std::optional<Steering> _steering(const VehicleState& in, const std::vector<xyz_vec<float>>& path) const;
 
-    float _lookahead_dist = 2.5f;
+    /* Fastest speed now that can still brake (at max_brake) down to each upcoming corner's limit, sqrt(max_lat_accel / curvature) */
+    float _profile_speed(const std::vector<xyz_vec<float>>& path) const;
+
+    std::atomic<float> _lookahead_dist{0.0f};
     float _wheelbase = 1.53f;
-    float _constant_speed = 0.0f;  // m/s, from the config; the cap on the discovery lap, and the speed whenever there is no speed profile
-    std::optional<SpeedProfileParams> _speed_profile;
-    float _commanded_speed = 0.0f;                          // what the speed profile has ramped up to; only touched by step()
-    std::chrono::steady_clock::time_point _last_step_time{};
+    std::atomic<float> _min_speed{0.0f};
+    std::atomic<float> _max_speed{0.0f};
+    std::atomic<float> _discovery_max_speed{0.0f};
+    std::atomic<float> _max_lat_accel{0.0f};
+    std::atomic<float> _max_brake{0.0f};
+    std::atomic<float> _torque_lim{0.0f};
+    boost::signals2::scoped_connection _param_connection;
     std::atomic<bool> _track_closed{false};  // set by the autonomy thread, read by the controller thread
-    float _torque_lim = 5.0f;
 
 };
 

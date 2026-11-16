@@ -6,7 +6,7 @@
 #include <thread>
 #include "PurePursuitController.hpp"
 #include "ConeClassifier.hpp"
-#include <RacingLinePlanner.hpp>
+#include <RacingLine.hpp>
 #include <StateTracker.hpp>
 #include <GraphSlam.hpp>
 #include <LidarFilter.hpp>
@@ -64,7 +64,7 @@ private:
   // Rate of OS1 LiDAR
   static constexpr std::chrono::milliseconds _period{100}; 
   std::unique_ptr<slam::Slam> _slam;
-  planning::RacingLinePlanner _racing_line;
+  std::unique_ptr<planning::RacingLinePlanner> _racing_line;
   std::unique_ptr<control::PurePursuitController> _controller;
   std::unique_ptr<perception::ConeClassifier> _cone_classifier;
 };

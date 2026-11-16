@@ -2,81 +2,56 @@
 
 #include <Eigen/Core>
 
-#include <cstddef>
+#include <atomic>
+#include <cstdint>
 #include <optional>
-#include <string>
 #include <vector>
 
-// Minimum-curvature racing line through a CLOSED track marked by blue (left) and yellow (right) cones.
-//
-// Pure geometry: no protobuf, no StateTracker, so it can be unit tested on its own.
-//
-// Pipeline (see compute()):
-//   1. order_closed_loop()  unordered cones of one colour -> an ordered closed loop (fails on an open track)
-//   2. build_gates()        two loops -> a centreline with, at every point, how far the track extends left and right
-//   3. solve_offsets()      choose a sideways offset at every gate that minimises the bending of the path
-//                           (a QP: minimise sum |p[i-1] - 2 p[i] + p[i+1]|^2, offsets limited by the cones)
+#include <FoxgloveServer.hpp>
+#include <StateTracker.hpp>
+#include "dv_msgs.pb.h"
 
-namespace planning::racing_line {
-
-using Vec2 = Eigen::Vector2d;
-
-struct Params {
-  double gate_spacing_m = 1.0;      // distance between gates along the centreline
-  // How far the car's centre must stay from each cone line = car half width + cone radius + clearance, see margin().
-  // The first two are physical sizes of the car and the cones; the clearance is the gap kept between the car and a cone
-  // (room for path tracking and SLAM error). Measured in the xcel sim: tracking within ~0.1-0.3 m, so ~0.3 m clearance.
-  double car_half_width_m = 0.70;   // half the car's width. Placeholder (xcel sim car): set from the real car
-  double cone_radius_m = 0.114;     // radius of a small (blue/yellow) cone base: 228 mm across
-  double clearance_m = 0.30;        // gap kept between the car's side and a cone, on top of the sizes above
-  /** Distance the car's centre is kept from each cone line */
-  double margin() const { return car_half_width_m + cone_radius_m + clearance_m; }
-  double max_cone_gap_m = 11.0;     // largest gap between neighbouring cones of one colour on a loop
-                                    //   (cones are up to 5 m apart, so this survives ONE missing cone, not two in a row)
-  double min_loop_length_m = 30.0;  // anything shorter is not a track
-  double min_cone_fraction = 0.85;  // share of a colour's cones that must lie on its loop (rest are treated as strays)
-  double max_half_width_m = 4.0;    // a boundary further than this from the centreline is not this gate's boundary
-  double regularisation = 1e-4;     // tiny pull towards the centreline where curvature does not care
-  int max_iterations = 5000;        // QP solver iteration cap
-  double admm_rho = 0.03;           // QP solver step parameter: only changes how fast it converges, not the answer (tuned: 9x fewer iterations than 1.0)
-  double tolerance_m = 5e-4;        // QP solver stops when the offsets change by less than this
-  int reweight_passes = 4;          // re-solves that correct the cost for uneven point spacing (0 = plain second differences)
-};
-
-/** The track as seen from the centreline. normal[i] points left; left[i]/right[i] are distances to the cone lines. */
-struct Gates {
-  std::vector<Vec2> centre;
-  std::vector<Vec2> normal;
-  std::vector<double> left;
-  std::vector<double> right;
-};
-
-/** Orders unordered same-colour cones into a closed loop, or returns nullopt (open track, gap too big, too many strays) */
-std::optional<std::vector<Vec2>> order_closed_loop(const std::vector<Vec2>& cones, const Params& params, std::string* error = nullptr);
-
-/** Builds gates from the blue (left) and yellow (right) loops. Centreline runs with blue on its left. */
-std::optional<Gates> build_gates(const std::vector<Vec2>& blue_loop, const std::vector<Vec2>& yellow_loop, const Params& params,
-                                 std::string* error = nullptr);
+namespace planning {
 
 /**
- * Sideways offset (m, positive = left) at every gate that minimises curvature, within the cone lines minus the margin.
- * A gate narrower than twice the margin is pinned to the middle of the track.
+ * Plans along a minimum-curvature racing line once the cone map is a complete, closed track.
+ *
+ * Until then plan() returns nullopt and the caller keeps using the midline planner (plan_path). That covers
+ * lap 1 (the track is still being discovered), open tracks (autocross, which never close), and any map that
+ * is too incomplete to build a reliable line from. Nothing here changes what the car does while it returns nullopt.
+ *
+ * How the line is built (see RacingLine.cpp):
+ *   1. order each colour's cones into a closed loop (fails on an open track)
+ *   2. build a centreline between the two loops, with how far the track extends left and right at every point
+ *   3. choose a sideways offset at every point that minimises how much the path bends, staying a margin inside the cones
+ *      (car half width + cone radius + clearance)
  */
-std::vector<double> solve_offsets(const Gates& gates, const Params& params, int* iterations_used = nullptr);
+class RacingLinePlanner {
+public:
+  /** Loads the "racing_line" config block and keeps it updated from live param changes; false if any value is missing */
+  bool init();
 
-/** Everything above in one call. The result is a closed line, in driving direction, one point per gate. */
-std::optional<std::vector<Vec2>> compute(const std::vector<Vec2>& blue_cones, const std::vector<Vec2>& yellow_cones, const Params& params,
-                                         std::string* error = nullptr);
+  /**
+   * @param cones the SLAM cone map, map frame
+   * @param scan_ns time of the scan the map came from
+   * @return the line ahead of the car, map frame, or nullopt when the map is not a closed track
+   *         (or the planner is disabled, or the car is not pointing along the line)
+   */
+  std::optional<std::vector<core::xyz_vec<float>>> plan(const dv_msgs::Cones& cones, std::uint64_t scan_ns);
 
-/**
- * The next n points of a closed line, starting at the point closest to pos among those that run the way the car points.
- * Returns nullopt, so the caller falls back to the midline planner, when no such point is within max_distance_m:
- * the car is pointing against the line, or is far from it. A path that starts far away is never better than no path.
- */
-std::optional<std::vector<Vec2>> window_ahead(const std::vector<Vec2>& closed_line, const Vec2& pos, const Vec2& heading, std::size_t n_points,
-                                              double max_distance_m = 5.0);
+  /** Whether the last plan() found a closed track, i.e. the discovery lap is over (true even when the planner is disabled) */
+  bool track_closed() const { return _line.has_value(); }
 
-/** Signed curvature (1/m) at each point of a closed path, three-point circle formula */
-std::vector<double> curvature(const std::vector<Vec2>& closed_path);
+private:
+  /* Set by init() and live param changes (Foxglove thread), read by plan() (autonomy thread). A size change applies at the next replan */
+  std::atomic<bool> _enabled{false};
+  std::atomic<float> _car_half_width{0.0f};
+  std::atomic<float> _cone_radius{0.0f};
+  std::atomic<float> _clearance{0.0f};
+  boost::signals2::scoped_connection _param_connection;
+  std::optional<std::vector<Eigen::Vector2d>> _line;  // closed, in driving direction
+  std::optional<std::uint64_t> _last_compute_ns;  // scan time the line was last rebuilt at
+  std::optional<bool> _last_reported_ok;  // availability last logged, so only changes are logged
+};
 
-}  // namespace planning::racing_line
+}  // namespace planning

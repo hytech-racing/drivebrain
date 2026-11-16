@@ -5,7 +5,6 @@ find_package(Eigen3 REQUIRED)
 add_library(drivebrain_planning STATIC
     src/PathPlanner.cpp
     src/RacingLine.cpp
-    src/RacingLinePlanner.cpp
 )
 
 target_include_directories(drivebrain_planning PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
