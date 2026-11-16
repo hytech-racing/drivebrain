@@ -291,9 +291,6 @@ void DrivebrainApp::_loop() {
 
     core::StateTracker::instance().set_previous_control_output(out_struct);
 
-    // Drawn every control tick so the arc tracks the command actually being sent
-    core::render_command(state_and_validity.first, out_struct, control::PurePursuitController::WHEELBASE_M, "steering_command");
-
     bool enabled = core::DrivebrainControllerInterface::instance().is_enabled();
 
     if (command_is_valid && enabled) {
