@@ -1,5 +1,6 @@
 .venv
 .venv/
+scripts/vendor/
 
 cmake
 cmake/

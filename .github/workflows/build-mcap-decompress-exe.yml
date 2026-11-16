@@ -1,0 +1,29 @@
+name: Build MCAP decompressor
+on: push
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - {os: ubuntu-22.04, platform: linux-amd64, suffix: ''}
+          - {os: windows-latest, platform: windows-amd64, suffix: '.exe'}
+          - {os: macos-15, platform: macos-arm64, suffix: ''}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements.txt pyinstaller rosbags
+      - shell: bash
+        working-directory: scripts
+        run: |
+          mkdir -p vendor
+          curl -fL "https://github.com/foxglove/mcap/releases/download/releases%2Fmcap-cli%2Fv0.3.0/mcap-${{ matrix.platform }}${{ matrix.suffix }}" -o vendor/mcap${{ matrix.suffix }}
+          chmod +x vendor/mcap${{ matrix.suffix }}
+          python -m PyInstaller --noconfirm decompress_mcap.spec
+      - uses: actions/upload-artifact@v4
+        with:
+          name: decompress-mcap-${{ matrix.platform }}
+          path: scripts/dist/decompress_mcap${{ matrix.suffix }}

@@ -1,6 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_submodules
 from PyInstaller.utils.hooks import copy_metadata
+from pathlib import Path
+import sys
+
+cli = Path('vendor') / ('mcap.exe' if sys.platform == 'win32' else 'mcap')
+if not cli.is_file():
+    raise SystemExit(f'Missing bundled MCAP CLI: {cli}')
 
 datas = [('ouster_calibration.json', '.')]
 hiddenimports = ['ouster.sdk._bindings']
@@ -11,7 +17,7 @@ hiddenimports += collect_submodules('rosbags.typesys.stores')
 a = Analysis(
     ['hytech.py'],
     pathex=[],
-    binaries=[],
+    binaries=[(str(cli), 'vendor')],
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
