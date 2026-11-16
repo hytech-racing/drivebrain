@@ -7,3 +7,4 @@ ouster-sdk
 zmq
 zstandard
 av
+pyinstaller
