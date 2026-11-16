@@ -1,4 +1,4 @@
-name: Build MCAP decompressor
+name: Build hytech CLI
 on: push
 
 jobs:
@@ -22,8 +22,8 @@ jobs:
           mkdir -p vendor
           curl -fL "https://github.com/foxglove/mcap/releases/download/releases%2Fmcap-cli%2Fv0.3.0/mcap-${{ matrix.platform }}${{ matrix.suffix }}" -o vendor/mcap${{ matrix.suffix }}
           chmod +x vendor/mcap${{ matrix.suffix }}
-          python -m PyInstaller --noconfirm decompress_mcap.spec
+          python -m PyInstaller --noconfirm hytech.spec
       - uses: actions/upload-artifact@v4
         with:
-          name: decompress-mcap-${{ matrix.platform }}
-          path: scripts/dist/decompress_mcap${{ matrix.suffix }}
+          name: hytech-${{ matrix.platform }}
+          path: scripts/dist/hytech${{ matrix.suffix }}
