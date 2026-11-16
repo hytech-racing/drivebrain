@@ -1,8 +1,10 @@
 import argparse
 import math
 import signal
+import sys
 import time
 import jax
+import jax.numpy as jnp
 import visualize
 import numpy as np
 import rerun as rr
@@ -18,6 +20,7 @@ from sim.vehicle.steering import SteeringActuator
 from sim.comms import SimComms
 from sim.scene import load_scene, LIDAR_X_M, LIDAR_Y_M, LIDAR_YAW, SENSOR_Z
 from sim.lidar import LidarSensor
+from sim.race import Race
 from sim import render
 from sim.proto import load_can, load_proto
 from sim.sensors import GroundSpeedSensor, GssConfig
@@ -34,6 +37,7 @@ def parse_args():
     p.add_argument("--track", default="FSG", choices=["FSG", "FSI", "skidpad", "acceleration", "thin"])
     p.add_argument("--logless", action="store_true", help="Disable Rerun (headless)")
     p.add_argument("--grip", type=float, default=1.0, help="Scales tyre friction (1.0 = peak mu 1.3, about 1 g of cornering)")
+    p.add_argument("--laps", type=int, default=0, help="Stop after this many timed laps, exit 1 if stopped before (0 = run forever)")
     return p.parse_args()
 
 def main():
@@ -64,6 +68,10 @@ def main():
     state = dynamics.state(x=x0, y=y0, psi=psi0)
     inverters: SpeedController = SpeedController(params.gear_ratio, dt)
     steering: SteeringActuator = SteeringActuator()
+    race: Race = Race(scene, np.array([
+        [params.l_f, params.w_f], [params.l_f, -params.w_f],
+        [-params.l_r, params.w_r], [-params.l_r, -params.w_r],
+    ]))
 
     if not args.logless:
         rr.init("vehicle_sim", spawn=True)
@@ -108,6 +116,14 @@ def main():
         y_i: float = float(state[Y])
         psi_i: float = float(state[PSI])
 
+        if race.update(sim_t, x_i, y_i, psi_i, float(state[VX]), float(state[VY])):
+            lidar.up = jnp.asarray(race.up)
+            lidar.off_xy = jnp.asarray(race.off_xy)
+            if not args.logless:
+                rr.set_time("sim_time", duration=sim_t)
+                render.log_cone_poses(scene, race.up, race.off_xy)
+        if args.laps and len(race.laps) >= args.laps:
+            running = False
 
         if step_i % lidar_rate == 0:
             latest_pts = lidar.scan((x_i, y_i, psi_i))
@@ -152,6 +168,10 @@ def main():
             time.sleep(drift)
 
     comms.close()
+    print(race.summary())
+    if args.laps and len(race.laps) < args.laps:
+        print("DNF")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

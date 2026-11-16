@@ -7,7 +7,7 @@ import math
 import numpy as np
 import rerun as rr
 
-from .scene import Scene, CAR_Z, LIDAR_X_M, LIDAR_Y_M, LIDAR_Z_M, LIDAR_YAW, _RGB
+from .scene import Scene, CAR_Z, CAR_HALF_LENGTH, CAR_HALF_WIDTH, LIDAR_X_M, LIDAR_Y_M, LIDAR_Z_M, LIDAR_YAW, _RGB
 
 
 def setup_static(scene: Scene) -> None:
@@ -38,21 +38,42 @@ def cone_mesh(radius: float, height: float, n_seg: int = 24):
     return pos, tris, nrm.astype("f4")
 
 
-def log_cones(scene: Scene) -> None:
-    """One instanced Mesh3D per (type, size) group, positioned by InstancePoses3D."""
-    xy = np.asarray(scene.cone_xy)
+def _cone_groups(scene: Scene):
+    """(entity path, mask, type, radius, height) per (type, size) group of cones"""
     r = np.asarray(scene.cone_r); h = np.asarray(scene.cone_h)
     typ = np.asarray(scene.cone_type)
     groups = np.unique(np.stack([typ, np.round(r, 4), np.round(h, 4)], 1), axis=0)
     for t, rr_, hh in groups:
         m = (typ == int(t)) & (np.round(r, 4) == rr_) & (np.round(h, 4) == hh)
-        pos, tris, nrm = cone_mesh(float(rr_), float(hh))
-        color = np.array(_RGB[int(t)], np.uint8)
-        rr.log(f"world/cones/{int(t)}_{rr_:.3f}",
-               rr.Mesh3D(vertex_positions=pos, triangle_indices=tris, vertex_normals=nrm,
-                         vertex_colors=np.tile(color, (pos.shape[0], 1))),
-               rr.InstancePoses3D(translations=np.column_stack([xy[m], np.zeros(m.sum())]).astype("f4")),
-               static=True)
+        yield f"world/cones/{int(t)}_{rr_:.3f}", m, int(t), float(rr_), float(hh)
+
+
+def log_cones(scene: Scene) -> None:
+    """One instanced Mesh3D per (type, size) group. The mesh is static; the poses are on the timeline so knocked
+    cones can move (log_cone_poses)."""
+    for path, _, t, r, h in _cone_groups(scene):
+        pos, tris, nrm = cone_mesh(r, h)
+        color = np.array(_RGB[t], np.uint8)
+        rr.log(path, rr.Mesh3D(vertex_positions=pos, triangle_indices=tris, vertex_normals=nrm,
+                               vertex_colors=np.tile(color, (pos.shape[0], 1))), static=True)
+    rr.set_time("sim_time", duration=0.0)
+    log_cone_poses(scene, np.ones(len(scene.cone_xy), np.float32), np.zeros((len(scene.cone_xy), 2), np.float32))
+
+
+def log_cone_poses(scene: Scene, up: np.ndarray, off_xy: np.ndarray) -> None:
+    """Upright cones at their base; knocked ones lying on their side, apex towards where they were pushed"""
+    xy = np.asarray(scene.cone_xy) + off_xy
+    for path, m, _, r, _ in _cone_groups(scene):
+        down = up[m] < 0.5
+        push = off_xy[m] / np.maximum(np.linalg.norm(off_xy[m], axis=1, keepdims=True), 1e-9)
+        # tip the apex over towards push: 90 deg about z x push
+        s45 = math.sqrt(0.5)
+        quat = np.where(down[:, None],
+                        np.column_stack([-push[:, 1] * s45, push[:, 0] * s45, np.zeros(m.sum()), np.full(m.sum(), s45)]),
+                        np.array([0.0, 0.0, 0.0, 1.0]))
+        z = np.where(down, r, 0.0)
+        rr.log(path, rr.InstancePoses3D(translations=np.column_stack([xy[m], z]).astype("f4"),
+                                        quaternions=quat.astype("f4")))
 
 
 def log_ground(size: float = 200.0) -> None:
@@ -66,7 +87,7 @@ def log_car(x: float, y: float, psi: float, timed_out: bool = False) -> None:
     hpsi = 0.5 * psi
     rr.log("world/car", rr.Transform3D(translation=[x, y, CAR_Z],
            quaternion=rr.Quaternion(xyzw=[0.0, 0.0, math.sin(hpsi), math.cos(hpsi)])))
-    rr.log("world/car/body", rr.Boxes3D(half_sizes=[[1.2, 0.6, 0.2]], centers=[[0, 0, 0]],
+    rr.log("world/car/body", rr.Boxes3D(half_sizes=[[CAR_HALF_LENGTH, CAR_HALF_WIDTH, 0.2]], centers=[[0, 0, 0]],
            colors=[[100, 100, 100] if timed_out else [220, 50, 50]]))
 
 
