@@ -197,6 +197,14 @@ void StateTracker::set_ground_truth_cones(std::shared_ptr<const dv_msgs::Cones> 
     _dv_state.ground_truth_cones = std::move(cones);
 }
 
+void StateTracker::set_ground_truth_pose(double x, double y, double yaw) {
+    std::unique_lock lk(_dv_state_mutex);
+    _dv_state.has_ground_truth_pose = true;
+    _dv_state.ground_truth_x = x;
+    _dv_state.ground_truth_y = y;
+    _dv_state.ground_truth_yaw = yaw;
+}
+
 void StateTracker::set_camera_detections(const std::string& camera, std::shared_ptr<const std::vector<ConeDetection>> detections) {
     std::unique_lock lk(_dv_state_mutex);
     _dv_state.camera_detections[camera] = std::move(detections);
