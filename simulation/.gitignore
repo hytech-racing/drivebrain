@@ -1,0 +1,7 @@
+build/
+.cache
+__pycache__
+.venv
+*.fmu
+.python-version
+
