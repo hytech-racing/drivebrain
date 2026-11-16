@@ -1,39 +1,4 @@
 #!/usr/bin/env python3
-"""HyTech MCAP tool.
-
-    hytech recover recording.mcap     recover if damaged, then decompress and trim
-    hytech decompress recording.mcap  decompress the whole recording
-    hytech trim recording.mcap        trim without decompressing
-    hytech strip recording.mcap       keep only data for driven analysis
-
-Decompressing turns camera <name>/raw messages into ordinary foxglove.RawImage
-Bayer RGGB8 messages and Ouster range images into foxglove.PointCloud messages
-on ouster/points. When a recording has no Ouster calibration message, the
-metadata captured in 235.mcap is used. All other messages, plus attachments
-and metadata, are copied. Output: recording_decompressed.mcap.
-
-Trimming keeps the time the car spent in READY_TO_DRIVE
-(hytech.car_states.vehicle_state == 3), plus 5 seconds before and after. Each
-separate drive is written to its own file: recording_0.mcap,
-recording_1.mcap, ... Drives whose padded windows overlap are merged into one
-file. Single-message channels (such as the drivebrain configuration) and
-Ouster calibration are copied into every file. If the recording has no
-car_states messages, recover keeps the whole recording.
-
-Stripping keeps only what driven analysis needs. It removes cameras
-(blackfly_*), lidar (ouster/*, PointCloud), Foxglove visualization
-(SceneUpdate, tf), and driverless-only data (dv_msgs.*, slam, KrakenInfo,
-drivebrain_steering_input), and copies everything else unchanged.
-Output: recording_stripped.mcap.
-
-Install Python dependencies with:
-    python3 -m pip install -r requirements.txt
-and install the MCAP CLI separately.
-
-The input is never modified. If MCAP recovery is needed, the recovered copy
-is kept beside the output. Recovery may discard unreadable records.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -60,11 +25,8 @@ FALLBACK_CALIBRATION = Path(__file__).with_name("ouster_calibration.json")
 RANGE_TOPIC = "ouster/range"
 POINTS_TOPIC = "ouster/points"
 MAX_FRAME_BYTES = 512 * 1024 * 1024
-
-# strip removes camera, lidar, visualization, and driverless-only data
 STRIP_TOPIC_PREFIXES = ("blackfly_", "ouster/", "slam/", "slam_")
 STRIP_TOPICS = {"filtered_cones", "tf", "KrakenInfo", "drivebrain_steering_input"}
-# foxglove.* covers PointCloud, SceneUpdate, FrameTransform, and images
 STRIP_SCHEMA_PREFIXES = ("foxglove.", "dv_msgs.")
 
 
