@@ -87,6 +87,7 @@ void Autonomy::stop() {
   if (_thread.joinable()) {
     _thread.join();
   }
+  _racing_line.reset();
   spdlog::info("Autonomy stack stopped");
 }
 
@@ -154,7 +155,7 @@ void Autonomy::_run() {
     StateTracker::instance().set_cone_observations(map);
     const auto midline = planning::plan_path(*map);
     render_path(midline, "midline_path", "map", {1.0, 0.5, 0.0, 1.0}, "scene/midline_path"); // orange
-    const auto racing_path = _racing_line->plan(*map, scan_ns);
+    const auto racing_path = _racing_line->plan();
     _controller->set_track_closed(_racing_line->track_closed());  // lifts the discovery lap speed cap
     if (racing_path) render_path(*racing_path, "racing_line_path", "map", {0.2, 1.0, 0.1, 1.0}, "scene/racing_line_path"); // green
     const auto& path = racing_path ? *racing_path : midline;

@@ -99,7 +99,8 @@
         "enabled": true,
         "car_half_width_m": 0.70,
         "cone_radius_m": 0.114,
-        "clearance_m": 0.3
+        "clearance_m": 0.3,
+        "replan_hz": 5.0
     },
     "PurePursuitController": {
         "lookahead_dist_m": 2.5,
