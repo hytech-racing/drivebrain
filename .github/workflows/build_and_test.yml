@@ -6,7 +6,7 @@ on:
 
 jobs:
   publish-image:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,7 +21,7 @@ jobs:
 
   build-executable:
     needs: publish-image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,7 +40,7 @@ jobs:
             -e ARTIFACTORY_TOKEN \
             -e ARTIFACTORY_URL \
             -e ARTIFACTORY_USERNAME \
-            dev ./scripts/build_script.sh
+            dev ./scripts/build_script.sh --jetson
 
       - name: Extract binary from build
         run: |
