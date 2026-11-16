@@ -41,8 +41,8 @@ class VehicleParams(NamedTuple):
     I_w: float = 0.094
     gear_ratio: float = 11.841667
     f_n: float = 600.0  # average static load per tyre
-    mu_a: float = 1.8
-    mu_s: float = 1.5
+    mu_a: float = 1.3
+    mu_s: float = 1.1
     s_adh: float = 0.117
     s_sld: float = 0.35
     # Low-speed slip regularization. Must stay >~1 m/s at dt=0.004: smaller makes the tire
