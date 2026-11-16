@@ -33,11 +33,13 @@ def parse_args():
     p: argparse.ArgumentParser = argparse.ArgumentParser()
     p.add_argument("--track", default="FSG", choices=["FSG", "FSI", "skidpad", "acceleration", "thin"])
     p.add_argument("--logless", action="store_true", help="Disable Rerun (headless)")
+    p.add_argument("--grip", type=float, default=1.0, help="Scales tyre friction (1.0 = peak mu 1.3, about 1 g of cornering)")
     return p.parse_args()
 
 def main():
     args = parse_args()
-    params: VehicleParams = VehicleParams()
+    defaults: VehicleParams = VehicleParams()
+    params: VehicleParams = defaults._replace(mu_a=defaults.mu_a * args.grip, mu_s=defaults.mu_s * args.grip)
     dt: float = 0.004
 
     vis_rate: int = max(1, round(1.0 / (VIS_HZ * dt)))
