@@ -40,7 +40,11 @@ class Scene(NamedTuple):
 
 
 def load_scene(track: str) -> Scene:
-    d = yaml.safe_load(open(TRACKS_DIR / f"{track}.yaml"))
+    return scene_from_dict(yaml.safe_load(open(TRACKS_DIR / f"{track}.yaml")))
+
+
+def scene_from_dict(d: dict) -> Scene:
+    """Scene from a track YAML's contents"""
     xy: list = []; r: list = []; h: list = []; typ: list = []
     for key, tc, rr, hh in [
         ("cones_left", CONE_BLUE, SMALL_R, SMALL_H),

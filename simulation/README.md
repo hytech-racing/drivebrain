@@ -26,6 +26,8 @@ uv sync
 uv run main.py --track FSG            # opens a Rerun viewer
 uv run main.py --track FSG --logless  # headless, no Rerun
 uv run main.py --track FSG --logless --laps 2  # stops after 2 laps, exits 1 (DNF) if stopped before
+uv run main.py --track random            # a new random track each run, seed printed
+uv run main.py --track random --seed 42  # the same random track again
 ```
 
 ### Scoring
@@ -47,6 +49,7 @@ visualize.py       Rerun time-series panels and layout
 sim/comms.py       ZMQ sockets and message packing
 sim/proto.py       HT_proto / HT_CAN download and caching
 sim/scene.py       track loading, sensor mount transforms
+sim/trackgen.py    random track generator
 sim/render.py      Rerun 3D scene (cones, car, lidar points)
 sim/lidar.py       lidar model
 sim/sensors.py     ground speed sensor model
