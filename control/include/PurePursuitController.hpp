@@ -30,14 +30,16 @@ private:
         xyz_vec<float> target;
     };
 
-    /* Front-wheel angle (rad) that arcs onto the point one lookahead past the closest path point, and that point */
-    std::optional<Steering> _steering(const VehicleState& in, const std::vector<xyz_vec<float>>& path) const;
+    /* Front-wheel angle (rad) that arcs onto the point one lookahead past the closest path point, and that point. The lookahead
+       grows with speed (lookahead_time_s ahead, at least lookahead_dist_m): a fixed one that suits low speed oscillates at high speed */
+    std::optional<Steering> _steering(const VehicleState& in, const std::vector<xyz_vec<float>>& path, float speed) const;
 
     /* Fastest speed now that can still brake (at max_brake) down to each upcoming corner's limit, sqrt(max_lat_accel / curvature) */
     float _profile_speed(const std::vector<xyz_vec<float>>& path) const;
 
     std::atomic<float> _lookahead_dist{0.0f};
     float _wheelbase = 1.53f;
+    std::atomic<float> _lookahead_time{0.0f};
     std::atomic<float> _min_speed{0.0f};
     std::atomic<float> _max_speed{0.0f};
     std::atomic<float> _discovery_max_speed{0.0f};

@@ -9,17 +9,19 @@
 bool control::PurePursuitController::init() {
     auto& foxglove = FoxgloveServer::instance();
     auto lookahead = foxglove.get_param<float>("purepursuitcontroller/lookahead_dist_m");
+    auto lookahead_time = foxglove.get_param<float>("purepursuitcontroller/lookahead_time_s");
     auto min_speed = foxglove.get_param<float>("purepursuitcontroller/min_speed_mps");
     auto max_speed = foxglove.get_param<float>("purepursuitcontroller/max_speed_mps");
     auto discovery_max_speed = foxglove.get_param<float>("purepursuitcontroller/discovery_max_speed_mps");
     auto max_lat_accel = foxglove.get_param<float>("purepursuitcontroller/max_lat_accel_mps2");
     auto max_brake = foxglove.get_param<float>("purepursuitcontroller/max_brake_mps2");
     auto torque_lim = foxglove.get_param<float>("purepursuitcontroller/torque_lim_nm");
-    if (!lookahead || !min_speed || !max_speed || !discovery_max_speed || !max_lat_accel || !max_brake || !torque_lim) {
+    if (!lookahead || !lookahead_time || !min_speed || !max_speed || !discovery_max_speed || !max_lat_accel || !max_brake || !torque_lim) {
         spdlog::error("Couldn't load all params for pure pursuit controller.");
         return false;
     }
     _lookahead_dist = *lookahead;
+    _lookahead_time = *lookahead_time;
     _min_speed = *min_speed;
     _max_speed = *max_speed;
     _discovery_max_speed = *discovery_max_speed;
@@ -29,6 +31,7 @@ bool control::PurePursuitController::init() {
 
     _param_connection = foxglove.register_param_callback([this](const std::unordered_map<std::string, core::DBParam>& params) {
         if (auto v = core::process_param_update<float>(params, "purepursuitcontroller/lookahead_dist_m")) _lookahead_dist = *v;
+        if (auto v = core::process_param_update<float>(params, "purepursuitcontroller/lookahead_time_s")) _lookahead_time = *v;
         if (auto v = core::process_param_update<float>(params, "purepursuitcontroller/min_speed_mps")) _min_speed = *v;
         if (auto v = core::process_param_update<float>(params, "purepursuitcontroller/max_speed_mps")) _max_speed = *v;
         if (auto v = core::process_param_update<float>(params, "purepursuitcontroller/discovery_max_speed_mps")) _discovery_max_speed = *v;
@@ -47,9 +50,10 @@ ControllerOutput control::PurePursuitController::step(const VehicleState& in) {
     speed_out.torque_lim_nm = {_torque_lim, _torque_lim, _torque_lim, _torque_lim};
 
     ControllerOutput out = {};
-    auto steering = path ? _steering(in, *path) : std::nullopt;
+    const float speed = path ? _profile_speed(*path) : 0.0f;
+    auto steering = path ? _steering(in, *path, speed) : std::nullopt;
     if (steering) {
-        const float rpm = _profile_speed(*path) * constants::METERS_PER_SECOND_TO_RPM;
+        const float rpm = speed * constants::METERS_PER_SECOND_TO_RPM;
         speed_out.desired_rpms = {rpm, rpm, rpm, rpm};
         out.desired_steering_deg = steering->angle_rad * 180.0f / M_PI;
         out.lookahead_point_map_frame = steering->target;
@@ -60,7 +64,7 @@ ControllerOutput control::PurePursuitController::step(const VehicleState& in) {
     return out;
 }
 
-std::optional<control::PurePursuitController::Steering> control::PurePursuitController::_steering(const VehicleState& in, const std::vector<xyz_vec<float>>& path) const {
+std::optional<control::PurePursuitController::Steering> control::PurePursuitController::_steering(const VehicleState& in, const std::vector<xyz_vec<float>>& path, float speed) const {
     if (path.size() < 2) {
         return std::nullopt;
     }
@@ -76,7 +80,8 @@ std::optional<control::PurePursuitController::Steering> control::PurePursuitCont
     }
 
     xyz_vec<float> target = path.back();
-    float remaining = _lookahead_dist;
+    // the commanded speed rather than the measured one: it leads while accelerating, so the lookahead is long before the car is fast
+    float remaining = std::max(_lookahead_dist.load(), _lookahead_time.load() * speed);
     for (size_t i = closest; i + 1 < path.size(); ++i) {
         const float seg = dist(path[i], path[i + 1]);
         if (seg >= remaining) {
