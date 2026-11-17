@@ -18,9 +18,10 @@ from sim.vehicle.dynamics import (
 from sim.vehicle.inverter import SpeedController
 from sim.vehicle.steering import SteeringActuator
 from sim.comms import SimComms
-from sim.scene import load_scene, LIDAR_X_M, LIDAR_Y_M, LIDAR_YAW, SENSOR_Z
+from sim.scene import load_scene, scene_from_dict, LIDAR_X_M, LIDAR_Y_M, LIDAR_YAW, SENSOR_Z
 from sim.lidar import LidarSensor
 from sim.race import Race
+from sim.trackgen import generate
 from sim import render
 from sim.proto import load_can, load_proto
 from sim.sensors import GroundSpeedSensor, GssConfig
@@ -34,7 +35,8 @@ CAN_TAG: int = 268  # must match the HT_CAN release drivebrain is built against
 
 def parse_args():
     p: argparse.ArgumentParser = argparse.ArgumentParser()
-    p.add_argument("--track", default="FSG", choices=["FSG", "FSI", "skidpad", "acceleration", "thin"])
+    p.add_argument("--track", default="FSG", choices=["FSG", "FSI", "skidpad", "acceleration", "thin", "random"])
+    p.add_argument("--seed", type=int, default=None, help="Seed for --track random (default: a new one each run, printed)")
     p.add_argument("--logless", action="store_true", help="Disable Rerun (headless)")
     p.add_argument("--grip", type=float, default=1.0, help="Scales tyre friction (1.0 = peak mu 1.3, about 1 g of cornering)")
     p.add_argument("--laps", type=int, default=0, help="Stop after this many timed laps, exit 1 if stopped before (0 = run forever)")
@@ -55,7 +57,12 @@ def main():
     u0 = dynamics.input()
     step_rk4(s0, u0, params, dt).block_until_ready()
 
-    scene = load_scene(args.track)
+    if args.track == "random":
+        seed: int = args.seed if args.seed is not None else int(np.random.default_rng().integers(1 << 31))
+        print(f"random track, seed {seed}")
+        scene = scene_from_dict(generate(seed))
+    else:
+        scene = load_scene(args.track)
     lidar: LidarSensor = LidarSensor(scene)
     gss: GroundSpeedSensor = GroundSpeedSensor(GssConfig(rate_hz=GSS_HZ))
     proto = load_proto()
