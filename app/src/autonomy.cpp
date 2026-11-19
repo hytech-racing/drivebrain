@@ -12,40 +12,9 @@
 #include <LidarFilter.hpp>
 #include <PointCloudDeskew.hpp>
 #include <PathPlanner.hpp>
+#include <SimConeColors.hpp>
 
 namespace core {
-namespace {
-// Distance from the sim's car reference point (base_link) to its lidar, along the car. Matches LIDAR_X_M in simulation/sim/scene.py
-// and static_transforms/lidar_x_m in the config
-constexpr double SIM_LIDAR_FORWARD_M = 1.244;
-constexpr double SIM_COLOR_MATCH_M = 0.6;
-
-// HOOTL only: the sim has no cameras, so no cone ever gets a colour. Copy the colour of the nearest true cone instead.
-// Does nothing on the real car (no ground truth is ever set). Colours already set by the camera classifier are kept.
-void color_cones_from_sim_ground_truth(dv_msgs::Cones& cones) {
-  const auto dv = StateTracker::instance().dv_state();
-  if (!dv.ground_truth_cones || !dv.has_ground_truth_pose) return;
-
-  const double c = std::cos(dv.ground_truth_yaw), s = std::sin(dv.ground_truth_yaw);
-  const double ox = dv.ground_truth_x + SIM_LIDAR_FORWARD_M * c, oy = dv.ground_truth_y + SIM_LIDAR_FORWARD_M * s;
-  for (auto& cone : *cones.mutable_cones()) {
-    if (cone.color() != dv_msgs::Cones_ConeColor_UNKNOWN) continue;
-    // sensor frame (car-forward along -y, car-left along +x) -> car frame -> sim world frame
-    const double car_fwd = -cone.position().y(), car_left = cone.position().x();
-    const double wx = ox + c * car_fwd - s * car_left;
-    const double wy = oy + s * car_fwd + c * car_left;
-    double best = SIM_COLOR_MATCH_M;
-    for (const auto& truth : dv.ground_truth_cones->cones()) {
-      const double d = std::hypot(truth.position().x() - wx, truth.position().y() - wy);
-      if (d < best) {
-        best = d;
-        cone.set_color(truth.color());
-        cone.set_color_confidence(1.0f);  // SLAM's colour voting ignores zero-confidence colours
-      }
-    }
-  }
-}
-}  // namespace
 
 Autonomy::~Autonomy() {
   stop();
@@ -117,7 +86,7 @@ void Autonomy::_run() {
 
     std::shared_ptr<dv_msgs::Cones> cones = perception::filter_cloud(*cloud);
     cones = _classifier.classify(cones, StateTracker::instance().dv_state().camera_detections, last_scan->frame_id());
-    color_cones_from_sim_ground_truth(*cones);
+    perception::color_cones_from_sim_ground_truth(*cones, T_base_lidar);
     render_cones(cones, "filtered_cones", "os_sensor");
 
     // Perform SLAM update with the filtered cones
