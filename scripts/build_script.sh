@@ -1,17 +1,15 @@
 #!/usr/bin/env sh
 set -e
 
-linkflags="-static"
 for a in "$@"; do
   case "$a" in
     --test|--local) shouldTest=1 ;;  # --local kept as an alias for the sim workflow
     --clean) shouldClean=1 ;;
     --local-cache-only) localCacheOnly=1 ;;
-    --jetson) jetson="-DJETSON=ON"; linkflags="" ;;
   esac
 done
 
-profile="rpi_profile"
+profile="jetson_profile"
 build_folder="build-arm"
 ARTIFACTORY_URL="${ARTIFACTORY_URL:-http://54.198.162.181:8082/artifactory/api/conan/conan}"
 
@@ -67,12 +65,10 @@ cmake .. \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_TOOLCHAIN_FILE=../cmake/conan_toolchain.cmake \
   -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-  -DCMAKE_EXE_LINKER_FLAGS="$linkflags" \
   $hootl \
-  $jetson \
   --log-level=NOTICE
 
-make -j1
+make -j
 
 # run unit tests
 if [ "$shouldTest" = 1 ]; then

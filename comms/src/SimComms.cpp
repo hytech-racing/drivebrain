@@ -216,7 +216,6 @@ void SimComms::_veh_recv_loop() {
             core::log(msg, topic);
             core::StateTracker::instance().handle_receive_protobuf_message(msg);
         }
-
     }
 }
 

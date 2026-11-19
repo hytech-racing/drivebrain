@@ -23,9 +23,14 @@ public:
             "caps=\"video/x-raw,format=I420,width=" + std::to_string(width) +
             ",height=" + std::to_string(height) + ",framerate=" +
             std::to_string(numerator) + "/" + std::to_string(denominator) +
+#if HOOTL_ENABLED
+            "\" ! x264enc bitrate=8000 key-int-max=1 bframes=0 "
+            "tune=zerolatency speed-preset=ultrafast "
+#else
             "\" ! nvvidconv ! video/x-raw(memory:NVMM),format=NV12 "
             "! nvv4l2h264enc bitrate=8000000 iframeinterval=1 idrinterval=1 "
             "insert-sps-pps=true num-B-Frames=0 "
+#endif
             "! video/x-h264,stream-format=byte-stream,alignment=au "
             "! appsink name=output sync=false async=false max-buffers=1";
         GError* error = nullptr;

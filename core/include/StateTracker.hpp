@@ -516,8 +516,7 @@ namespace core {
             /* Singleton move semantics */
             StateTracker(const StateTracker&) = delete; 
             StateTracker& operator=(const StateTracker&) = delete;
-
-            
+        
 
             /* Singleton instance */
             inline static std::atomic<StateTracker*> _s_instance; 

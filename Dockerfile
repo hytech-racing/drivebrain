@@ -16,12 +16,27 @@ RUN apt-get update && apt-get install -y \
     vim \
     libgl1 \
     pkg-config \
+    libgstreamer1.0-dev \
+    libgstreamer-plugins-base1.0-dev \
+    gstreamer1.0-plugins-base \
+    gstreamer1.0-plugins-ugly \
     python3 \
     python3-pip \
     python3-setuptools \
     python3-venv \
     binutils-aarch64-linux-gnu \
     patchelf \
+    && apt-get clean
+
+RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
+        dpkg --add-architecture arm64 \
+        && sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list \
+        && echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy main universe" > /etc/apt/sources.list.d/arm64.list \
+        && echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main universe" >> /etc/apt/sources.list.d/arm64.list; \
+    fi \
+    && apt-get update && apt-get install -y \
+    libgstreamer1.0-dev:arm64 \
+    libgstreamer-plugins-base1.0-dev:arm64 \
     && apt-get clean
 
 RUN wget -q "https://github.com/foxglove/mcap/releases/download/releases%2Fmcap-cli%2Fv0.3.0/mcap-linux-$(dpkg --print-architecture)" -O /usr/local/bin/mcap \
@@ -32,7 +47,7 @@ RUN wget -q "https://github.com/foxglove/mcap/releases/download/releases%2Fmcap-
 ARG NV_REPO=https://repo.download.nvidia.com/jetson/common/pool/main
 ARG CUDA=13-2_13.2.86-1
 ARG TRT=10.16.2.10-1+cuda13.2
-ARG PHOENIX6=26.3.0 
+ARG PHOENIX6=26.3.0
 
 ENV JETSON_SYSROOT=/opt/jetson-sysroot
 
@@ -64,17 +79,5 @@ RUN mkdir -p ${JETSON_SYSROOT} \
         ${JETSON_SYSROOT}/usr/lib/phoenix6/*_Replay.so
 
 WORKDIR /
-    
-CMD ["/bin/bash"]
-
-# Simulation layer
-FROM dev-base as dev-sim
-RUN wget https://packages.osrfoundation.org/gazebo.gpg -O /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable jammy main" \
-    > /etc/apt/sources.list.d/gazebo-stable.list \
-    && apt-get update && apt-get install -y \
-    libgz-transport13-dev \
-    libgz-msgs10-dev \
-    && apt-get clean
 
 CMD ["/bin/bash"]

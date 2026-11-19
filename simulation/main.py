@@ -30,7 +30,7 @@ CAN_TAG: int = 268  # must match the HT_CAN release drivebrain is built against
 
 def parse_args():
     p: argparse.ArgumentParser = argparse.ArgumentParser()
-    p.add_argument("--track", default="FSG", choices=["FSG", "FSI", "skidpad", "acceleration", "thin"])
+    p.add_argument("--track", default="test", choices=["FSG", "FSI", "skidpad", "acceleration", "thin", "test"])
     p.add_argument("--logless", action="store_true", help="Disable Rerun (headless)")
     return p.parse_args()
 
