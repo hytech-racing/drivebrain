@@ -1,6 +1,6 @@
 # DriveBrain Software
 
-This repo contains the main executable that runs on the Drivebrain embedded computer on HyTech Racing's cars. This code is deployed as a systemd service onto the car within HyTech's Raspberry Pi [NixOS description](https://github.com/hytech-racing/hytech_nixos/releases). This service handles, among other things:
+This repo contains the main executable that runs on the Drivebrain embedded computer on HyTech Racing's cars. This code is deployed as a systemd service onto the car's Jetson Orin. This service handles, among other things:
 
 * high-performance control algorithm execution from both hand written c++ and MATLAB Simulink generated code c++
 * car state estimation via both hand written c++ and MATLAB Simulink generated code c++
@@ -59,6 +59,8 @@ Inside the container, execute:
 ```bash
 ./scripts/build_script.sh
 ```
+
+If you run into any package / dependency errors, run `docker compose build dev` and then re-enter the container to run the build script.
 
 This script will build the DriveBrain software using the cross-compilation toolchain for the target platform.
 The first time you run it, it will take some time because it needs to compile all the dependencies. However, future builds past the first one take <1 minute because dependencies are cached. Once finished, the `drivebrain` binary will be in `build-arm/`

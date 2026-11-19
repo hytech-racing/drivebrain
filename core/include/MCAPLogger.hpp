@@ -55,9 +55,10 @@ namespace core {
               spdlog::info("Destructing mcap logger");
               {
                 std::lock_guard lock(_input_buffer_mutex);
-              _logging = false;
+                _logging = false;
               }
 
+              close_active_mcap();
               _s_instance.store(nullptr, std::memory_order_release);
               spdlog::info("Msg logger singleton instance released");
 
@@ -96,12 +97,6 @@ namespace core {
              * Kicks off the message logging & param logging thread and begins writing to a log file.
             */
             void init_logging();
-
-            /**
-             * Stops logging to the current file.
-             * To not be confused with halting, which stops logging and running the MCAPLogger entirely.
-            */
-            void stop_logging();
 
             /**
              * Logs a protobuf message to the current MCAP file
