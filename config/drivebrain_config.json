@@ -39,6 +39,17 @@
         "invert_steering_axis": false,
         "axis_deadzone": 0.05
     },
+    "BasicQP": {
+        "omega": 10.0,
+        "alpha": 0.1,
+        "lambda": 0.1,
+        "gamma": 0.1,
+        "dt_rate_hz": 1000.0,
+        "yaw_kp": 1400.0,
+        "yaw_ki": 0.0,
+        "yaw_kd": 30.0,
+        "mu": 1.0
+    },
     "vn_driver": {
         "device_name": "/dev/ttyUSB0",
         "baud_rate": 921600, 

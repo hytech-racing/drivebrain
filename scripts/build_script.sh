@@ -20,6 +20,7 @@ if [ "$shouldTest" = 1 ]; then
   profile="default"
   build_folder="build-native"
   hootl="-DHOOTL=ON"
+  # linkflags=""
 fi
 
 if [ "$shouldClean" = 1 ]; then

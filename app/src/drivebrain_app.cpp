@@ -136,7 +136,12 @@ void DrivebrainApp::run() {
     spdlog::error("Failed to initialize mode 2");
   }
 
-  std::array<std::shared_ptr<control::Controller<core::ControllerOutput, core::VehicleState>>, constants::NUM_DRIVERED_CONTROLLERS> controllers{_mode1, _mode2};
+  _mode4 = std::make_shared<control::BasicQP>();
+  if (!_mode4->init()) {
+    spdlog::error("Failed to initialize mode 4");
+  }
+
+  std::array<std::shared_ptr<control::Controller<core::ControllerOutput, core::VehicleState>>, constants::NUM_DRIVERED_CONTROLLERS> controllers{_mode4, _mode2};
   
   // Create controller manager instance
   ControllerManager<control::Controller<ControllerOutput, VehicleState>, constants::NUM_DRIVERED_CONTROLLERS>::create(controllers);
