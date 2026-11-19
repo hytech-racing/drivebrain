@@ -30,6 +30,8 @@ public:
   /** The line ahead of the car, map frame, or nullopt when the map is not closed, the planner is disabled, or the car is off the line */
   std::optional<std::vector<core::xyz_vec<float>>> plan() const;
 
+  bool enabled() const { return _enabled; }
+
   /** Whether the map is a closed track, i.e. the discovery lap is over (true even when the planner is disabled) */
   bool track_closed() const { return _latest_line() != nullptr; }
 

@@ -397,7 +397,7 @@ std::shared_ptr<const RacingLinePlanner::Line> RacingLinePlanner::_latest_line()
 
 std::optional<std::vector<core::xyz_vec<float>>> RacingLinePlanner::plan() const {
   const auto line = _latest_line();
-  if (!line || !_enabled) return std::nullopt;
+  if (!line) return std::nullopt;
 
   const auto vehicle_state = core::StateTracker::instance().vehicle_state().first;
   const Vec2 position(vehicle_state.vehicle_position_map_frame.x, vehicle_state.vehicle_position_map_frame.y);

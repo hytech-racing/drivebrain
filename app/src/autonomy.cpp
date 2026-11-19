@@ -127,7 +127,7 @@ void Autonomy::_run() {
     const auto racing_path = _racing_line->plan();
     _controller->set_track_closed(_racing_line->track_closed());  // lifts the discovery lap speed cap
     if (racing_path) render_path(*racing_path, "racing_line_path", "map", {0.2, 1.0, 0.1, 1.0}, "scene/racing_line_path"); // green
-    const auto& path = racing_path ? *racing_path : midline;
+    const auto& path = racing_path && _racing_line->enabled() ? *racing_path : midline;
     render_path(path, "planned_path", "map", {1.0, 0.0, 1.0, 1.0}, "scene/planned_path"); // magenta: what the controller follows, apart from the green trails
 
     StateTracker::instance().set_dv_path(std::make_shared<const std::vector<xyz_vec<float>>>(path)); // Used by the pure pursuit controller
