@@ -1,0 +1,84 @@
+name: Sim test
+
+on:
+  push:
+    branches:
+      - '**'
+  workflow_dispatch:
+    inputs:
+      track:
+        description: Track to run
+        type: choice
+        options: [acceleration, skidpad, FSG, FSI, thin, random]
+        default: acceleration
+      laps:
+        description: Laps to finish
+        default: '1'
+      timeout:
+        description: Time limit in seconds
+        default: '300'
+
+jobs:
+  sim-test:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore Conan packages
+        id: conan-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ runner.temp }}/conan-packages
+          key: conan-sim-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Dockerfile', 'requirements.txt', 'conanfile.py') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            conan-sim-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Dockerfile', 'requirements.txt', 'conanfile.py') }}-
+            conan-sim-v1-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Prepare Conan package directory
+        run: mkdir -p "$RUNNER_TEMP/conan-packages"
+
+      - name: Pull from container registry
+        run: docker pull kkittur/drivebrain_cross_compile:latest
+
+      - name: Build drivebrain for the sim
+        env:
+          ARTIFACTORY_TOKEN: ${{ secrets.ARTIFACTORY_TOKEN }}
+          ARTIFACTORY_URL: ${{ secrets.ARTIFACTORY_URL }}
+          ARTIFACTORY_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
+        run: |
+          docker compose run --rm \
+            -v "$RUNNER_TEMP/conan-packages:/root/.conan2/p" \
+            -e ARTIFACTORY_TOKEN \
+            -e ARTIFACTORY_URL \
+            -e ARTIFACTORY_USERNAME \
+            dev ./scripts/build_script.sh --local
+
+      - name: Fix Conan cache ownership
+        if: ${{ !cancelled() }}
+        run: sudo chown -R "$(id -u):$(id -g)" "$RUNNER_TEMP/conan-packages"
+
+      - name: Save Conan packages
+        if: ${{ !cancelled() }}
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ runner.temp }}/conan-packages
+          key: ${{ steps.conan-cache.outputs.cache-primary-key }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Run sim
+        env:
+          TRACK: ${{ inputs.track || 'acceleration' }}
+          LAPS: ${{ inputs.laps || '1' }}
+          TIMEOUT_S: ${{ inputs.timeout || '300' }}
+        run: ./scripts/run_sim_test.sh "$TRACK" "$LAPS" "$TIMEOUT_S"
+
+      - name: Upload drivebrain log
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: drivebrain-sim-log
+          path: drivebrain_sim.log
