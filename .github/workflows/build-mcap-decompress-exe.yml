@@ -1,0 +1,71 @@
+name: Build hytech CLI
+on: push
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - {os: ubuntu-22.04, platform: linux-amd64, suffix: ''}
+          - {os: windows-latest, platform: windows-amd64, suffix: '.exe'}
+          - {os: macos-15, platform: macos-arm64, suffix: ''}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements.txt pyinstaller rosbags
+      - shell: bash
+        working-directory: scripts
+        run: |
+          mkdir -p vendor
+          curl -fL "https://github.com/foxglove/mcap/releases/download/releases%2Fmcap-cli%2Fv0.3.0/mcap-${{ matrix.platform }}${{ matrix.suffix }}" -o vendor/mcap${{ matrix.suffix }}
+          chmod +x vendor/mcap${{ matrix.suffix }}
+          python -m PyInstaller --noconfirm hytech.spec
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hytech-${{ matrix.platform }}
+          path: scripts/dist/hytech${{ matrix.suffix }}
+
+  release:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # separate hytech-cli-vN tags so this never collides with the drivebrain vN releases
+      - name: Determine next version
+        id: version
+        run: |
+          git fetch --tags
+          LATEST=$(git tag -l 'hytech-cli-v[0-9]*' | sed 's/^hytech-cli-v//' | sort -n | tail -1)
+          echo "tag=hytech-cli-v$(( ${LATEST:-0} + 1 ))" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: hytech-*
+          path: hytech-cli
+
+      - name: Name binaries by platform
+        run: |
+          mv hytech-cli/hytech-linux-amd64/hytech hytech-linux-amd64
+          mv hytech-cli/hytech-macos-arm64/hytech hytech-macos-arm64
+          mv hytech-cli/hytech-windows-amd64/hytech.exe hytech-windows-amd64.exe
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create ${{ steps.version.outputs.tag }} \
+            --title "hytech CLI ${{ steps.version.outputs.tag }}" \
+            --generate-notes \
+            --latest=false \
+            hytech-linux-amd64 \
+            hytech-macos-arm64 \
+            hytech-windows-amd64.exe

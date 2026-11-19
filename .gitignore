@@ -1,5 +1,6 @@
 .venv
 .venv/
+scripts/vendor/
 
 cmake
 cmake/
@@ -23,3 +24,5 @@ CMakeUserPresets.json
 
 tests/replay/mcap/*.mcap
 .agents/
+__pycache__/
+*.pyc

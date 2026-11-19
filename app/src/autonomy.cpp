@@ -12,6 +12,7 @@
 #include <LidarFilter.hpp>
 #include <PointCloudDeskew.hpp>
 #include <PathPlanner.hpp>
+#include <SimConeColors.hpp>
 
 namespace core {
 
@@ -79,6 +80,7 @@ void Autonomy::_run() {
 
     std::shared_ptr<dv_msgs::Cones> cones = perception::filter_cloud(*cloud);
     cones = _classifier.classify(cones, StateTracker::instance().dv_state().camera_detections, last_scan->frame_id());
+    perception::color_cones_from_sim_ground_truth(*cones, T_base_lidar);
     render_cones(cones, "filtered_cones", "os_sensor");
 
     // Perform SLAM update with the filtered cones
@@ -96,6 +98,7 @@ void Autonomy::_run() {
       log(map_pose, "slam/vehicle_pose");                                  // MCAP + Foxglove
       render_pose(map_pose, "vehicle_pose_map");                           // box in the 3D panel, map frame
       StateTracker::instance().handle_receive_protobuf_message(map_pose);  // planner + pure pursuit
+      StateTracker::instance().set_pose_map_from_odom(_slam->map_state->pose_map_from_odom);
     }
 
     // Update the state tracker with the new cone observations and plan a path

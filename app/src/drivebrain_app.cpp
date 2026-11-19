@@ -23,7 +23,6 @@ std::atomic<bool> running{true};
 
 void sig_handler(int signal) {
     if(signal == SIGINT || signal == SIGTERM) {
-      spdlog::warn("Interrupted, stopping Drivebrain app");
       running = false;
     }
 }
@@ -34,10 +33,33 @@ DrivebrainApp::DrivebrainApp(const std::string& json_param_path, const std::stri
 
 DrivebrainApp::~DrivebrainApp() {
   running = false;
+  _autonomy.stop();
 
-  core::MCAPLogger::instance().destroy();
-  core::FoxgloveServer::instance().destroy();
+  /* Threads that call core::log outlive run(), so they must stop before the sinks go away. */
+  _stop_producers();
+
+  core::FoxgloveServer::destroy();
+  core::MCAPLogger::destroy();
   spdlog::info("Logging singletons safely destroyed");
+}
+
+void DrivebrainApp::_stop_producers() {
+#if HOOTL_ENABLED
+  comms::SimComms::destroy();
+#endif
+  _camera_drivers.clear();
+  _ouster_driver.reset();
+#if !HOOTL_ENABLED
+  _kraken_comms.reset();
+#endif
+  _telem_can.reset();
+  _aux_can.reset();
+  _oms_comms.reset();
+  _vn_driver.reset();
+  _acu_core_eth_driver.reset();
+  _acu_eth_driver.reset();
+  _vcr_eth_driver.reset();
+  _vcf_eth_driver.reset();
 }
 
 void DrivebrainApp::run() {
@@ -257,7 +279,7 @@ void DrivebrainApp::_actuate(const core::ControllerOutput& out) {
     // Actuate the steering angle
 #if !HOOTL_ENABLED
     if (_kraken_comms) {
-      _kraken_comms->set_angle(*out.desired_steering_deg);
+      _kraken_comms->set_angle(*out.desired_steering_deg * (1.0/0.2428));
     }
 #endif
   }
@@ -298,6 +320,22 @@ void DrivebrainApp::_loop() {
 
     if (command_is_valid && enabled) {
       _actuate(out_struct);
+    } else {
+      static auto desired_rpm_msg = std::make_shared<hytech::drivebrain_speed_set_input>();
+      static auto torque_limit_msg = std::make_shared<hytech::drivebrain_torque_lim_input>();
+
+      desired_rpm_msg->set_drivebrain_set_rpm_fl(0);
+      desired_rpm_msg->set_drivebrain_set_rpm_fr(0);
+      desired_rpm_msg->set_drivebrain_set_rpm_rl(0);
+      desired_rpm_msg->set_drivebrain_set_rpm_rr(0);
+
+      torque_limit_msg->set_drivebrain_torque_fl(0);
+      torque_limit_msg->set_drivebrain_torque_fr(0);
+      torque_limit_msg->set_drivebrain_torque_rl(0);
+      torque_limit_msg->set_drivebrain_torque_rr(0);
+
+      _telem_can->send_message(desired_rpm_msg);
+      _telem_can->send_message(torque_limit_msg);
     }
 
     // Log MCAP Info

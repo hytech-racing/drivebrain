@@ -142,6 +142,12 @@ std::pair<core::VehicleState, bool> StateTracker::vehicle_state() {
         std::unique_lock lk(_state_mutex);
         _vehicle_state.state_is_valid = state_is_valid;
         current_state = _vehicle_state;
+        if (_pose_map_from_odom) {
+            const Eigen::Isometry2d pose_map = *_pose_map_from_odom * _odometry.latest_pose();
+            const float yaw = std::atan2(pose_map.linear()(1, 0), pose_map.linear()(0, 0));
+            current_state.vehicle_position_map_frame = {static_cast<float>(pose_map.translation().x()), static_cast<float>(pose_map.translation().y()), 0.0f};
+            current_state.vehicle_heading_map_frame_unit_vector = {std::cos(yaw), std::sin(yaw), 0.0f};
+        }
     }
 
     return {current_state, state_is_valid};
@@ -185,6 +191,11 @@ Eigen::Vector3d StateTracker::odom_twist() {
     return _odometry.twist();
 }
 
+void StateTracker::set_pose_map_from_odom(const Eigen::Isometry2d& pose_map_from_odom) {
+    std::unique_lock lk(_state_mutex);
+    _pose_map_from_odom = pose_map_from_odom;
+}
+
 void StateTracker::set_dv_path(std::shared_ptr<const std::vector<xyz_vec<float>>> path) {
     std::unique_lock lk(_dv_state_mutex);
     _dv_state.path = std::move(path);
@@ -198,6 +209,14 @@ void StateTracker::set_cone_observations(std::shared_ptr<const dv_msgs::Cones> c
 void StateTracker::set_ground_truth_cones(std::shared_ptr<const dv_msgs::Cones> cones) {
     std::unique_lock lk(_dv_state_mutex);
     _dv_state.ground_truth_cones = std::move(cones);
+}
+
+void StateTracker::set_ground_truth_pose(double x, double y, double yaw) {
+    std::unique_lock lk(_dv_state_mutex);
+    _dv_state.has_ground_truth_pose = true;
+    _dv_state.ground_truth_x = x;
+    _dv_state.ground_truth_y = y;
+    _dv_state.ground_truth_yaw = yaw;
 }
 
 void StateTracker::set_camera_detections(const std::string& camera, std::shared_ptr<const std::vector<ConeDetection>> detections) {

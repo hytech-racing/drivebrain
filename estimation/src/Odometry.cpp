@@ -16,6 +16,7 @@ namespace {
 constexpr std::uint64_t HISTORY_NS = 1'000'000'000;
 constexpr std::uint64_t PUBLISH_PERIOD_NS = 20'000'000;
 constexpr std::uint64_t TRAIL_RENDER_PERIOD_NS = 500'000'000;
+constexpr float MAX_SPEED_KMH = 500.0f;
 
 }  // namespace
 
@@ -33,13 +34,16 @@ bool Odometry::update(const hytech_msgs::OMSData& sample, const std::uint64_t re
             return false;
         }
 
+        // an out-of-range or NaN velocity is treated like an invalid status
+        const bool speed_plausible = std::abs(sample.motion().vel_x_kmh()) <= MAX_SPEED_KMH &&
+                                     std::abs(sample.motion().vel_y_kmh()) <= MAX_SPEED_KMH;
         Eigen::Vector3d twist(sample.motion().vel_x_kmh() / 3.6, sample.motion().vel_y_kmh() / 3.6,
                               sample.rate_hor_deg_s().z() * M_PI / 180.0);
         // velocity at the sensor -> base_link: v_base = v_sensor - w x r
         twist.x() += twist.z() * _position_base_m.y();
         twist.y() -= twist.z() * _position_base_m.x();
         if (sample.status().standstill()) twist.setZero();
-        else if (!sample.status().status_ok()) twist = _twist;
+        else if (!sample.status().status_ok() || !speed_plausible) twist = _twist;
 
         if (_timestamp_ns != 0) {
             _pose = _pose * core::geometry::integrate_twist(0.5 * (_twist + twist), (ts - _timestamp_ns) * 1e-9);
@@ -102,6 +106,11 @@ std::optional<Eigen::Isometry2d> Odometry::pose(const std::uint64_t timestamp_ns
 Eigen::Vector3d Odometry::twist() const {
     std::scoped_lock lock(_mutex);
     return _twist;
+}
+
+Eigen::Isometry2d Odometry::latest_pose() const {
+    std::scoped_lock lock(_mutex);
+    return _pose;
 }
 
 std::uint64_t Odometry::_host_time_ns(const float sample_time_s, const std::uint64_t receive_ns) {

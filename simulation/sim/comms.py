@@ -172,10 +172,8 @@ class SimComms:
         # sensor-local clock like the real unit; drivebrain maps it onto host time itself.
         # relative to start since the field is a float32
         msg.sample_time_s = time.monotonic() - self._start_time
-        # the real sensor is mounted facing backwards and drivebrain's Odometry negates
-        # vel_x/vel_y to undo it, so report in the sensor's own (rear-facing) frame
-        msg.motion.vel_x_kmh = -vx * 3.6
-        msg.motion.vel_y_kmh = -vy * 3.6
+        msg.motion.vel_x_kmh = vx * 3.6
+        msg.motion.vel_y_kmh = vy * 3.6
         msg.motion.vel_a_kmh = math.hypot(vx, vy) * 3.6
         msg.motion.ang_s_deg = math.degrees(math.atan2(vy, vx))
         msg.rate_hor_deg_s.z = math.degrees(yaw_rate)
