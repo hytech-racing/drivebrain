@@ -53,7 +53,7 @@ if [ "$RESULT" -eq 0 ]; then
 elif [ "$RESULT" -eq 124 ]; then
     echo "FAIL: hit the ${TIMEOUT_S}s time limit on $TRACK"
 else 
-    echo "FAIL: did not finish $LAPS lap(s) on $TRACK"
+    echo "FAIL: sim exited with code $RESULT on $TRACK (check the output above)"
 fi 
 
 exit "$RESULT"

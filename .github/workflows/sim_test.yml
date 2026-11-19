@@ -74,6 +74,7 @@ jobs:
           TRACK: ${{ inputs.track || 'acceleration' }}
           LAPS: ${{ inputs.laps || '1' }}
           TIMEOUT_S: ${{ inputs.timeout || '300' }}
+          UV_PYTHON: '3.14'
         run: ./scripts/run_sim_test.sh "$TRACK" "$LAPS" "$TIMEOUT_S"
 
       - name: Upload drivebrain log
