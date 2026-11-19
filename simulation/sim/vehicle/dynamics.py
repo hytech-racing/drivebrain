@@ -13,6 +13,11 @@ vx, vy: CG velocity in world frame (m/s)
 omega: Yaw rate (rad/s)
 omega_fl..rr: Wheel angular velocities (rad/s)
 
+Tyre loads: static load split by the CG position, plus quasi-static load transfer from the body accelerations
+(longitudinal over the wheelbase, lateral over each axle's track). The accelerations depend on the tyre forces and
+the forces on the loads, so xdot solves this with one fixed-point pass: forces at the static loads give the
+accelerations, which give the transferred loads the final forces are computed from.
+
 Input vector (5 x 1):
 [tau_fl, tau_fr, tau_rl, tau_rr, delta]
 
@@ -31,12 +36,13 @@ class VehicleParams(NamedTuple):
     l_r: float = 0.765
     w_f: float = 0.6
     w_r: float = 0.6
+    h_cg: float = 0.29  # CG height, FZ_CG_Z in estimation/include/FzEstimator.h
     r_w: float = 0.2
     I_w: float = 0.094
-    gear_ratio: float = 11.83
-    f_n: float = 600.0
-    mu_a: float = 1.8
-    mu_s: float = 1.5
+    gear_ratio: float = 11.841667
+    f_n: float = 600.0  # average static load per tyre
+    mu_a: float = 1.3
+    mu_s: float = 1.1
     s_adh: float = 0.117
     s_sld: float = 0.35
     # Low-speed slip regularization. Must stay >~1 m/s at dt=0.004: smaller makes the tire
@@ -140,12 +146,39 @@ def xdot(state: jax.Array, u: jax.Array, params: VehicleParams) -> jax.Array:
     v_adh: jax.Array = jnp.maximum(p.s_adh * jnp.abs(v_long), p.v_adh_min)
     v_sld: jax.Array = jnp.maximum(p.s_sld * jnp.abs(v_long), p.v_sld_min)
 
-    f_mag: jax.Array = _tire_friction(v_slip_mag, v_adh, v_sld, p.mu_a, p.mu_s, p.f_n)
-    f_long: jax.Array = -f_mag * v_slip_long / v_slip_mag
-    f_lat: jax.Array = -f_mag * v_slip_lat / v_slip_mag
+    def tyre_forces(fz: jax.Array) -> tuple[jax.Array, jax.Array, jax.Array]:
+        """World-frame tyre forces (Fx, Fy) and longitudinal force for each wheel at the given tyre loads"""
+        f_mag: jax.Array = _tire_friction(v_slip_mag, v_adh, v_sld, p.mu_a, p.mu_s, fz)
+        f_long: jax.Array = -f_mag * v_slip_long / v_slip_mag
+        f_lat: jax.Array = -f_mag * v_slip_lat / v_slip_mag
+        return f_long * c_h - f_lat * s_h, f_long * s_h + f_lat * c_h, f_long
 
-    Fx: jax.Array = f_long * c_h - f_lat * s_h
-    Fy: jax.Array = f_long * s_h + f_lat * c_h
+    # Static loads from the CG position
+    wheelbase: float = p.l_f + p.l_r
+    front_axle: float = 4.0 * p.f_n * p.l_r / wheelbase
+    rear_axle: float = 4.0 * p.f_n * p.l_f / wheelbase
+    fz_base: jax.Array = jnp.array([front_axle, front_axle, rear_axle, rear_axle]) / 2.0
+
+    # Body-frame acceleration from the tyre forces at those loads
+    Fx0, Fy0, _ = tyre_forces(fz_base)
+    ax_w0: jax.Array = jnp.sum(Fx0) / p.m
+    ay_w0: jax.Array = jnp.sum(Fy0) / p.m
+    a_long: jax.Array = c_psi * ax_w0 + s_psi * ay_w0
+    a_lat: jax.Array = -s_psi * ax_w0 + c_psi * ay_w0
+
+    # Load transfer: accelerating moves load to the rear, cornering to the outside (a_lat > 0 = turning left = load on the
+    # right). Lateral transfer is shared between the axles by their static weight
+    d_long: jax.Array = p.m * a_long * p.h_cg / wheelbase / 2.0
+    d_lat_f: jax.Array = p.m * a_lat * p.h_cg * (p.l_r / wheelbase) / (2.0 * p.w_f)
+    d_lat_r: jax.Array = p.m * a_lat * p.h_cg * (p.l_f / wheelbase) / (2.0 * p.w_r)
+    fz: jax.Array = jnp.maximum(fz_base + jnp.array([
+        -d_long - d_lat_f,
+        -d_long + d_lat_f,
+        d_long - d_lat_r,
+        d_long + d_lat_r,
+    ]), 0.0)
+
+    Fx, Fy, f_long = tyre_forces(fz)
 
     ax: jax.Array = jnp.sum(Fx) / p.m
     ay: jax.Array = jnp.sum(Fy) / p.m
@@ -158,7 +191,7 @@ def xdot(state: jax.Array, u: jax.Array, params: VehicleParams) -> jax.Array:
     alpha: jax.Array = jnp.sum(r_wx * Fy - r_wy * Fx) / p.I_zz
 
     # Rolling resistance, opposing wheel rotation. tanh instead of sign RK4 agrees at standstill
-    tau_rr: jax.Array = -jnp.tanh(w / p.w_rr_eps) * p.c_rr * p.f_n * p.r_w
+    tau_rr: jax.Array = -jnp.tanh(w / p.w_rr_eps) * p.c_rr * fz * p.r_w
 
     # I_w * w_dot = tau_drive + tau_rr - f_long * r_w
     w_dot: jax.Array = (tau_drive + tau_rr - f_long * p.r_w) / p.I_w
