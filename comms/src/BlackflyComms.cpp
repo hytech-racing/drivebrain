@@ -163,14 +163,10 @@ void BlackflyComms::_aravis_receive_loop() {
                     }
                     core::StateTracker::instance().set_camera_detections(_name, timestamp_ns, cone_detections);
 
-                    auto make_annotations = [&](float scale, bool unrotate) {
+                    auto make_annotations = [&](float scale) {
                         auto annotations = std::make_shared<foxglove::ImageAnnotations>();
                         for (const auto& det : detections) {
-                            cv::Rect r = det.bbox;
-                            if (unrotate) {
-                                r.x = bgr.cols - (r.x + r.width);
-                                r.y = bgr.rows - (r.y + r.height);
-                            }
+                            const cv::Rect& r = det.bbox;
                             const float x0 = r.x * scale, y0 = r.y * scale;
                             const float x1 = (r.x + r.width) * scale, y1 = (r.y + r.height) * scale;
                             const cv::Scalar c = _detector->cone_color(det.class_id); // BGR, 0-255
@@ -205,8 +201,8 @@ void BlackflyComms::_aravis_receive_loop() {
                         return annotations;
                     };
 
-                    core::log_mcap_only(make_annotations(2.0f, true), _name + "/detections");   // matches <name>/raw: full-res, sensor orientation
-                    core::log_foxglove_only(make_annotations(1.0f, false), _name + "/detections"); // matches <name>/compressed
+                    core::log_mcap_only(make_annotations(2.0f), _name + "/h264/detections");
+                    core::log_foxglove_only(make_annotations(1.0f), _name + "/detections"); // matches <name>/compressed
                 }
 #endif
 
