@@ -110,8 +110,6 @@ private:
     enum class DecodeError { None, COBS, CRC, Oversize };
 
     friend struct UARTCodecTestAccess;
-    friend struct UARTBenchAccess; // Hardware-test injector; shares the bounded TX queue.
-    friend struct UARTLifecycleTestAccess;
 
     bool _submit_frame(std::vector<uint8_t> frame);
     void _start_receive();
