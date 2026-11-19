@@ -57,16 +57,16 @@ void StateTracker::handle_receive_protobuf_message(std::shared_ptr<google::proto
         _dv_state_cv.notify_all();
     } else if (msg->GetDescriptor() == hytech_msgs::VNData::descriptor()) {
         auto in_msg = std::static_pointer_cast<hytech_msgs::VNData>(msg);
-        xyz_vec<float> body_vel_ms = {(in_msg->vn_vel_m_s().x()), (in_msg->vn_vel_m_s().y()),
-                                      (in_msg->vn_vel_m_s().z())};
+        // xyz_vec<float> body_vel_ms = {(in_msg->vn_vel_m_s().x()), (in_msg->vn_vel_m_s().y()),
+        //                               (in_msg->vn_vel_m_s().z())};
 
         xyz_vec<float> body_accel_mss = {(in_msg->vn_linear_accel_m_ss().x()),
                                          (in_msg->vn_linear_accel_m_ss().y()),
                                          (in_msg->vn_linear_accel_m_ss().z())};
 
-        xyz_vec<float> angular_rate_rads = {(in_msg->vn_angular_rate_rad_s().x()),
-                                            (in_msg->vn_angular_rate_rad_s().y()),
-                                            (in_msg->vn_angular_rate_rad_s().z())};
+        // xyz_vec<float> angular_rate_rads = {(in_msg->vn_angular_rate_rad_s().x()),
+        //                                     (in_msg->vn_angular_rate_rad_s().y()),
+        //                                     (in_msg->vn_angular_rate_rad_s().z())};
 
         ypr_vec<float> ypr_rad = {(in_msg->vn_ypr_rad().yaw()), (in_msg->vn_ypr_rad().pitch()),
                                   (in_msg->vn_ypr_rad().roll())};
@@ -76,9 +76,9 @@ void StateTracker::handle_receive_protobuf_message(std::shared_ptr<google::proto
 
         {
             std::unique_lock lk(_state_mutex);
-            _vehicle_state.current_body_vel_ms = body_vel_ms;
+        //     _vehicle_state.current_body_vel_ms = body_vel_ms;
             _vehicle_state.current_body_accel_mss = body_accel_mss;
-            _vehicle_state.current_angular_rate_rads = angular_rate_rads;
+        //     _vehicle_state.current_angular_rate_rads = angular_rate_rads;
             _vehicle_state.current_ypr_rad = ypr_rad;
             _vehicle_state.ins_status.status_mode = ins_mode_int;
             _vehicle_state.ins_status.vel_uncertainty = vel_u;
@@ -88,6 +88,20 @@ void StateTracker::handle_receive_protobuf_message(std::shared_ptr<google::proto
         const uint64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();
         _odometry.update(*in_msg, now_ns);
+
+        xyz_vec<float> body_vel_ms = {(-in_msg->motion().vel_x_kmh() / 3.6f),
+                                      (-in_msg->motion().vel_y_kmh() / 3.6f),
+                                      (0.0f)};
+
+        xyz_vec<float> angular_rate_rads = {(in_msg->rate_hor_deg_s().x() * M_PI / 180.0f),
+                                           (in_msg->rate_hor_deg_s().y() * M_PI / 180.0f),
+                                           (in_msg->rate_hor_deg_s().z() * M_PI / 180.0f)};
+
+        {
+            std::unique_lock lk(_state_mutex);
+            _vehicle_state.current_body_vel_ms = body_vel_ms;
+            _vehicle_state.current_angular_rate_rads = angular_rate_rads;
+        }
     } else if (msg->GetDescriptor() == hytech_msgs::VCRData_s::descriptor()) {
         auto in_msg = std::static_pointer_cast<hytech_msgs::VCRData_s>(msg);
         bool is_rtd = (in_msg->status().vehicle_state() == hytech_msgs::VehicleState_e::READY_TO_DRIVE);
@@ -406,6 +420,7 @@ void StateTracker::_update_estimators() {
     _fz_estimator.update(_vehicle_state.loadcells.FL, _vehicle_state.loadcells.FR, _vehicle_state.loadcells.RL, _vehicle_state.loadcells.RR);
 
     auto estimates = _fz_estimator.getEstimates();
+    // _vehicle_state.fz_estimates = estimates;
 
     std::shared_ptr<hytech_msgs::FzEstimator> fz_estimate = std::make_shared<hytech_msgs::FzEstimator>();
 

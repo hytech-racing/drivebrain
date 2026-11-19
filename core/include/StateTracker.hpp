@@ -262,6 +262,8 @@ namespace core {
 
         xyz_vec<float> vehicle_position_map_frame;
         xyz_vec<float> vehicle_heading_map_frame_unit_vector;
+
+        Eigen::Matrix<double, 4, 1> fz_estimates;
     };
 
     enum class ControllerManagerStatus

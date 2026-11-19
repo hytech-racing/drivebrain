@@ -18,6 +18,7 @@
 #include "hytech_msgs.pb.h"
 #include <BlackflyComms.hpp>
 #include "PurePursuitController.hpp"
+#include "BasicQP.hpp"
 
 enum class DrivingMode { DRIVERED, DRIVERLESS, TELEOP };
 
@@ -96,6 +97,7 @@ private:
   /* Controllers */
   std::shared_ptr<control::LoadCellTorqueController> _mode1;
   std::shared_ptr<control::TeleopController> _mode2;
+  std::shared_ptr<control::BasicQP> _mode4;
   std::shared_ptr<control::PurePursuitController> _dv_controller;
 
   /* Vectornav */
