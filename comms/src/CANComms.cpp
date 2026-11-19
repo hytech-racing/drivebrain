@@ -170,6 +170,11 @@ void comms::CANComms::_receive_handler() {
             continue;
         }
 
+        // Ignore extended frames from the steering motor which use CTRE's protocol in KrakenComms.cpp
+        if (_frame.can_id & CAN_EFF_FLAG) {
+            continue;
+        }
+
         auto dmsg = _decode_can_frame(_frame);
         if(dmsg.has_value()) {
             core::log(dmsg.value());

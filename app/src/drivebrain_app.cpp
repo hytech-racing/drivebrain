@@ -119,7 +119,7 @@ void DrivebrainApp::run() {
 #endif
 
   _telem_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("telem_can_device").value(), _dbc_path);
-  // _aux_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("aux_can_device").value(), _dbc_path);
+  _aux_can = std::make_unique<comms::CANComms>(core::FoxgloveServer::instance().get_param<std::string>("aux_can_device").value(), _dbc_path);
   spdlog::info("Initialized CAN drivers");
 
 #if JETSON_ENABLED
@@ -259,7 +259,7 @@ void DrivebrainApp::_actuate(const core::ControllerOutput& out) {
 
 #if !JETSON_ENABLED
     _telem_can->send_message(desired_torque_msg);
-    // _aux_can->send_message(desired_torque_msg);
+    _aux_can->send_message(desired_torque_msg);
 #endif
 
     core::log(desired_torque_msg);
