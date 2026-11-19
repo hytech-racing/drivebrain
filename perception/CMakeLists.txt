@@ -4,6 +4,7 @@ add_library(drivebrain_perception
     src/LidarFilter.cpp
     src/ConeClassifier.cpp
     src/PointCloudDeskew.cpp
+    src/SimConeColors.cpp
     src/ConeClassifier.cpp
 )
 

@@ -15,8 +15,7 @@ from sim.vehicle.dynamics import (
     VehicleParams, step_rk4,
     X, Y, PSI, VX, VY, OMEGA, W_FL, W_RR, slip_angle,
 )
-from sim.vehicle.inverter import SpeedController
-from sim.vehicle.steering import SteeringActuator
+from sim.vehicle import inverter, steering
 from sim.comms import SimComms
 from sim.scene import load_scene, scene_from_dict, LIDAR_X_M, LIDAR_Y_M, LIDAR_YAW, SENSOR_Z
 from sim.lidar import LidarSensor
@@ -73,8 +72,8 @@ def main():
 
     x0, y0, psi0 = [float(v) for v in scene.start_pose]
     state = dynamics.state(x=x0, y=y0, psi=psi0)
-    inverters: SpeedController = SpeedController(params.gear_ratio, dt)
-    steering: SteeringActuator = SteeringActuator()
+    inverter_state: jax.Array = inverter.init()
+    steering_state: steering.SteeringState = steering.init()
     race: Race = Race(scene, np.array([
         [params.l_f, params.w_f], [params.l_f, -params.w_f],
         [-params.l_r, params.w_r], [-params.l_r, -params.w_r],
@@ -105,9 +104,12 @@ def main():
         comms.drain_commands()
         cmd = comms.current_input()
 
-        wheel_omega: np.ndarray = np.asarray(state[W_FL:W_RR + 1])
-        tau: np.ndarray = inverters.update(wheel_omega, cmd.speed_rpm, cmd.torque_lim)
-        steer_rad: float = steering.update(cmd.wheel_steer_rad, dt)
+        tau, inverter_state = inverter.step(
+            inverter_state, state[W_FL:W_RR + 1],
+            jnp.asarray(cmd.speed_rpm), jnp.asarray(cmd.torque_lim),
+            params.gear_ratio, dt,
+        )
+        steer_rad, steering_state = steering.step(steering_state, jnp.asarray(cmd.wheel_steer_rad), dt)
 
         u: jax.Array = dynamics.input(
             tau_fl=tau[0], tau_fr=tau[1],
@@ -159,7 +161,7 @@ def main():
                 slip=float(slip_angle(state)),
                 torque_fl=float(tau[0]), torque_fr=float(tau[1]),
                 torque_rl=float(tau[2]), torque_rr=float(tau[3]),
-                steering=steer_rad,
+                steering=float(steer_rad),
             )
 
         if step_i % gss_rate == 0:
