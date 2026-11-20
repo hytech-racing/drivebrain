@@ -139,8 +139,10 @@ void BlackflyComms::_aravis_receive_loop() {
                 if (tick_error_ns > period_ns / 2) tick_error_ns -= period_ns;
                 _trigger_phase_ns = (_trigger_phase_ns + tick_error_ns / 2) % period_ns;
                 if (std::abs(tick_error_ns) > 2'000'000) spdlog::warn("[{}] frame {:.1f} ms off the PTP tick", _name, tick_error_ns / 1e6);
-                const auto secs = timestamp_ns / 1000000000ULL;
-                const auto nanos = timestamp_ns % 1000000000ULL;
+                // PTP runs on TAI, 37 s ahead of the jetson's system clock
+                constexpr uint64_t tai_offset_ns = 37'000'000'000ULL;
+                const auto secs = (timestamp_ns - tai_offset_ns) / 1000000000ULL;
+                const auto nanos = (timestamp_ns - tai_offset_ns) % 1000000000ULL;
 
                 // Record full-resolution upright video; autonomy keeps its existing image path.
                 try {
