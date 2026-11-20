@@ -20,6 +20,9 @@ if [ "$shouldTest" = 1 ]; then
   profile="default"
   build_folder="build-native"
   hootl="-DHOOTL=ON"
+  # gstreamer is required by comms and Ubuntu only ships it as shared libraries,
+  # so the native/sim build cannot be fully static.
+  linkflags=""
 fi
 
 if [ "$shouldClean" = 1 ]; then
