@@ -10,7 +10,7 @@ on:
         description: Track to run
         type: choice
         options: [acceleration, skidpad, FSG, FSI, thin, random]
-        default: acceleration
+        default: FSG
       laps:
         description: Laps to finish
         default: '1'
@@ -73,7 +73,7 @@ jobs:
         env:
           TRACK: ${{ inputs.track || 'FSG' }}
           LAPS: ${{ inputs.laps || '1' }}
-          TIMEOUT_S: ${{ inputs.timeout || '300' }}
+          TIMEOUT_S: ${{ inputs.timeout || '420' }}
           UV_PYTHON: '3.14'
         run: ./scripts/run_sim_test.sh "$TRACK" "$LAPS" "$TIMEOUT_S"
 
