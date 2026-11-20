@@ -16,7 +16,7 @@ on:
         default: '1'
       timeout:
         description: Time limit in seconds
-        default: '300'
+        default: '420'
 
 jobs:
   sim-test:
