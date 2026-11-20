@@ -13,8 +13,6 @@ namespace perception {
 
   constexpr float CONE_HEIGHT_M = 0.23495f;
   constexpr float CONE_WIDTH_M = 0.127f;
-  // A LiDAR cone takes the color of a camera-placed cone at most this far away (ground plane distance)
-  constexpr float MATCH_DISTANCE_M = 0.75f;
 
   // the mr cal model
   struct CameraModel {
@@ -24,6 +22,9 @@ namespace perception {
 
     // Pixel to the undistorted normalized coords (x/z, y/z) of its ray
     Eigen::Vector2f unproject(const Eigen::Vector2f& px) const;
+
+    // Camera-frame point to distorted image pixels (requires positive depth)
+    Eigen::Vector2f project(const Eigen::Vector3f& point) const;
   };
 
   CameraModel load_camera_model(const std::string& path);
@@ -34,8 +35,8 @@ namespace perception {
       ConeClassifier(const std::string& intrinsics_dir);
 
       /**
-       * Colors cones by placing each camera's YOLO detections on the ground plane and giving each LiDAR cone the
-       * color of the nearest placed detection within MATCH_DISTANCE_M. Each detection colors at most one cone;
+       * Colors cones by projecting LiDAR centroids into each camera and matching to containing YOLO boxes,
+       * closest to the box center first. Each detection colors at most one cone per camera;
        * unmatched cones stay UNKNOWN.
        * @param cones The uncolored cones from the LiDAR filter, os_sensor frame
        * @param detections The latest detections per camera, keyed by camera name

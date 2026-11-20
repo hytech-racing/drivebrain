@@ -328,6 +328,8 @@ namespace core {
         float score;
     };
 
+    using CameraDetections = std::map<std::string, std::shared_ptr<const std::vector<ConeDetection>>>;
+
     /* Maps a detector class name ("blue", "yellow", "orange", ...) to a cone color */
     inline dv_msgs::Cones::ConeColor cone_color_from_name(const std::string& name) {
         if (name == "blue") return dv_msgs::Cones::BLUE;
@@ -350,7 +352,6 @@ namespace core {
         bool has_ground_truth_pose = false;
         double ground_truth_x = 0.0, ground_truth_y = 0.0, ground_truth_yaw = 0.0;
         std::shared_ptr<const std::vector<xyz_vec<float>>> path;
-        std::map<std::string, std::shared_ptr<const std::vector<ConeDetection>>> camera_detections; // latest per camera, keyed by camera name
     };
 
 
@@ -447,12 +448,14 @@ namespace core {
             void set_ground_truth_pose(double x, double y, double yaw);
 
             /**
-             * Sets the latest cone detections from a camera, replacing that camera's previous detections.
+             * Buffers camera detections by image capture time.
              *
              * @param camera the camera name, blackfly_<serial>
              * @param detections the detections
              */
-            void set_camera_detections(const std::string& camera, std::shared_ptr<const std::vector<ConeDetection>> detections);
+            void set_camera_detections(const std::string& camera, uint64_t capture_ns, std::shared_ptr<const std::vector<ConeDetection>> detections);
+            // Nearest frame within 50 ms, waiting up to 100 ms for inference.
+            CameraDetections camera_detections_at(uint64_t scan_ns);
 
             /**
              * Pose of base_link in the odom frame at the given host timestamp, interpolated
@@ -513,6 +516,7 @@ namespace core {
             DriverlessState _dv_state = { };
             std::mutex _dv_state_mutex;
             std::condition_variable _dv_state_cv;
+            std::map<std::string, std::map<uint64_t, std::shared_ptr<const std::vector<ConeDetection>>>> _camera_history;
 
             TeleopCommand _teleop_command = { };
             std::mutex _teleop_mutex;
