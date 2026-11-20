@@ -71,7 +71,7 @@ jobs:
 
       - name: Run sim
         env:
-          TRACK: ${{ inputs.track || 'acceleration' }}
+          TRACK: ${{ inputs.track || 'FSG' }}
           LAPS: ${{ inputs.laps || '1' }}
           TIMEOUT_S: ${{ inputs.timeout || '300' }}
           UV_PYTHON: '3.14'
