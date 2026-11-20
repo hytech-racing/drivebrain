@@ -26,3 +26,4 @@ tests/replay/mcap/*.mcap
 .agents/
 __pycache__/
 *.pyc
+drivebrain_sim.log

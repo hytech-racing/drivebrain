@@ -76,7 +76,7 @@ cmake .. \
   $jetson \
   --log-level=NOTICE
 
-make -j
+make -j$(nproc)
 
 # run unit tests
 if [ "$shouldTest" = 1 ]; then
