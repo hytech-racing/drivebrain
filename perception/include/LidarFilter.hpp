@@ -15,12 +15,24 @@ namespace perception {
   constexpr float GRID_MAX_RANGE_M = 26.0f;
   constexpr float GRID_RADIAL_BIN_SIZE_M = 0.75f;
 
-  // Ground estimation. The only absolute height in the filter: where the ground sits in sensor z
-  // when a cell has too few points to estimate it (the lidar is ~0.6 m above the ground).
+  // Ground estimation. Himmelsbach-style piecewise linear regression.
+  // Selects the lowest point in each radial bin and fits local ground segments.
+  // Ensures validity by checking for continuity and slope as well as fitting error.
   constexpr float SENSOR_HEIGHT_ABOVE_GROUND_M = 0.6f;
   constexpr std::size_t MIN_POINTS_PER_CELL = 5;
-  constexpr float GROUND_PERCENTILE = 0.15f;
   constexpr float NON_GROUND_HEIGHT_THRESHOLD_M = 0.05f;
+  constexpr std::size_t MIN_GROUND_LINE_POINTS = 3;
+  constexpr float MAX_GROUND_SLOPE = 0.25f;
+  constexpr float MAX_GROUND_FIT_ERROR_M = 0.05f;
+  constexpr float MAX_GROUND_SEGMENT_GAP_M = 1.5f;
+  constexpr float MAX_GROUND_START_HEIGHT_ERROR_M = 0.20f;
+  constexpr float MAX_GROUND_CONTINUITY_ERROR_M = 0.15f;
+  constexpr float MAX_GROUND_POINT_LINE_DISTANCE_M = 0.08f;
+  constexpr float GROUND_LONG_GAP_M = 1.0f;
+  constexpr float MAX_GROUND_LONG_GAP_HEIGHT_CHANGE_M = 0.20f;
+  constexpr int GROUND_NEIGHBOR_SECTOR_SEARCH_BINS = 1;
+
+
 
   // Clustering
   constexpr float CLUSTER_TOLERANCE_M = 0.25f;
