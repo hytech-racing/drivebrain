@@ -32,6 +32,8 @@ trap cleanup EXIT
 # Start drivebrain in the background inside the container.
 # SIM_HOST only gets passed in if it was set (needed on Windows, not on GitHub).
 # Output goes to drivebrain_sim.log so it doesn't mix with the sim's output.
+
+mkdir -p recordings
 echo "Starting drivebrain"
 
 docker compose run --rm -T --name drivebrain-sim ${SIM_HOST:+-e SIM_HOST=$SIM_HOST} dev \

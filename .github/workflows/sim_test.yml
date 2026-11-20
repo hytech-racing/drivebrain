@@ -83,3 +83,10 @@ jobs:
         with:
           name: drivebrain-sim-log
           path: drivebrain_sim.log
+
+      - name: Upload recording
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: drivebrain-recording
+          path: recordings/*.mcap
