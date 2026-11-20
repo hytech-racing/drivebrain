@@ -5,6 +5,8 @@
 #include "dv_msgs.pb.h"
 #include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <cstdlib>
 #include <exception>
 #include <memory>
 #include <cstring>
@@ -42,6 +44,10 @@ int comms::OusterComms::_init() {
     ouster::sdk::core::SensorConfig config; 
     config.udp_dest = "169.254.0.1"; // TODO validate that this works reliably
     config.timestamp_mode = ouster::sdk::core::TimestampMode::TIME_FROM_PTP_1588; // use jetson's PTP clock
+    // point at the car's front (the cameras' view) on every 100 ms PTP tick, when the cameras are triggered.
+    // phase lock angles are in the lidar frame, CCW from the connector; car forward is os_sensor -y = lidar +y = 90 deg
+    config.phase_lock_enable = true;
+    config.phase_lock_offset = 90000;
     spdlog::info("Entering Ouster _init: Attempting to open sensor at 169.254.77.2");
 
     try {
@@ -133,15 +139,26 @@ void comms::OusterComms::_loop() {
         const float* dir = lut.direction.data();
         const float* ofs = lut.offset.data();
 
-        // per-column sensor timestamps; points are stamped relative to the last valid column (scan end)
+        // per-column PTP timestamps; points are stamped relative to the 100 ms PTP tick inside the scan, which is
+        // when the lidar faces forward (phase lock) and the cameras capture, so deskew lands on the camera frames
         const auto column_ts = frame.timestamp();
         uint64_t scan_end_ts = 0;
         for (Eigen::Index u = 0; u < w; ++u) scan_end_ts = std::max<uint64_t>(scan_end_ts, column_ts(u));
+        constexpr uint64_t tick_ns = 100'000'000;
+        const uint64_t scan_ref_ts = scan_end_ts / tick_ns * tick_ns;
+
+        // PTP and host clocks share the jetson's clock up to whole seconds (UTC vs TAI)
+        const int64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        const int64_t ptp_offset_ns = std::llround((static_cast<int64_t>(scan_end_ts) - now_ns) / 1e9) * 1'000'000'000LL;
+        if (std::abs(static_cast<int64_t>(scan_end_ts) - now_ns - ptp_offset_ns) > 50'000'000) {
+            spdlog::warn("Ouster PTP time is {} ms off the host clock; is the jetson's PTP clock synced to system time?",
+                         (static_cast<int64_t>(scan_end_ts) - now_ns - ptp_offset_ns) / 1'000'000);
+        }
+        const int64_t scan_ref_host_ns = static_cast<int64_t>(scan_ref_ts) - ptp_offset_ns;
 
         auto pc = std::make_shared<foxglove::PointCloud>();
-        const auto now = std::chrono::system_clock::now().time_since_epoch();
-        pc->mutable_timestamp()->set_seconds(std::chrono::duration_cast<std::chrono::seconds>(now).count());
-        pc->mutable_timestamp()->set_nanos(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count() % 1000000000);
+        pc->mutable_timestamp()->set_seconds(scan_ref_host_ns / 1'000'000'000);
+        pc->mutable_timestamp()->set_nanos(scan_ref_host_ns % 1'000'000'000);
         pc->set_frame_id("os_sensor");
         pc->mutable_pose()->mutable_orientation()->set_w(1);
         pc->set_point_stride(4 * sizeof(float));
@@ -163,7 +180,7 @@ void comms::OusterComms::_loop() {
             if (r == 0.0f) continue;
             const uint64_t ts = column_ts(i % w);
             const float point[4] = {r * dir[3 * i] + ofs[3 * i], r * dir[3 * i + 1] + ofs[3 * i + 1], r * dir[3 * i + 2] + ofs[3 * i + 2],
-                                    ts == 0 ? 0.0f : static_cast<float>(static_cast<double>(static_cast<int64_t>(ts) - static_cast<int64_t>(scan_end_ts)) * 1e-9)};
+                                    ts == 0 ? 0.0f : static_cast<float>(static_cast<double>(static_cast<int64_t>(ts) - static_cast<int64_t>(scan_ref_ts)) * 1e-9)};
             data->append(reinterpret_cast<const char*>(point), sizeof(point));
         }
 

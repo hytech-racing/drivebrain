@@ -346,6 +346,7 @@ namespace core {
         std::shared_ptr<const dv_msgs::Cones> ground_truth_cones;
         std::shared_ptr<const std::vector<xyz_vec<float>>> path;
         std::map<std::string, std::shared_ptr<const std::vector<ConeDetection>>> camera_detections; // latest per camera, keyed by camera name
+        std::map<std::string, uint64_t> camera_detection_ns; // capture time (host clock) of each camera's latest detections, 0 if unknown
     };
 
 
@@ -443,8 +444,9 @@ namespace core {
              *
              * @param camera the camera name, blackfly_<serial>
              * @param detections the detections
+             * @param capture_ns host-clock capture time of the image, 0 if unknown
              */
-            void set_camera_detections(const std::string& camera, std::shared_ptr<const std::vector<ConeDetection>> detections);
+            void set_camera_detections(const std::string& camera, std::shared_ptr<const std::vector<ConeDetection>> detections, uint64_t capture_ns = 0);
 
             /**
              * Pose of base_link in the odom frame at the given host timestamp, interpolated

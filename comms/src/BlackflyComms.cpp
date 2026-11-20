@@ -4,6 +4,9 @@
 #include <foxglove/CompressedVideo.pb.h>
 
 #include <foxglove/websocket/common.hpp>
+#include <chrono>
+#include <cmath>
+#include <cstdlib>
 #include <memory>
 
 #if JETSON_ENABLED
@@ -20,6 +23,9 @@ BlackflyComms::~BlackflyComms() {
     _running = false;
     if (_blackfly_receive_thread.joinable()) {
         _blackfly_receive_thread.join();
+    }
+    if (_trigger_thread.joinable()) {
+        _trigger_thread.join();
     }
     if (_camera)arv_camera_stop_acquisition(_camera, nullptr);
     g_object_unref(_stream);
@@ -38,7 +44,9 @@ bool BlackflyComms::start(const std::string& id, const std::string& name, const 
     arv_camera_clear_triggers(_camera, &_error);
     arv_camera_set_pixel_format_from_string(_camera, pixel_format.c_str(), &_error);
     arv_camera_set_acquisition_mode(_camera, ARV_ACQUISITION_MODE_CONTINUOUS, &_error);
-    arv_camera_set_frame_rate(_camera, fps, &_error);
+    // triggered on PTP ticks instead of free-running (also disables the frame rate limit)
+    _fps = fps;
+    arv_camera_set_trigger(_camera, "Software", &_error);
     arv_camera_gv_set_packet_size(_camera, 1500, &_error);
     arv_camera_gv_set_packet_delay(_camera, 2000, &_error);
     // sync the camera clock to the jetson's PTP master (newer firmware calls it PtpEnable)
@@ -84,8 +92,20 @@ bool BlackflyComms::start(const std::string& id, const std::string& name, const 
     // Start the receive thread
     _running = true;
     _blackfly_receive_thread = std::thread(&BlackflyComms::_aravis_receive_loop, this);
+    _trigger_thread = std::thread(&BlackflyComms::_trigger_loop, this);
 
     return true;
+}
+
+void BlackflyComms::_trigger_loop() {
+    const int64_t period_ns = static_cast<int64_t>(1e9 / _fps);
+    while (_running) {
+        const int64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        const int64_t phase_ns = _trigger_phase_ns;
+        const int64_t next_ns = ((now_ns + phase_ns) / period_ns + 1) * period_ns - phase_ns;
+        std::this_thread::sleep_until(std::chrono::system_clock::time_point(std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::nanoseconds(next_ns))));
+        if (_running) arv_camera_software_trigger(_camera, nullptr);
+    }
 }
 
 void BlackflyComms::_aravis_receive_loop() {
@@ -111,7 +131,14 @@ void BlackflyComms::_aravis_receive_loop() {
                     continue;
                 }
 
-                const uint64_t timestamp_ns = arv_buffer_get_timestamp(buffer);
+                const uint64_t timestamp_ns = arv_buffer_get_timestamp(buffer); // camera PTP time
+
+                // nudge the trigger so the next frames land on the PTP tick
+                const int64_t period_ns = static_cast<int64_t>(1e9 / _fps);
+                int64_t tick_error_ns = static_cast<int64_t>(timestamp_ns % period_ns);
+                if (tick_error_ns > period_ns / 2) tick_error_ns -= period_ns;
+                _trigger_phase_ns = (_trigger_phase_ns + tick_error_ns / 2) % period_ns;
+                if (std::abs(tick_error_ns) > 2'000'000) spdlog::warn("[{}] frame {:.1f} ms off the PTP tick", _name, tick_error_ns / 1e6);
                 const auto secs = timestamp_ns / 1000000000ULL;
                 const auto nanos = timestamp_ns % 1000000000ULL;
 
@@ -121,7 +148,7 @@ void BlackflyComms::_aravis_receive_loop() {
                     cv::Mat video_bgr;
                     cv::cvtColor(bayer, video_bgr, cv::COLOR_BayerRGGB2BGR);
                     cv::rotate(video_bgr, video_bgr, cv::ROTATE_180);
-                    if (!video_encoder) video_encoder = std::make_unique<H264Encoder>(width, height, arv_camera_get_frame_rate(_camera, nullptr));
+                    if (!video_encoder) video_encoder = std::make_unique<H264Encoder>(width, height, _fps);
                     auto video = std::make_shared<foxglove::CompressedVideo>();
                     video->mutable_timestamp()->set_seconds(secs);
                     video->mutable_timestamp()->set_nanos(nanos);
@@ -153,6 +180,9 @@ void BlackflyComms::_aravis_receive_loop() {
 
                 #if JETSON_ENABLED
                 if (_detector) {
+                    // capture time on the host clock (PTP and host share the jetson's clock up to whole seconds, UTC vs TAI)
+                    const int64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+                    const int64_t capture_host_ns = static_cast<int64_t>(timestamp_ns) - std::llround((static_cast<int64_t>(timestamp_ns) - now_ns) / 1e9) * 1'000'000'000LL;
                     const auto detections = _detector->detect(bgr, 0.5f);
                     // perception gets the boxes in full-res upright pixels
                     auto cone_detections = std::make_shared<std::vector<core::ConeDetection>>();
@@ -161,7 +191,7 @@ void BlackflyComms::_aravis_receive_loop() {
                         cone_detections->push_back({2.0f * r.x, 2.0f * r.y, 2.0f * (r.x + r.width), 2.0f * (r.y + r.height),
                                                     core::cone_color_from_name(_detector->cone_name(det.class_id)), det.score});
                     }
-                    core::StateTracker::instance().set_camera_detections(_name, cone_detections);
+                    core::StateTracker::instance().set_camera_detections(_name, cone_detections, capture_host_ns);
 
                     auto make_annotations = [&](float scale, bool unrotate) {
                         auto annotations = std::make_shared<foxglove::ImageAnnotations>();

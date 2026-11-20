@@ -52,6 +52,10 @@ private:
   // How long to wait for the next scan before re-checking that the stack is still running
   static constexpr std::chrono::milliseconds SCAN_WAIT{200};
   static constexpr std::chrono::milliseconds ODOM_TIMEOUT{100};
+  static constexpr std::chrono::milliseconds CAMERA_WAIT{80};
+
+  // camera detections captured on the same PTP tick as the scan, waiting up to CAMERA_WAIT for late cameras
+  std::map<std::string, std::shared_ptr<const std::vector<ConeDetection>>> _camera_detections_at(uint64_t scan_ns);
 
   // deskew -> detect -> map -> plan, once per lidar scan
   void _run();

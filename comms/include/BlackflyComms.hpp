@@ -45,6 +45,11 @@ class BlackflyComms {
     private: 
 
         void _aravis_receive_loop(); 
+        void _trigger_loop();
+
+        double _fps{10.0};
+        std::atomic<int64_t> _trigger_phase_ns{0};
+        std::thread _trigger_thread;
 
         std::atomic<bool> _running{false};
 

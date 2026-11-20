@@ -1,6 +1,9 @@
 #include "autonomy.hpp"
 
 #include <cmath>
+#include <cstdlib>
+#include <map>
+#include <string>
 #include <memory>
 #include <variant>
 #include <vector>
@@ -55,6 +58,25 @@ ControllerOutput Autonomy::command(const VehicleState& vehicle_state) {
   return out;
 }
 
+std::map<std::string, std::shared_ptr<const std::vector<ConeDetection>>> Autonomy::_camera_detections_at(uint64_t scan_ns) {
+  // cameras and lidar both capture on the same PTP tick; wait for each camera's frame from that tick
+  constexpr int64_t tolerance_ns = 5'000'000;
+  const auto deadline = std::chrono::steady_clock::now() + CAMERA_WAIT;
+  while (true) {
+    const auto dv = StateTracker::instance().dv_state();
+    std::map<std::string, std::shared_ptr<const std::vector<ConeDetection>>> matched;
+    bool waiting = false;
+    for (const auto& [name, dets] : dv.camera_detections) {
+      const uint64_t capture_ns = dv.camera_detection_ns.count(name) ? dv.camera_detection_ns.at(name) : 0;
+      const int64_t dt = static_cast<int64_t>(capture_ns) - static_cast<int64_t>(scan_ns);
+      if (capture_ns == 0 || std::abs(dt) < tolerance_ns) matched[name] = dets;  // unstamped (sim) detections always pass
+      else if (dt < 0) waiting = true;                                           // this camera's frame isn't in yet
+    }
+    if (!waiting || std::chrono::steady_clock::now() > deadline) return matched;
+    std::this_thread::sleep_for(std::chrono::milliseconds(2));
+  }
+}
+
 void Autonomy::_run() {
   std::shared_ptr<const foxglove::PointCloud> last_scan;
 
@@ -78,7 +100,7 @@ void Autonomy::_run() {
     log_foxglove_only(cloud, "perception/deskewed_points");
 
     std::shared_ptr<dv_msgs::Cones> cones = perception::filter_cloud(*cloud);
-    cones = _classifier.classify(cones, StateTracker::instance().dv_state().camera_detections, last_scan->frame_id());
+    cones = _classifier.classify(cones, _camera_detections_at(scan_ns), last_scan->frame_id());
     render_cones(cones, "filtered_cones", "os_sensor");
 
     // Perform SLAM update with the filtered cones

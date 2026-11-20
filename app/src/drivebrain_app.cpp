@@ -117,7 +117,7 @@ void DrivebrainApp::run() {
       for (unsigned int i = 0; i < num_cameras; i++) {
         std::unique_lock lock{_camera_drivers_mutex};
         auto camera = std::make_unique<comms::BlackflyComms>();
-        camera->start(arv_get_device_id(i), std::string("blackfly_") + arv_get_device_serial_nbr(i), "BayerRG8", 15.0);
+        camera->start(arv_get_device_id(i), std::string("blackfly_") + arv_get_device_serial_nbr(i), "BayerRG8", 10.0);
         _camera_drivers.push_back(std::move(camera));
       }
     } catch (const std::exception& e) {
