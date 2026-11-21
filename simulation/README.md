@@ -25,7 +25,17 @@ Requires Python ≥ 3.14 and [uv](https://docs.astral.sh/uv/).
 uv sync
 uv run main.py --track FSG            # opens a Rerun viewer
 uv run main.py --track FSG --logless  # headless, no Rerun
+uv run main.py --track FSG --logless --laps 2  # stops after 2 laps, exits 1 (DNF) if stopped before
+uv run main.py --track random            # a new random track each run, seed printed
+uv run main.py --track random --seed 42  # the same random track again
 ```
+
+### Scoring
+
+The sim times laps at the track's timekeeping lines (`tk_device` in the track YAML), counting a lap per forward
+crossing. It also counts cones knocked over by the car's footprint (DOO; the cone falls over in the lidar and the viewer)
+and off-course excursions, when all four wheels leave the cone boundary (closed tracks only). Events print as they
+happen, and a summary with FS penalties (2 s per DOO, 10 s per OC) prints when the sim stops.
 
 ### Sim on your machine, drivebrain in the container
 
@@ -39,9 +49,11 @@ visualize.py       Rerun time-series panels and layout
 sim/comms.py       ZMQ sockets and message packing
 sim/proto.py       HT_proto / HT_CAN download and caching
 sim/scene.py       track loading, sensor mount transforms
+sim/trackgen.py    random track generator
 sim/render.py      Rerun 3D scene (cones, car, lidar points)
 sim/lidar.py       lidar model
 sim/sensors.py     ground speed sensor model
+sim/race.py        lap timing, cone hits, off course
 sim/vehicle/       dynamics, inverter controller, input state
 tracks/            track definitions
 ```

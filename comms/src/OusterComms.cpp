@@ -139,9 +139,11 @@ void comms::OusterComms::_loop() {
         for (Eigen::Index u = 0; u < w; ++u) scan_end_ts = std::max<uint64_t>(scan_end_ts, column_ts(u));
 
         auto pc = std::make_shared<foxglove::PointCloud>();
-        const auto now = std::chrono::system_clock::now().time_since_epoch();
-        pc->mutable_timestamp()->set_seconds(std::chrono::duration_cast<std::chrono::seconds>(now).count());
-        pc->mutable_timestamp()->set_nanos(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count() % 1000000000);
+        if (!scan_end_ts) continue;
+        // Match the reference used by per-point offsets: sensor scan end,
+        // rather than the time the host finished receiving the scan.
+        pc->mutable_timestamp()->set_seconds(scan_end_ts / 1000000000ULL);
+        pc->mutable_timestamp()->set_nanos(scan_end_ts % 1000000000ULL);
         pc->set_frame_id("os_sensor");
         pc->mutable_pose()->mutable_orientation()->set_w(1);
         pc->set_point_stride(4 * sizeof(float));

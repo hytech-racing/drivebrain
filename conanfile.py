@@ -35,7 +35,7 @@ class DrivebrainSoftware(ConanFile):
         self.requires("openssl/3.6.2")
         self.requires("ouster_sdk/1.0.1")
         self.requires("eigen/3.4.0", transitive_headers=True)
-        self.requires("ht_proto/warren-slam-landmark-fields-2026-10-21t12_25_29")
+        self.requires("ht_proto/reuel-tegrastats-2026-11-08t22_32_15")
         self.requires("ht_can/main-344")
         
         self.requires("aravis/0.8.33")
@@ -65,5 +65,6 @@ class DrivebrainSoftware(ConanFile):
         self.options["ouster_sdk"].build_osf = False
         self.options["ouster_sdk"].build_pcap = False
         self.options["ouster_sdk"].build_mapping = False
+        self.options["glib"].with_elf = False
 
         # TODO: we will need onettb at some point for fast parallelization, but it's annoying as fuck to build rn so idgaf

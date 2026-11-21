@@ -113,7 +113,7 @@
         "enable_timeout_ms": 100,
         "enable_output": true,
         "steering_timeout_ms": 100,
-        "kp": 60.0,
+        "kp": 90.0,
         "ki": 0.0,
         "kd": 0.0,
         "ks": 0.44,
@@ -133,7 +133,9 @@
             "up_m": 0.452827,
             "roll_deg": 0.0, 
             "pitch_deg": 0.0, 
-            "yaw_deg": 17.0
+            "yaw_deg": 17.0,
+            "pitch_offset_deg": 0.0,
+            "yaw_offset_deg": 0.0
         },
         "blackfly_26291609": {
             "forward_m": -1.561, 
@@ -141,7 +143,9 @@
             "up_m": 0.452827,
             "roll_deg": 0.0, 
             "pitch_deg": 0.0, 
-            "yaw_deg": -17.0
+            "yaw_deg": -17.0,
+            "pitch_offset_deg": 0.0,
+            "yaw_offset_deg": 0.0
         }
     }
 }

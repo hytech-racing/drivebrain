@@ -197,6 +197,8 @@ namespace core {
         std::variant<SpeedControlOut, TorqueControlOut, std::monostate> out;
         // To only be set in a driverless context
         std::optional<float> desired_steering_deg;
+        // Map-frame point the steering is aiming at, for path-tracking controllers
+        std::optional<xyz_vec<float>> lookahead_point_map_frame;
     };
 
     /**
@@ -326,6 +328,8 @@ namespace core {
         float score;
     };
 
+    using CameraDetections = std::map<std::string, std::shared_ptr<const std::vector<ConeDetection>>>;
+
     /* Maps a detector class name ("blue", "yellow", "orange", ...) to a cone color */
     inline dv_msgs::Cones::ConeColor cone_color_from_name(const std::string& name) {
         if (name == "blue") return dv_msgs::Cones::BLUE;
@@ -344,8 +348,10 @@ namespace core {
         std::shared_ptr<const dv_msgs::Cones> cone_observations;
         // Full colored track map from the sim, map frame. Only set in HOOTL
         std::shared_ptr<const dv_msgs::Cones> ground_truth_cones;
+        // True car pose from the sim (x, y, yaw), same frame as ground_truth_cones. Only set in HOOTL
+        bool has_ground_truth_pose = false;
+        double ground_truth_x = 0.0, ground_truth_y = 0.0, ground_truth_yaw = 0.0;
         std::shared_ptr<const std::vector<xyz_vec<float>>> path;
-        std::map<std::string, std::shared_ptr<const std::vector<ConeDetection>>> camera_detections; // latest per camera, keyed by camera name
     };
 
 
@@ -438,13 +444,18 @@ namespace core {
              */
             void set_ground_truth_cones(std::shared_ptr<const dv_msgs::Cones> cones);
 
+            /** Sets the true car pose sent by the sim (the car's reference point, same frame as the ground-truth cones). */
+            void set_ground_truth_pose(double x, double y, double yaw);
+
             /**
-             * Sets the latest cone detections from a camera, replacing that camera's previous detections.
+             * Buffers camera detections by image capture time.
              *
              * @param camera the camera name, blackfly_<serial>
              * @param detections the detections
              */
-            void set_camera_detections(const std::string& camera, std::shared_ptr<const std::vector<ConeDetection>> detections);
+            void set_camera_detections(const std::string& camera, uint64_t capture_ns, std::shared_ptr<const std::vector<ConeDetection>> detections);
+            // Nearest frame within 50 ms, waiting up to 100 ms for inference.
+            CameraDetections camera_detections_at(uint64_t scan_ns);
 
             /**
              * Pose of base_link in the odom frame at the given host timestamp, interpolated
@@ -459,6 +470,9 @@ namespace core {
 
             /* Latest body velocity and yaw rate from the OMS: (vx m/s, vy m/s, yaw rate rad/s) */
             Eigen::Vector3d odom_twist();
+
+            /* SLAM's map <- odom correction; vehicle_state() applies it to the latest odometry so the map pose moves at odom rate */
+            void set_pose_map_from_odom(const Eigen::Isometry2d& pose_map_from_odom);
 
             /* Lidar mounting pose in base_link, from the static_transforms config */
             const Eigen::Isometry3d& T_base_lidar() const { return _T_base_lidar; }
@@ -502,11 +516,13 @@ namespace core {
             DriverlessState _dv_state = { };
             std::mutex _dv_state_mutex;
             std::condition_variable _dv_state_cv;
+            std::map<std::string, std::map<uint64_t, std::shared_ptr<const std::vector<ConeDetection>>>> _camera_history;
 
             TeleopCommand _teleop_command = { };
             std::mutex _teleop_mutex;
             
             estimation::Odometry _odometry;
+            std::optional<Eigen::Isometry2d> _pose_map_from_odom;
             Eigen::Isometry3d _T_base_lidar = Eigen::Isometry3d::Identity();
 
             /* Private constructor called by the init method */

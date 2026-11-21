@@ -12,6 +12,7 @@
 #include <LidarFilter.hpp>
 #include <PointCloudDeskew.hpp>
 #include <PathPlanner.hpp>
+#include <SimConeColors.hpp>
 
 namespace core {
 
@@ -64,13 +65,6 @@ void Autonomy::_run() {
     last_scan = scan;
     const uint64_t scan_ns = google::protobuf::util::TimeUtil::TimestampToNanoseconds(last_scan->timestamp());
 
-    // Get odometry pose for the scan
-    const auto pose = StateTracker::instance().odom_pose(scan_ns, ODOM_TIMEOUT);
-    if (!pose) {
-      spdlog::warn("Autonomy: no odom pose for scan at {} ns, skipping SLAM", scan_ns);
-      continue;
-    }
-
     // Deskew the point cloud
     const Eigen::Isometry3d& T_base_lidar = StateTracker::instance().T_base_lidar();
     publish_transform("base_link", "os_sensor", scan_ns, T_base_lidar);
@@ -78,8 +72,16 @@ void Autonomy::_run() {
     log_foxglove_only(cloud, "perception/deskewed_points");
 
     std::shared_ptr<dv_msgs::Cones> cones = perception::filter_cloud(*cloud);
-    cones = _classifier.classify(cones, StateTracker::instance().dv_state().camera_detections, last_scan->frame_id());
+    cones = _classifier.classify(cones, StateTracker::instance().camera_detections_at(scan_ns), last_scan->frame_id());
+    perception::color_cones_from_sim_ground_truth(*cones, T_base_lidar);
     render_cones(cones, "filtered_cones", "os_sensor");
+
+        // Get odometry pose for the scan
+    const auto pose = StateTracker::instance().odom_pose(scan_ns, ODOM_TIMEOUT);
+    if (!pose) {
+      spdlog::warn("Autonomy: no odom pose for scan at {} ns, skipping SLAM", scan_ns);
+      continue;
+    }
 
     // Perform SLAM update with the filtered cones
     const auto map = _slam->update(*cones, scan_ns, *pose, T_base_lidar);
@@ -96,6 +98,7 @@ void Autonomy::_run() {
       log(map_pose, "slam/vehicle_pose");                                  // MCAP + Foxglove
       render_pose(map_pose, "vehicle_pose_map");                           // box in the 3D panel, map frame
       StateTracker::instance().handle_receive_protobuf_message(map_pose);  // planner + pure pursuit
+      StateTracker::instance().set_pose_map_from_odom(_slam->map_state->pose_map_from_odom);
     }
 
     // Update the state tracker with the new cone observations and plan a path

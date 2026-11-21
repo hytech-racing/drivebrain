@@ -44,6 +44,9 @@ public:
     /* Latest body velocity and yaw rate: (vx m/s, vy m/s, yaw rate rad/s) */
     Eigen::Vector3d twist() const;
 
+    /* Latest odom <- base_link */
+    Eigen::Isometry2d latest_pose() const;
+
 private:
     /* Maps the OMS sample clock onto host time*/
     std::uint64_t _host_time_ns(float sample_time_s, std::uint64_t receive_ns);

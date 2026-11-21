@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 
 #include <StateTracker.hpp>
@@ -128,6 +129,12 @@ std::pair<core::VehicleState, bool> StateTracker::vehicle_state() {
         std::unique_lock lk(_state_mutex);
         _vehicle_state.state_is_valid = state_is_valid;
         current_state = _vehicle_state;
+        if (_pose_map_from_odom) {
+            const Eigen::Isometry2d pose_map = *_pose_map_from_odom * _odometry.latest_pose();
+            const float yaw = std::atan2(pose_map.linear()(1, 0), pose_map.linear()(0, 0));
+            current_state.vehicle_position_map_frame = {static_cast<float>(pose_map.translation().x()), static_cast<float>(pose_map.translation().y()), 0.0f};
+            current_state.vehicle_heading_map_frame_unit_vector = {std::cos(yaw), std::sin(yaw), 0.0f};
+        }
     }
 
     return {current_state, state_is_valid};
@@ -171,6 +178,11 @@ Eigen::Vector3d StateTracker::odom_twist() {
     return _odometry.twist();
 }
 
+void StateTracker::set_pose_map_from_odom(const Eigen::Isometry2d& pose_map_from_odom) {
+    std::unique_lock lk(_state_mutex);
+    _pose_map_from_odom = pose_map_from_odom;
+}
+
 void StateTracker::set_dv_path(std::shared_ptr<const std::vector<xyz_vec<float>>> path) {
     std::unique_lock lk(_dv_state_mutex);
     _dv_state.path = std::move(path);
@@ -186,9 +198,44 @@ void StateTracker::set_ground_truth_cones(std::shared_ptr<const dv_msgs::Cones> 
     _dv_state.ground_truth_cones = std::move(cones);
 }
 
-void StateTracker::set_camera_detections(const std::string& camera, std::shared_ptr<const std::vector<ConeDetection>> detections) {
+void StateTracker::set_ground_truth_pose(double x, double y, double yaw) {
     std::unique_lock lk(_dv_state_mutex);
-    _dv_state.camera_detections[camera] = std::move(detections);
+    _dv_state.has_ground_truth_pose = true;
+    _dv_state.ground_truth_x = x;
+    _dv_state.ground_truth_y = y;
+    _dv_state.ground_truth_yaw = yaw;
+}
+
+void StateTracker::set_camera_detections(const std::string& camera, uint64_t capture_ns,
+                                         std::shared_ptr<const std::vector<ConeDetection>> detections) {
+    if (!capture_ns || !detections) return;
+    {
+        std::lock_guard lock(_dv_state_mutex);
+        auto& history = _camera_history[camera];
+        history[capture_ns] = std::move(detections);
+        while (history.size() > 64) history.erase(history.begin());
+    }
+    _dv_state_cv.notify_all();
+}
+
+core::CameraDetections StateTracker::camera_detections_at(uint64_t scan_ns) {
+    std::unique_lock lock(_dv_state_mutex);
+    _dv_state_cv.wait_for(lock, std::chrono::milliseconds(100), [&] {
+        return !_camera_history.empty() && std::all_of(_camera_history.begin(), _camera_history.end(),
+            [&](const auto& camera) { return camera.second.rbegin()->first >= scan_ns; });
+    });
+    CameraDetections matched;
+    for (const auto& [camera, history] : _camera_history) {
+        uint64_t best_delta = 50'000'001;
+        for (const auto& [capture_ns, detections] : history) {
+            const uint64_t delta = capture_ns > scan_ns ? capture_ns - scan_ns : scan_ns - capture_ns;
+            if (delta < best_delta) {
+                best_delta = delta;
+                matched[camera] = detections;
+            }
+        }
+    }
+    return matched;
 }
 
 static constexpr std::chrono::milliseconds TELEOP_TIMEOUT(500);

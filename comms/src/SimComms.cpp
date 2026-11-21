@@ -4,6 +4,7 @@
 #include <foxglove/ImageAnnotations.pb.h>
 #include <foxglove/RawImage.pb.h>
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <memory>
 #include "StateTracker.hpp"
@@ -65,6 +66,10 @@ bool SimComms::start() {
     _veh_recv_thread = std::thread(&SimComms::_veh_recv_loop, this);
     _lidar_recv_thread = std::thread(&SimComms::_lidar_recv_loop, this);
     return true;
+}
+
+SimComms::~SimComms() {
+    close();
 }
 
 bool SimComms::close() {
@@ -185,7 +190,14 @@ void SimComms::_veh_recv_loop() {
             // Kept in its own slot so the autonomy stack's map doesn't overwrite it
             core::StateTracker::instance().set_ground_truth_cones(std::static_pointer_cast<dv_msgs::Cones>(msg));
         } else if (desc == hytech_msgs::pose::descriptor()) {
-            core::render_pose(std::static_pointer_cast<hytech_msgs::pose>(msg), "ground_truth_pose");
+            core::render_pose(std::static_pointer_cast<hytech_msgs::pose>(msg), "ground_truth_pose", "map", {0.2f, 0.4f, 1.0f});
+            {
+                const auto& gt = static_cast<const hytech_msgs::pose&>(*msg);
+                const auto& q = gt.orientation();
+                core::StateTracker::instance().set_ground_truth_pose(
+                    gt.position().x(), gt.position().y(),
+                    std::atan2(2.0 * (q.w() * q.z() + q.x() * q.y()), 1.0 - 2.0 * (q.y() * q.y() + q.z() * q.z())));
+            }
             core::StateTracker::instance().handle_receive_protobuf_message(msg);
         } else if (desc == foxglove::FrameTransform::descriptor()) {
             core::log(msg);
@@ -198,7 +210,8 @@ void SimComms::_veh_recv_loop() {
             // per-camera topic, otherwise every camera lands on "RawImage"
             core::log(img, img->frame_id() + "/raw");
         } else if (desc == foxglove::ImageAnnotations::descriptor() && topic.ends_with("/detections")) {
-            // Recorded YOLO boxes: LINE_LOOP corners in raw (upside-down) full-res pixels, labelled "<color> <score>"
+            // H.264 annotations use upright pixels. Legacy recordings used upside-down raw pixels.
+            const bool upright = topic.ends_with("/h264/detections");
             constexpr float W = 1280, H = 1024;
             const auto& ann = static_cast<const foxglove::ImageAnnotations&>(*msg);
             auto detections = std::make_shared<std::vector<core::ConeDetection>>();
@@ -208,9 +221,16 @@ void SimComms::_veh_recv_loop() {
                 char name[16] = {};
                 float score = 0;
                 std::sscanf(ann.texts(i).text().c_str(), "%15s %f", name, &score);
-                detections->push_back({W - p[2].x(), H - p[2].y(), W - p[0].x(), H - p[0].y(), core::cone_color_from_name(name), score});
+                const auto color = core::cone_color_from_name(name);
+                if (upright) {
+                    detections->push_back({p[0].x(), p[0].y(), p[2].x(), p[2].y(), color, score});
+                } else {
+                    detections->push_back({W - p[2].x(), H - p[2].y(), W - p[0].x(), H - p[0].y(), color, score});
+                }
             }
-            core::StateTracker::instance().set_camera_detections(topic.substr(0, topic.find('/')), detections);
+            const uint64_t capture_ns = ann.points_size()
+                ? google::protobuf::util::TimeUtil::TimestampToNanoseconds(ann.points(0).timestamp()) : 0;
+            core::StateTracker::instance().set_camera_detections(topic.substr(0, topic.find('/')), capture_ns, detections);
             core::log(msg, topic);
         } else {
             core::log(msg, topic);

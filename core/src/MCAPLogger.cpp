@@ -213,10 +213,7 @@ int core::MCAPLogger::open_new_mcap() {
 }
 
 int core::MCAPLogger::close_active_mcap() {
-    spdlog::info("Closing mcap");
     _writer.close(); 
-    _log_name = "NONE";
-
     return 0;
 }
 
