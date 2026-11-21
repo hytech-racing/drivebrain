@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cmath>
 
 #include "StateTracker.hpp"
 #include <MCAPLogger.hpp>
@@ -204,6 +205,84 @@ inline void render_path(const std::vector<xyz_vec<float>>& path, std::string id,
         p->set_x(point.x);
         p->set_y(point.y);
         p->set_z(point.z);
+    }
+    auto* color = line->mutable_color();
+    color->set_r(rgba[0]);
+    color->set_g(rgba[1]);
+    color->set_b(rgba[2]);
+    color->set_a(rgba[3]);
+
+    log(scene);
+}
+
+/**
+ * Renders a planned path in Foxglove's 3D panel as a flat triangle strip
+ * 
+ * @param path the path points to render, in order
+ * @param id The identifier of the path (used to distinguish e.g. a midline from a raceline)
+ * @param frame_id The frame the path points are expressed in.
+ */
+inline void render_thick_path(const std::vector<xyz_vec<float>>& path, std::string id, std::string frame_id = "map",
+                        std::array<double, 4> rgba = {0.0, 0.9, 0.5, 1.0}) {
+    auto scene = std::make_shared<foxglove::SceneUpdate>();
+    auto* entity = scene->add_entities();
+    entity->set_frame_id(frame_id);
+    entity->set_id(id);
+
+    auto now = std::chrono::system_clock::now().time_since_epoch();
+    entity->mutable_timestamp()->set_seconds(std::chrono::duration_cast<std::chrono::seconds>(now).count());
+    entity->mutable_timestamp()->set_nanos(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count() % 1000000000);
+    entity->set_frame_locked(true);
+
+    auto* line = entity->add_triangles();
+    //line->set_type(foxglove::TrianglePrimitive::LINE_STRIP);
+    line->mutable_pose()->mutable_orientation()->set_w(1.0);
+    //line->set_thickness(0.1);
+
+    /*
+    For each path point, get delta to previous and next point
+    extend poitn along normals
+    should get 4 points
+    for now just have rects overlap
+    */
+
+    for (int i = 1; i < path.size(); i++) {
+
+        auto& point = path[i];
+        auto& prev = path[i-1];
+
+        float dx = point.x-prev.x;
+        float dy = point.y-prev.y;
+        float mag = std::sqrt(dx*dx + dy*dy);
+
+        auto* p1 = line->add_points();
+        auto* p2 = line->add_points();
+        auto* p1 = line->add_points();
+        auto* p2 = line->add_points();
+
+        p1->set_x(prev.x - dy/mag);
+        p1->set_y(prev.y + dx/mag);
+        p1->set_z(prev.z);
+
+        p2->set_x(prev.x + dy/mag);
+        p2->set_y(prev.y - dx/mag);
+        p2->set_z(prev.z);
+
+        p1->set_x(prev.x - dy/mag);
+        p1->set_y(prev.y + dx/mag);
+        p1->set_z(prev.z);
+
+        p2->set_x(prev.x + dy/mag);
+        p2->set_y(prev.y - dx/mag);
+        p2->set_z(prev.z);
+
+        line->add_indices(4*(i-1));
+        line->add_indices(4*(i-1)+1);
+        line->add_indices(4*(i-1)+2);
+
+        line->add_indices(4*(i-1)+1);
+        line->add_indices(4*(i-1)+2);
+        line->add_indices(4*(i-1)+3);
     }
     auto* color = line->mutable_color();
     color->set_r(rgba[0]);
