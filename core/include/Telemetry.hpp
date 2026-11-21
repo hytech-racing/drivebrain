@@ -1,7 +1,6 @@
 #pragma once
 
 #include <array>
-#include <cmath>
 
 #include "StateTracker.hpp"
 #include <MCAPLogger.hpp>
@@ -216,63 +215,67 @@ inline void render_path(const std::vector<xyz_vec<float>>& path, std::string id,
 }
 
 /**
- * Renders a planned path in Foxglove's 3D panel as a flat triangle strip
- * 
- * @param path the path points to render, in order
- * @param id The identifier of the path (used to distinguish e.g. a midline from a raceline)
- * @param frame_id The frame the path points are expressed in.
- */
-inline void render_thick_path(const std::vector<xyz_vec<float>>& path, std::string id, std::string frame_id = "map",
-                        std::array<double, 4> rgba = {0.0, 0.9, 0.5, 1.0}, float thickness = 1.5) {
-    auto scene = std::make_shared<foxglove::SceneUpdate>();
-    auto* entity = scene->add_entities();
-    entity->set_frame_id(frame_id);
-    entity->set_id(id);
+     * Renders a planned path in Foxglove's 3D panel as a flat triangle strip, option for rainbow path
+     *
+     * @param path the path points to render, in order
+     * @param id The identifier of the path (used to distinguish e.g. a midline from a raceline)
+     * @param frame_id The frame the path points are expressed in.
+     */
+    inline void render_thick_path(const std::vector<xyz_vec<float>> &path, std::string id, std::string frame_id = "map",
+                                  std::array<double, 4> rgba = {0.0, 0.9, 0.5, 1.0}, float thickness = 1.5, bool rainbow = false)
+    {
+        auto scene = std::make_shared<foxglove::SceneUpdate>();
+        auto *entity = scene->add_entities();
+        entity->set_frame_id(frame_id);
+        entity->set_id(id);
 
-    auto now = std::chrono::system_clock::now().time_since_epoch();
-    entity->mutable_timestamp()->set_seconds(std::chrono::duration_cast<std::chrono::seconds>(now).count());
-    entity->mutable_timestamp()->set_nanos(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count() % 1000000000);
-    entity->set_frame_locked(true);
+        auto now = std::chrono::system_clock::now().time_since_epoch();
+        entity->mutable_timestamp()->set_seconds(std::chrono::duration_cast<std::chrono::seconds>(now).count());
+        entity->mutable_timestamp()->set_nanos(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count() % 1000000000);
+        entity->set_frame_locked(true);
 
-    if (path.size() < 2) {
-        log(scene);
-        return; //atleast 2 points needed to draw path
-    }
+        if (path.size() < 2)
+        {
+            log(scene);
+            return; // atleast 2 points needed to draw path
+        }
 
-    auto* line = entity->add_triangles();
-    line->mutable_pose()->mutable_orientation()->set_w(1.0);
+        auto *line = entity->add_triangles();
+        line->mutable_pose()->mutable_orientation()->set_w(1.0);
 
-    const float half_thick = thickness/2;
-    const float hue_shift_freq = 720;
+        const float half_thick = thickness / 2;
+        const float hue_shift_freq = FoxgloveServer::instance().get_param<float>("path_vis/rainbow_hue_shift_per_m").value_or(60.0f);
 
-    int left_vertex_index = 0;
-    int right_vertex_index = 1;
+        int left_vertex_index = 0;
+        int right_vertex_index = 1;
 
-    float cur_hue = 0;
+        float cur_hue = 0; // as we loop thorugh path, this gets incremented
 
-    auto add_tri = [&](int i1, int i2, int i3) { 
-        line->add_indices(i1);
-        line->add_indices(i2);
-        line->add_indices(i3);
-    };
-    /*
-    auto add_color = [&](float hue) { 
-        auto* c = line->add_colors();
+        auto add_tri = [&](int i1, int i2, int i3)
+        {
+            line->add_indices(i1);
+            line->add_indices(i2);
+            line->add_indices(i3);
+        };
+        auto add_color = [&](float hue)
+        {
+            auto *c = line->add_colors();
 
-        //covert hue to rbg
-        float r = 0;
-        float g = 0;
-        float b = 0;
-        hue = std::fmod(hue, 300);
-        int group = std::floor(hue/60);
-        float match = hue/60.0 - group;
-        switch (group) {
+            // covert hue to rbg
+            float r = 0;
+            float g = 0;
+            float b = 0;
+            hue = std::fmod(hue, 360);
+            int group = std::floor(hue / 60);
+            float match = hue / 60.0 - group;
+            switch (group)
+            {
             case 0:
                 r = 1;
                 g = match;
                 break;
             case 1:
-                r = 1-match;
+                r = 1 - match;
                 g = 1;
                 break;
             case 2:
@@ -280,146 +283,205 @@ inline void render_thick_path(const std::vector<xyz_vec<float>>& path, std::stri
                 b = match;
                 break;
             case 3:
-                g = 1-match;
+                g = 1 - match;
                 b = 1;
                 break;
             case 4:
                 b = 1;
                 r = match;
                 break;
+            case 5:
+                b = 1-match;
+                r = 1;
+                break;
+            }
+
+            c->set_r(r);
+            c->set_g(g);
+            c->set_b(b);
+            c->set_a(rgba[3]);
+        };
+        auto add_vertex = [&](float x, float y, float z)
+        {
+            auto *p = line->add_points();
+            p->set_x(x);
+            p->set_y(y);
+            p->set_z(z);
+        };
+        auto add_vertex_left = [&](float x, float y, float z)
+        {
+            add_vertex(x, y, z);
+            add_tri(left_vertex_index, right_vertex_index, line->points_size() - 1);
+            left_vertex_index = line->points_size() - 1;
+        };
+        auto add_vertex_right = [&](float x, float y, float z)
+        {
+            add_vertex(x, y, z);
+            add_tri(left_vertex_index, right_vertex_index, line->points_size() - 1);
+            right_vertex_index = line->points_size() - 1;
+        };
+        // if rainbow path, then we need intermediate verticies between large stretches to properly interpolate color
+        const auto add_intermediate_vertices = [&](const xyz_vec<float> &start, const xyz_vec<float> &end, 
+            float offset_x, float offset_y, float start_hue, float end_hue, float seg_len, float miter_start, float miter_end)
+        {
+            for (int h = std::floor(start_hue / 60 + 1) * 60; h < end_hue; h += 60)
+            {
+                float interp = (h - start_hue) / (end_hue - start_hue); // inverse lerp on hue bounds
+                if (interp * seg_len < miter_start) continue; //skip if we're too close to the fan of a bend
+                if (interp * seg_len > seg_len - miter_end) continue;
+                add_vertex_left(start.x + interp * (end.x - start.x) + offset_x, start.y + interp * (end.y - start.y) + offset_y, start.z + interp * (end.z - start.z));
+                add_vertex_right(start.x + interp * (end.x - start.x) - offset_x, start.y + interp * (end.y - start.y) - offset_y, start.z + interp * (end.z - start.z));
+                add_color(h);
+                add_color(h);
+            }
+        };
+
+        float miter_foot_prev = 0;
+
+        for (int i = 0; i < path.size(); i++)
+        {
+            if (i == 0)
+            {
+                float dx = path[i + 1].x - path[i].x;
+                float dy = path[i + 1].y - path[i].y;
+                float mag = std::sqrt(dx * dx + dy * dy);
+                dx *= half_thick / mag;
+                dy *= half_thick / mag;
+
+                add_vertex(path[i].x - dy, path[i].y + dx, path[i].z);
+                add_vertex(path[i].x + dy, path[i].y - dx, path[i].z);
+
+                if (rainbow) {
+                    add_color(cur_hue);
+                    add_color(cur_hue);
+                }
+
+                continue;
+            }
+            else if (i == path.size() - 1)
+            {
+                float dx = path[i].x - path[i - 1].x;
+                float dy = path[i].y - path[i - 1].y;
+                float mag = std::sqrt(dx * dx + dy * dy);
+                dx *= half_thick / mag;
+                dy *= half_thick / mag;
+
+                if (rainbow) add_intermediate_vertices(path[i - 1], path[i], -dy, dx, cur_hue, cur_hue + hue_shift_freq * mag, mag, miter_foot_prev, 0);
+
+                add_vertex_left(path[i].x - dy, path[i].y + dx, path[i].z);
+                add_vertex_right(path[i].x + dy, path[i].y - dx, path[i].z);
+
+                cur_hue += hue_shift_freq * mag;
+                if (rainbow) {
+                    add_color(cur_hue);
+                    add_color(cur_hue);
+                }
+
+                continue;
+            }
+
+            const auto &prev = path[i - 1];
+            const auto &cur = path[i];
+            const auto &next = path[i + 1];
+
+            float prev_dx = cur.x - prev.x;
+            float prev_dy = cur.y - prev.y;
+            float next_dx = next.x - cur.x;
+            float next_dy = next.y - cur.y;
+
+            float prev_mag = std::sqrt(prev_dx * prev_dx + prev_dy * prev_dy);
+            float next_mag = std::sqrt(next_dx * next_dx + next_dy * next_dy);
+
+            float offset1_x = -half_thick * prev_dy / prev_mag;
+            float offset1_y = half_thick * prev_dx / prev_mag;
+            float offset2_x = -half_thick * next_dy / next_mag;
+            float offset2_y = half_thick * next_dx / next_mag;
+
+            float ax, ay, bx, by; // the coodinates on the side we calc the intersection for
+
+            // check the direction the path curves,
+            // for the side that curves inwards, find the intersect of the path edges, place a single point there
+            // on the side we curve away from, add an extra triangle to fill were the elbo breaks
+            float delta_det = prev_dx * next_dy - prev_dy * next_dx; // positive means curve left, negative curve right
+
+            float miter_foot = half_thick * std::abs(delta_det) / (prev_mag*next_mag + prev_dx*next_dx + prev_dy*next_dy);
+            if (rainbow) add_intermediate_vertices(prev, cur, offset1_x, offset1_y, cur_hue, cur_hue + hue_shift_freq * prev_mag, prev_mag, miter_foot_prev, miter_foot);
+            cur_hue += hue_shift_freq * prev_mag;
+            miter_foot_prev = miter_foot;
+
+            if (std::abs(delta_det) < 0.1 * prev_mag * next_mag)
+            { // parallel case, or if we're close enoguh to being paralell
+                add_vertex_left(path[i].x + offset1_x, path[i].y + offset1_y, path[i].z);
+                add_vertex_right(path[i].x - offset1_x, path[i].y - offset1_y, path[i].z);
+                if (rainbow) {
+                    add_color(cur_hue);
+                    add_color(cur_hue);
+                }
+                continue;
+            }
+            else if (delta_det > 0)
+            {
+                ax = prev.x + offset1_x;
+                ay = prev.y + offset1_y;
+                bx = next.x + offset2_x;
+                by = next.y + offset2_y;
+            }
+            else
+            {
+                ax = prev.x - offset1_x;
+                ay = prev.y - offset1_y;
+                bx = next.x - offset2_x;
+                by = next.y - offset2_y;
+            }
+
+            float delta_prev_det = prev_dy * ax - prev_dx * ay;
+            float delta_next_det = next_dy * bx - next_dx * by;
+            float intersect_x = (prev_dx * delta_next_det - next_dx * delta_prev_det) / delta_det;
+            float intersect_y = (prev_dy * delta_next_det - next_dy * delta_prev_det) / delta_det;
+
+            float elbow_offset_x = offset1_x + offset2_x;
+            float elbow_offset_y = offset1_y + offset2_y;
+            float elbow_offset_mag = std::sqrt(elbow_offset_x * elbow_offset_x + elbow_offset_y * elbow_offset_y);
+            elbow_offset_x *= half_thick / elbow_offset_mag;
+            elbow_offset_y *= half_thick / elbow_offset_mag;
+
+            // order which we add points depends on bend direction, since we want the left vertex to have lower index
+            if (delta_det > 0)
+            {
+                add_vertex_left(intersect_x, intersect_y, cur.z);
+                add_vertex_right(cur.x - offset1_x, cur.y - offset1_y, cur.z);
+                add_vertex_right(cur.x - elbow_offset_x, cur.y - elbow_offset_y, cur.z);
+                add_vertex_right(cur.x - offset2_x, cur.y - offset2_y, cur.z);
+            }
+            else
+            {
+                add_vertex_right(intersect_x, intersect_y, cur.z);
+                add_vertex_left(cur.x + offset1_x, cur.y + offset1_y, cur.z);
+                add_vertex_left(cur.x + elbow_offset_x, cur.y + elbow_offset_y, cur.z);
+                add_vertex_left(cur.x + offset2_x, cur.y + offset2_y, cur.z);
+            }
+            if (rainbow)
+            {
+                float curve_arc_length = half_thick * std::abs(std::atan2(delta_det, prev_dx*next_dx + prev_dy*next_dy)); // on bends, hueshift by arclength
+                add_color(cur_hue + 0.5 * hue_shift_freq * curve_arc_length);
+                add_color(cur_hue);
+                add_color(cur_hue + 0.5 * hue_shift_freq * curve_arc_length);
+                add_color(cur_hue + hue_shift_freq * curve_arc_length);
+                cur_hue += hue_shift_freq * curve_arc_length;
+            }
         }
 
-        c->set_r(r);
-        c->set_b(g);
-        c->set_g(b);
-        c->set_a(rgba[3]);
-    };
-    */
-    auto add_vertex = [&](float x, float y, float z) { 
-        auto* p = line->add_points();
-        p->set_x(x);
-        p->set_y(y);
-        p->set_z(z);
-        //add_color(cur_hue);
-    };
-    auto add_vertex_left = [&](float x, float y, float z) { 
-        add_vertex(x,y,z);
-        add_tri(left_vertex_index, right_vertex_index, line->points_size()-1);
-        left_vertex_index = line->points_size()-1;
-    };
-    auto add_vertex_right = [&](float x, float y, float z) { 
-        add_vertex(x,y,z);
-        add_tri(left_vertex_index, right_vertex_index, line->points_size()-1);
-        right_vertex_index = line->points_size()-1;
-    };
-
-    for (int i = 0; i < path.size(); i++)
-    {
-        if (i == 0) {
-            float dx = path[i+1].x - path[i].x;
-            float dy = path[i+1].y - path[i].y;
-            float mag = std::sqrt(dx*dx + dy*dy);
-            dx *= half_thick/mag;
-            dy *= half_thick/mag;
-
-            add_vertex(path[i].x-dy, path[i].y+dx, path[i].z);
-            add_vertex(path[i].x+dy, path[i].y-dx, path[i].z);
-
-            cur_hue += hue_shift_freq*mag;
-
-            continue;
-        } else if (i == path.size()-1) {
-            float dx = path[i].x - path[i-1].x;
-            float dy = path[i].y - path[i-1].y;
-            float mag = std::sqrt(dx*dx + dy*dy);
-            dx *= half_thick/mag;
-            dy *= half_thick/mag;
-
-            add_vertex_left(path[i].x-dy, path[i].y+dx, path[i].z);
-            add_vertex_right(path[i].x+dy, path[i].y-dx, path[i].z);
-
-            continue;
+        if (!rainbow)
+        {
+            auto *color = line->mutable_color();
+            color->set_r(rgba[0]);
+            color->set_g(rgba[1]);
+            color->set_b(rgba[2]);
+            color->set_a(rgba[3]);
         }
 
-        const auto& prev = path[i-1];
-        const auto& cur = path[i];
-        const auto& next = path[i+1];
-
-        float prev_dx = cur.x-prev.x;
-        float prev_dy = cur.y-prev.y;
-        float next_dx = next.x-cur.x;
-        float next_dy = next.y-cur.y;
-
-        float prev_mag = std::sqrt(prev_dx*prev_dx + prev_dy*prev_dy);
-        float next_mag = std::sqrt(next_dx*next_dx + next_dy*next_dy);
-
-        float offset1_x = -half_thick*prev_dy/prev_mag;
-        float offset1_y = half_thick*prev_dx/prev_mag;
-        float offset2_x = -half_thick*next_dy/next_mag;
-        float offset2_y = half_thick*next_dx/next_mag;
-
-
-        float ax, ay, bx, by; //the coodinates on the side we calc the intersection for
-
-        //check the direction the path curves,
-        //for the side that curves inwards, find the intersect of the path edges, place a single point there
-        //on the side we curve away from, add an extra triangle to fill were the elbo breaks
-        float delta_det = prev_dx*next_dy - prev_dy*next_dx; //positive means curve left, negative curve right
-
-        if (std::abs(delta_det) < 0.1*prev_mag*next_mag) { //parallel case, or if we're close enoguh to being paralell
-            add_vertex_left(path[i].x+offset1_x, path[i].y+offset1_y, path[i].z);
-            add_vertex_right(path[i].x-offset1_x, path[i].y-offset1_y, path[i].z);
-            continue;
-        } else if (delta_det > 0) {
-            ax = prev.x + offset1_x;
-            ay = prev.y + offset1_y;
-            bx = next.x + offset2_x;
-            by = next.y + offset2_y;
-        } else {
-            ax = prev.x - offset1_x;
-            ay = prev.y - offset1_y;
-            bx = next.x - offset2_x;
-            by = next.y - offset2_y;
-        }
-        
-        float delta_prev_det = prev_dy*ax - prev_dx*ay;
-        float delta_next_det = next_dy*bx - next_dx*by;
-        float intersect_x = (prev_dx*delta_next_det - next_dx*delta_prev_det) / delta_det;
-        float intersect_y = (prev_dy*delta_next_det - next_dy*delta_prev_det) / delta_det;
-
-        float elbow_offset_x = offset1_x + offset2_x;
-        float elbow_offset_y = offset1_y + offset2_y;
-        float elbow_offset_mag = std::sqrt(elbow_offset_x*elbow_offset_x + elbow_offset_y*elbow_offset_y);
-        elbow_offset_x *= half_thick/elbow_offset_mag;
-        elbow_offset_y *= half_thick/elbow_offset_mag;
-
-        //order which we add points depends on bend direction, since we want the left vertex to have lower index
-        if (delta_det > 0) {
-            add_vertex_left(intersect_x, intersect_y, cur.z);
-            add_vertex_right(cur.x - offset1_x, cur.y - offset1_y, cur.z);
-            add_vertex_right(cur.x - elbow_offset_x, cur.y - elbow_offset_y, cur.z);
-            add_vertex_right(cur.x - offset2_x, cur.y - offset2_y, cur.z);
-        } else {
-            add_vertex_right(intersect_x, intersect_y, cur.z);
-            add_vertex_left(cur.x + offset1_x, cur.y + offset1_y, cur.z);
-            add_vertex_left(cur.x + elbow_offset_x, cur.y + elbow_offset_y, cur.z);
-            add_vertex_left(cur.x + offset2_x, cur.y + offset2_y, cur.z);
-        }
-
-        cur_hue += hue_shift_freq*prev_mag;
+        log(scene);
     }
-    
-    /*
-    auto* color = line->mutable_color();
-    color->set_r(rgba[0]);
-    color->set_g(rgba[1]);
-    color->set_b(rgba[2]);
-    color->set_a(rgba[3]);
-    */
-    
-
-    log(scene);
-}
 
 /**
  * Renders line segments in Foxglove's 3D panel, one per consecutive pair of points
