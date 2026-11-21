@@ -223,7 +223,7 @@ inline void render_path(const std::vector<xyz_vec<float>>& path, std::string id,
  * @param frame_id The frame the path points are expressed in.
  */
 inline void render_thick_path(const std::vector<xyz_vec<float>>& path, std::string id, std::string frame_id = "map",
-                        std::array<double, 4> rgba = {0.0, 0.9, 0.5, 1.0}) {
+                        std::array<double, 4> rgba = {0.0, 0.9, 0.5, 1.0}, float thickness = 1.5) {
     auto scene = std::make_shared<foxglove::SceneUpdate>();
     auto* entity = scene->add_entities();
     entity->set_frame_id(frame_id);
@@ -234,61 +234,189 @@ inline void render_thick_path(const std::vector<xyz_vec<float>>& path, std::stri
     entity->mutable_timestamp()->set_nanos(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count() % 1000000000);
     entity->set_frame_locked(true);
 
-    auto* line = entity->add_triangles();
-    //line->set_type(foxglove::TrianglePrimitive::LINE_STRIP);
-    line->mutable_pose()->mutable_orientation()->set_w(1.0);
-    //line->set_thickness(0.1);
-
-    /*
-    For each path point, get delta to previous and next point
-    extend poitn along normals
-    should get 4 points
-    for now just have rects overlap
-    */
-
-    for (int i = 1; i < path.size(); i++) {
-
-        auto& point = path[i];
-        auto& prev = path[i-1];
-
-        float dx = point.x-prev.x;
-        float dy = point.y-prev.y;
-        float mag = std::sqrt(dx*dx + dy*dy);
-
-        auto* p1 = line->add_points();
-        auto* p2 = line->add_points();
-        auto* p1 = line->add_points();
-        auto* p2 = line->add_points();
-
-        p1->set_x(prev.x - dy/mag);
-        p1->set_y(prev.y + dx/mag);
-        p1->set_z(prev.z);
-
-        p2->set_x(prev.x + dy/mag);
-        p2->set_y(prev.y - dx/mag);
-        p2->set_z(prev.z);
-
-        p1->set_x(prev.x - dy/mag);
-        p1->set_y(prev.y + dx/mag);
-        p1->set_z(prev.z);
-
-        p2->set_x(prev.x + dy/mag);
-        p2->set_y(prev.y - dx/mag);
-        p2->set_z(prev.z);
-
-        line->add_indices(4*(i-1));
-        line->add_indices(4*(i-1)+1);
-        line->add_indices(4*(i-1)+2);
-
-        line->add_indices(4*(i-1)+1);
-        line->add_indices(4*(i-1)+2);
-        line->add_indices(4*(i-1)+3);
+    if (path.size() < 2) {
+        log(scene);
+        return; //atleast 2 points needed to draw path
     }
+
+    auto* line = entity->add_triangles();
+    line->mutable_pose()->mutable_orientation()->set_w(1.0);
+
+    const float half_thick = thickness/2;
+    const float hue_shift_freq = 720;
+
+    int left_vertex_index = 0;
+    int right_vertex_index = 1;
+
+    float cur_hue = 0;
+
+    auto add_tri = [&](int i1, int i2, int i3) { 
+        line->add_indices(i1);
+        line->add_indices(i2);
+        line->add_indices(i3);
+    };
+    /*
+    auto add_color = [&](float hue) { 
+        auto* c = line->add_colors();
+
+        //covert hue to rbg
+        float r = 0;
+        float g = 0;
+        float b = 0;
+        hue = std::fmod(hue, 300);
+        int group = std::floor(hue/60);
+        float match = hue/60.0 - group;
+        switch (group) {
+            case 0:
+                r = 1;
+                g = match;
+                break;
+            case 1:
+                r = 1-match;
+                g = 1;
+                break;
+            case 2:
+                g = 1;
+                b = match;
+                break;
+            case 3:
+                g = 1-match;
+                b = 1;
+                break;
+            case 4:
+                b = 1;
+                r = match;
+                break;
+        }
+
+        c->set_r(r);
+        c->set_b(g);
+        c->set_g(b);
+        c->set_a(rgba[3]);
+    };
+    */
+    auto add_vertex = [&](float x, float y, float z) { 
+        auto* p = line->add_points();
+        p->set_x(x);
+        p->set_y(y);
+        p->set_z(z);
+        //add_color(cur_hue);
+    };
+    auto add_vertex_left = [&](float x, float y, float z) { 
+        add_vertex(x,y,z);
+        add_tri(left_vertex_index, right_vertex_index, line->points_size()-1);
+        left_vertex_index = line->points_size()-1;
+    };
+    auto add_vertex_right = [&](float x, float y, float z) { 
+        add_vertex(x,y,z);
+        add_tri(left_vertex_index, right_vertex_index, line->points_size()-1);
+        right_vertex_index = line->points_size()-1;
+    };
+
+    for (int i = 0; i < path.size(); i++)
+    {
+        if (i == 0) {
+            float dx = path[i+1].x - path[i].x;
+            float dy = path[i+1].y - path[i].y;
+            float mag = std::sqrt(dx*dx + dy*dy);
+            dx *= half_thick/mag;
+            dy *= half_thick/mag;
+
+            add_vertex(path[i].x-dy, path[i].y+dx, path[i].z);
+            add_vertex(path[i].x+dy, path[i].y-dx, path[i].z);
+
+            cur_hue += hue_shift_freq*mag;
+
+            continue;
+        } else if (i == path.size()-1) {
+            float dx = path[i].x - path[i-1].x;
+            float dy = path[i].y - path[i-1].y;
+            float mag = std::sqrt(dx*dx + dy*dy);
+            dx *= half_thick/mag;
+            dy *= half_thick/mag;
+
+            add_vertex_left(path[i].x-dy, path[i].y+dx, path[i].z);
+            add_vertex_right(path[i].x+dy, path[i].y-dx, path[i].z);
+
+            continue;
+        }
+
+        const auto& prev = path[i-1];
+        const auto& cur = path[i];
+        const auto& next = path[i+1];
+
+        float prev_dx = cur.x-prev.x;
+        float prev_dy = cur.y-prev.y;
+        float next_dx = next.x-cur.x;
+        float next_dy = next.y-cur.y;
+
+        float prev_mag = std::sqrt(prev_dx*prev_dx + prev_dy*prev_dy);
+        float next_mag = std::sqrt(next_dx*next_dx + next_dy*next_dy);
+
+        float offset1_x = -half_thick*prev_dy/prev_mag;
+        float offset1_y = half_thick*prev_dx/prev_mag;
+        float offset2_x = -half_thick*next_dy/next_mag;
+        float offset2_y = half_thick*next_dx/next_mag;
+
+
+        float ax, ay, bx, by; //the coodinates on the side we calc the intersection for
+
+        //check the direction the path curves,
+        //for the side that curves inwards, find the intersect of the path edges, place a single point there
+        //on the side we curve away from, add an extra triangle to fill were the elbo breaks
+        float delta_det = prev_dx*next_dy - prev_dy*next_dx; //positive means curve left, negative curve right
+
+        if (std::abs(delta_det) < 0.1*prev_mag*next_mag) { //parallel case, or if we're close enoguh to being paralell
+            add_vertex_left(path[i].x+offset1_x, path[i].y+offset1_y, path[i].z);
+            add_vertex_right(path[i].x-offset1_x, path[i].y-offset1_y, path[i].z);
+            continue;
+        } else if (delta_det > 0) {
+            ax = prev.x + offset1_x;
+            ay = prev.y + offset1_y;
+            bx = next.x + offset2_x;
+            by = next.y + offset2_y;
+        } else {
+            ax = prev.x - offset1_x;
+            ay = prev.y - offset1_y;
+            bx = next.x - offset2_x;
+            by = next.y - offset2_y;
+        }
+        
+        float delta_prev_det = prev_dy*ax - prev_dx*ay;
+        float delta_next_det = next_dy*bx - next_dx*by;
+        float intersect_x = (prev_dx*delta_next_det - next_dx*delta_prev_det) / delta_det;
+        float intersect_y = (prev_dy*delta_next_det - next_dy*delta_prev_det) / delta_det;
+
+        float elbow_offset_x = offset1_x + offset2_x;
+        float elbow_offset_y = offset1_y + offset2_y;
+        float elbow_offset_mag = std::sqrt(elbow_offset_x*elbow_offset_x + elbow_offset_y*elbow_offset_y);
+        elbow_offset_x *= half_thick/elbow_offset_mag;
+        elbow_offset_y *= half_thick/elbow_offset_mag;
+
+        //order which we add points depends on bend direction, since we want the left vertex to have lower index
+        if (delta_det > 0) {
+            add_vertex_left(intersect_x, intersect_y, cur.z);
+            add_vertex_right(cur.x - offset1_x, cur.y - offset1_y, cur.z);
+            add_vertex_right(cur.x - elbow_offset_x, cur.y - elbow_offset_y, cur.z);
+            add_vertex_right(cur.x - offset2_x, cur.y - offset2_y, cur.z);
+        } else {
+            add_vertex_right(intersect_x, intersect_y, cur.z);
+            add_vertex_left(cur.x + offset1_x, cur.y + offset1_y, cur.z);
+            add_vertex_left(cur.x + elbow_offset_x, cur.y + elbow_offset_y, cur.z);
+            add_vertex_left(cur.x + offset2_x, cur.y + offset2_y, cur.z);
+        }
+
+        cur_hue += hue_shift_freq*prev_mag;
+    }
+    
+    /*
     auto* color = line->mutable_color();
     color->set_r(rgba[0]);
     color->set_g(rgba[1]);
     color->set_b(rgba[2]);
     color->set_a(rgba[3]);
+    */
+    
 
     log(scene);
 }
