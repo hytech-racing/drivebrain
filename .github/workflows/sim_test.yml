@@ -78,7 +78,7 @@ jobs:
         env:
           TRACK: ${{ matrix.track }}
           LAPS: ${{ inputs.laps || '1' }}
-          TIMEOUT_S: ${{ inputs.timeout || '600' }}
+          TIMEOUT_S: ${{ inputs.timeout || '420' }}
           UV_PYTHON: '3.14'
         run: ./scripts/run_sim_test.sh "$TRACK" "$LAPS" "$TIMEOUT_S"
 
