@@ -189,3 +189,7 @@ if(NOT CMAKE_CROSSCOMPILING)
     enable_testing()
     # add_subdirectory(tests/sil)
 endif()
+
+if(HOOTL)
+    add_subdirectory(tests/unit)
+endif()
