@@ -20,8 +20,13 @@ on:
 
 jobs:
   sim-test:
+    name: sim-test (${{ matrix.track }})
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        track: ${{ fromJSON(inputs.track && format('["{0}"]', inputs.track) || '["FSG", "FSI", "skidpad", "thin"]') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -71,9 +76,9 @@ jobs:
 
       - name: Run sim
         env:
-          TRACK: ${{ inputs.track || 'FSG' }}
+          TRACK: ${{ matrix.track }}
           LAPS: ${{ inputs.laps || '1' }}
-          TIMEOUT_S: ${{ inputs.timeout || '420' }}
+          TIMEOUT_S: ${{ inputs.timeout || '600' }}
           UV_PYTHON: '3.14'
         run: ./scripts/run_sim_test.sh "$TRACK" "$LAPS" "$TIMEOUT_S"
 
@@ -81,12 +86,12 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: drivebrain-sim-log
+          name: drivebrain-sim-log-${{ matrix.track }}
           path: drivebrain_sim.log
 
       - name: Upload recording
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: drivebrain-recording
+          name: drivebrain-recording-${{ matrix.track }}
           path: recordings/*.mcap
