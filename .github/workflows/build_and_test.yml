@@ -94,12 +94,17 @@ jobs:
         id: version
         run: |
           git fetch --tags
-          LATEST=$(git tag -l 'v[0-9]*' | sort -t'v' -k2 -n | tail -1)
+          LATEST=$(git tag -l 'v*' | grep -E '^v[0-9]+$' | sort -V | tail -1)
           if [ -z "$LATEST" ]; then
             NEXT="v1"
           else
             NUM=${LATEST#v}
             NEXT="v$((NUM + 1))"
+          fi
+
+          if [ -z "$NEXT" ]; then 
+            echo "Version came out empty" >&2
+            exit 1
           fi
           echo "tag=$NEXT" >> "$GITHUB_OUTPUT"
 
