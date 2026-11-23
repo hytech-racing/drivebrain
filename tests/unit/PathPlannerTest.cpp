@@ -52,3 +52,43 @@ TEST_F(PathPlannerTest, TooFewConesGivesEmptyPath) {
     auto path = planning::plan_path(cones);
     EXPECT_TRUE(path.empty());
 }
+
+// Test that path goes down middle with straight lines of cones
+TEST_F(PathPlannerTest, StraightWithManyPairsGivesPathDownTheMiddle) {
+    set_car_pose(0.0f, 0.0f, 0.0f);
+    dv_msgs:: Cones cones;
+    for (int i = 1; i <=6; i++) {
+        float x = 5.0f * i;
+        add_cone(cones, x, 1.9f, dv_msgs::Cones_ConeColor_BLUE);
+        add_cone(cones, x, -1.9f, dv_msgs::Cones_ConeColor_YELLOW);
+
+
+    }
+    auto path = planning::plan_path(cones);
+    ASSERT_FALSE(path.empty());
+    EXPECT_GT(path[0].x, 0.0f);
+    for(const auto& point: path) {
+        EXPECT_NEAR(point.y, 0.0f, 0.5f);
+
+    }
+    
+}
+
+// Disabled: fails on the current planner. With only 2 pairs of cones, the
+// blue to yellow gaps end up on the outside of the triangulation and get
+// skipped, so the path is always empty. This is what stops the car from moving
+//  on the acceleration track. Remove DISABLED_ once the planner handles that case.
+TEST_F(PathPlannerTest, DISABLED_StraightWithTwoPairsGivesPath) {
+    set_car_pose(0.0f, 0.0f, 0.0f);
+    dv_msgs:: Cones cones;
+    for (int i = 1; i <=2; i++) {
+        float x = 5.0f * i;
+        add_cone(cones, x, 1.9f, dv_msgs::Cones_ConeColor_BLUE);
+        add_cone(cones, x, -1.9f, dv_msgs::Cones_ConeColor_YELLOW);
+
+
+    }
+    auto path = planning::plan_path(cones);
+    EXPECT_FALSE(path.empty());
+
+}
