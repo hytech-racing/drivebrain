@@ -63,6 +63,7 @@ def main():
 
     if not args.logless:
         rr.init("vehicle_sim", spawn=True)
+
         render.setup_static(scene)
         visualize.setup_series()
         rr.send_blueprint(visualize.blueprint())

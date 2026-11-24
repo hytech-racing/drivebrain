@@ -34,6 +34,8 @@ std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones) {
     /* Initializations */
     std::vector<core::xyz_vec<float>> midpoints; // Set of points to follow
     std::vector<double> coords; // Cone coordinates used to make the delaunay triangulation
+    std::vector<std::pair<float, float>> edge_directions;
+
     const auto vehicle_state = core::StateTracker::instance().vehicle_state().first;
     const float vehicle_x = vehicle_state.vehicle_position_map_frame.x;
     const float vehicle_y = vehicle_state.vehicle_position_map_frame.y;
@@ -89,6 +91,8 @@ std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones) {
         float my = (delaunay.coords[2*curr_edge + 1] + delaunay.coords[2* twin_edge + 1]) / (2.0);
         midpoints.push_back({mx, my, 0.0f});
         crossing_edges.push_back(is_crossing_edge);
+        float len = std::sqrt(edge_length_sq);
+        edge_directions.push_back({dx/len, dy/len});
     
     }
 
@@ -114,6 +118,8 @@ std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones) {
 
     std::swap(midpoints[0], midpoints[start]); // make the index of the closest cone the start of the midpoints
     std::swap(crossing_edges[0], crossing_edges[start]);
+    std::swap(edge_directions[0], edge_directions[start]);
+
     // sort the rest of the midpoints based on proximity to the first one
     std::size_t count = 1;
     float hx = heading_x;
@@ -130,15 +136,23 @@ std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones) {
             float dx = midpoints[j].x - current.x;
             float dy = midpoints[j].y - current.y;
             float d_square = dx * dx + dy * dy;
+            const bool colored = crossing_edges[j];
 
             if (d_square < 1e-6f || d_square > MAX_JUMP_SQ) continue;                       
 
             float dist = std::sqrt(d_square);
             float angle = (dx * hx + dy * hy) / dist;
+
             if (angle <= MIN_COS_TURN) continue; 
+
+            if (!colored) {
+                float along = std::fabs((dx * edge_directions[j].first + dy * edge_directions[j].second) / dist);
+                if (along > 0.5f) continue;
+            }
+
             float cost = dist * (2.0f - angle); // angle = 1 means straight ahead, then cost is only based on distance
             // check if there is a colored edge within the plan ahead range but if there isn't, then look at the uncolored cones
-            if (crossing_edges[j]) {
+            if (colored) {
                 if (cost < best_cost) {
                     best_cost = cost;
                     best_next = j;
@@ -158,6 +172,7 @@ std::vector<core::xyz_vec<float>> plan_path(const dv_msgs::Cones& cones) {
 
         std::swap(midpoints[count], midpoints[chosen]);
         std::swap(crossing_edges[count], crossing_edges[chosen]);
+        std::swap(edge_directions[count], edge_directions[chosen]);
 
         float dx = midpoints[count].x - current.x;
         float dy = midpoints[count].y - current.y;

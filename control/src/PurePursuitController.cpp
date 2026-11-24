@@ -22,7 +22,8 @@ ControllerOutput control::PurePursuitController::step(const VehicleState& in) {
         speed_out.desired_rpms = {rpm, rpm, rpm, rpm};
         out.desired_steering_deg = *steering * 180.0f / M_PI;
     } else {
-        speed_out.desired_rpms = {0.0f, 0.0f, 0.0f, 0.0f};
+        //speed_out.desired_rpms = {0.0f, 0.0f, 0.0f, 0.0f};
+        speed_out.desired_rpms = {1.0f, 1.0f, 1.0f, 1.0f};
     }
     out.out = speed_out;
     return out;
