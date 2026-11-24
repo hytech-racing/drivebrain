@@ -272,8 +272,9 @@ void DrivebrainApp::_loop() {
     core::ControllerOutput out_struct;
     bool command_is_valid;
 
-    core::DriveMode drive_mode = static_cast<core::DriveMode>(core::DrivebrainControllerInterface::instance().get_drive_mode());
-
+    //core::DriveMode drive_mode = static_cast<core::DriveMode>(core::DrivebrainControllerInterface::instance().get_drive_mode());
+    core::DriveMode drive_mode = core::DriveMode::AUTONOMOUS;
+    
     if (drive_mode == core::DriveMode::AUTONOMOUS) {
       _autonomy.start(); // Fine to do this cuz start() is idempotent and won't restart an already running stack
       out_struct = _autonomy.command(state_and_validity.first); 
