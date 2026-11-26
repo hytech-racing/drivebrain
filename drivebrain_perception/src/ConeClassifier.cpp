@@ -8,6 +8,7 @@
 #include <spdlog/spdlog.h>
 #include "FoxgloveServer.hpp"
 #include "Telemetry.hpp"
+#include "ReflectivityClassifierModel.hpp"
 
 namespace perception {
 namespace {
@@ -243,7 +244,7 @@ namespace {
 
 
 
-
+/*
     std::shared_ptr<dv_msgs::Cones> ConeClassifier::classifyWithReflectivity(const UnclassifiedCones& unclassifiedCones, const std::string& frame_id) {
 
         auto cones = std::make_shared<dv_msgs::Cones>();
@@ -319,6 +320,79 @@ namespace {
 
             cone->set_color(dv_msgs::Cones::UNKNOWN); // TODO
             cone->set_color_confidence(0); // TODO
+
+            auto* position = cone->mutable_position();
+            position->set_x(unclassifiedCone.position.x);
+            position->set_y(unclassifiedCone.position.y);
+            position->set_z(unclassifiedCone.position.z);
+
+        }
+
+        cones->set_timestamp_us(unclassifiedCones.timestamp_us);
+
+        return cones;
+    }
+*/
+
+    std::shared_ptr<dv_msgs::Cones> ConeClassifier::classifyWithReflectivity(const UnclassifiedCones& unclassifiedCones, const std::string& frame_id) {
+
+        auto cones = std::make_shared<dv_msgs::Cones>();
+
+        constexpr std::array<float, 10> edges = {-0.48f, -0.44888889f, -0.41777778f, -0.38666667f, -0.35555556f, -0.32444444f, -0.29333333f, -0.26222222f, -0.23111111f, -0.2f};
+
+        for (const auto& unclassifiedCone : unclassifiedCones.cones) {
+            auto* cone = cones->add_cones();
+
+            // 1. Bin the points (single pass)
+            std::array<std::vector<float>, 9> bins;
+            for (const auto& pt : unclassifiedCone.points) {
+                auto it = std::upper_bound(edges.begin(), edges.end(), pt.z);
+                int b = std::clamp(static_cast<int>(std::distance(edges.begin(), it)) - 1, 0, 8);
+                bins[b].push_back(pt.r);
+            }
+
+            // 2. Compute the 4 sets of 9 values
+            std::vector<float> values(9, 0.0f), cts(9, 0.0f), values2(9, 0.0f);
+            for (int b = 0; b < 9; ++b) {
+                auto& r_bin = bins[b];
+                cts[b] = static_cast<float>(r_bin.size());
+                if (!r_bin.empty()) {
+                    // values2: mean
+                    float sum_all = std::accumulate(r_bin.begin(), r_bin.end(), 0.0f);
+                    values2[b] = sum_all / r_bin.size();
+
+                    // values: top 25% mean
+                    std::sort(r_bin.begin(), r_bin.end(), std::greater<float>());
+                    int n = std::max(1, static_cast<int>((r_bin.size() + 3) / 4));
+                    float sum_top = std::accumulate(r_bin.begin(), r_bin.begin() + n, 0.0f);
+                    values[b] = sum_top / n;
+                }
+            }
+
+            // 3. Assemble feature vector
+            std::vector<float> features;
+            features.reserve(37);
+            features.insert(features.end(), values.begin(), values.end());
+            features.insert(features.end(), cts.begin(), cts.end());
+            features.insert(features.end(), values2.begin(), values2.end());
+            features.insert(features.end(), cts.begin(), cts.end()); // cts2 == cts
+            features.push_back(std::hypot(unclassifiedCone.position.x, unclassifiedCone.position.y));
+
+
+            float p_yellow = ReflectivityClassifierModel::predictYellow(features.data());
+
+            if (p_yellow >= 0.5) {
+                cone->set_color(dv_msgs::Cones::YELLOW);
+                cone->set_color_confidence(p_yellow);
+                cone->set_mean_reflectivity(p_yellow);
+            } else {
+                cone->set_color(dv_msgs::Cones::BLUE);
+                cone->set_color_confidence(1-p_yellow);
+                cone->set_mean_reflectivity(1-p_yellow);
+            }
+
+            // cone->set_color(dv_msgs::Cones::UNKNOWN); // TODO
+            // cone->set_color_confidence(0); // TODO
 
             auto* position = cone->mutable_position();
             position->set_x(unclassifiedCone.position.x);

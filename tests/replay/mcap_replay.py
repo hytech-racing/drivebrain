@@ -11,7 +11,7 @@ RECV_SOCKET_PORT = 6767
 SEND_SOCKET_PORT = 5940 
 LIDAR_SOCKET_PORT = 1155
 
-BLACKLIST = {"estimator_Outports", "Cones", "SceneUpdate", "ouster/calibration"}
+BLACKLIST = {"estimator_Outports", "Cones", "SceneUpdate", "ouster/calibration", "perception/cone_cluster_points"}
 
 # Initialize the sockets
 ctx = zmq.Context()

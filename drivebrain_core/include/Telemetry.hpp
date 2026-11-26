@@ -138,7 +138,7 @@ inline void render_cones(std::shared_ptr<dv_msgs::Cones> cones, std::string id, 
         auto* text_pos = text->mutable_pose()->mutable_position();
         text_pos->set_x(cone.position().x());
         text_pos->set_y(cone.position().y());
-        text_pos->set_z(cone.position().z() + 0.5);
+        text_pos->set_z(cone.position().z() + 1.0);
         text->mutable_pose()->mutable_orientation()->set_w(1.0);
         text->set_billboard(true);
         text->set_font_size(12.0);
@@ -147,7 +147,7 @@ inline void render_cones(std::shared_ptr<dv_msgs::Cones> cones, std::string id, 
         text->mutable_color()->set_g(1.0);
         text->mutable_color()->set_b(1.0);
         text->mutable_color()->set_a(0.9);
-        text->set_text(fmt::format("{:.0f}", cone.mean_reflectivity()));
+        text->set_text(fmt::format("{:.2f}", cone.mean_reflectivity()));
     }
 
     log(scene);
