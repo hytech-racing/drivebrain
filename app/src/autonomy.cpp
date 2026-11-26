@@ -104,7 +104,18 @@ void Autonomy::_run() {
     // Update the state tracker with the new cone observations and plan a path
     StateTracker::instance().set_cone_observations(map);
     auto path = planning::plan_path(*map);
-    render_path(path, "planned_path", "map", {1.0, 0.0, 1.0, 1.0}); // magenta, apart from the green trails
+
+    bool show_mid = FoxgloveServer::instance().get_param<bool>("path_vis/show_mid_line").value_or(true);
+    bool show_thick_path = FoxgloveServer::instance().get_param<bool>("path_vis/show_thick_path").value_or(true);
+    bool rainbow = FoxgloveServer::instance().get_param<bool>("path_vis/rainbow").value_or(false);
+    float thickness = FoxgloveServer::instance().get_param<float>("path_vis/thickness_m").value_or(1.5f);
+    float thick_r = FoxgloveServer::instance().get_param<float>("path_vis/base_r").value_or(0.5f);
+    float thick_g = FoxgloveServer::instance().get_param<float>("path_vis/base_g").value_or(0.0f);
+    float thick_b = FoxgloveServer::instance().get_param<float>("path_vis/base_b").value_or(1.0f);
+    float thick_a = FoxgloveServer::instance().get_param<float>("path_vis/base_a").value_or(0.5f);
+
+    if (show_mid) render_path(path, "planned_path", "map", {1.0, 0.0, 1.0, 1.0}); // magenta, apart from the green trails
+    if (show_thick_path) render_thick_path(path, "planned_path_thick", "map", {thick_r, thick_g, thick_b, thick_a}, thickness, rainbow); //better looking ribbon path
 
     StateTracker::instance().set_dv_path(std::make_shared<const std::vector<xyz_vec<float>>>(std::move(path))); // Used by the pure pursuit controller
   }

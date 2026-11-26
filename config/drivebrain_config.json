@@ -146,5 +146,16 @@
             "pitch_offset_deg": 0.0,
             "yaw_offset_deg": 0.0
         }
+    },
+    "path_vis": {
+        "show_mid_line": true,
+        "show_thick_path": true,
+        "thickness_m": 1.5,
+        "base_r": 0.5,
+        "base_g": 0.0,
+        "base_b": 1.0,
+        "base_a": 0.5,
+        "rainbow": true,
+        "rainbow_hue_shift_per_m": 60.0
     }
 }
