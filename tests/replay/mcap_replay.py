@@ -11,7 +11,7 @@ RECV_SOCKET_PORT = 6767
 SEND_SOCKET_PORT = 5940 
 LIDAR_SOCKET_PORT = 1155
 
-BLACKLIST = {"estimator_Outports", "Cones", "SceneUpdate", "ouster/calibration", "perception/cone_cluster_points"}
+BLACKLIST = {"estimator_Outports", "Cones", "SceneUpdate", "ouster/calibration", "ouster/points", "perception/cone_cluster_points"}
 
 # Initialize the sockets
 ctx = zmq.Context()
@@ -55,7 +55,7 @@ try:
                 if dt > 0:
                     time.sleep(dt)
 
-                if channel.topic in ("PointCloud", "ouster/points"):
+                if channel.topic in ("PointCloud"):
                     # restamp to now so StateTracker doesn't drop the scan as stale
                     pc = PointCloud()
                     pc.ParseFromString(message.data)

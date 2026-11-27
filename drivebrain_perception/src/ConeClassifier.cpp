@@ -5,6 +5,8 @@
 #include <sstream>
 #include <stdexcept>
 #include <tuple>
+#include <algorithm>
+#include <numeric>
 #include <spdlog/spdlog.h>
 #include "FoxgloveServer.hpp"
 #include "Telemetry.hpp"
@@ -243,8 +245,6 @@ namespace {
     }
 
 
-
-/*
     std::shared_ptr<dv_msgs::Cones> ConeClassifier::classifyWithReflectivity(const UnclassifiedCones& unclassifiedCones, const std::string& frame_id) {
 
         auto cones = std::make_shared<dv_msgs::Cones>();
@@ -252,134 +252,45 @@ namespace {
         for (const auto& unclassifiedCone : unclassifiedCones.cones) {
             auto* cone = cones->add_cones();
 
-            //TODO: Classificaiton
 
-            struct PointSample { float angle; float r;};
-            std::vector<PointSample> samples;
-            samples.reserve(unclassifiedCone.points.size());
+            const int nbins = 7;
+            float zmin = unclassifiedCone.points[0].z;
+            float zmax = unclassifiedCone.points[0].z;
 
             for (const auto& pt : unclassifiedCone.points) {
-                samples.push_back({
-                    std::atan2(pt.z, std::hypot(pt.x, pt.y)),
-                    pt.r
-                });
+                zmin = std::min(zmin, pt.z);
+                zmax = std::max(zmax, pt.z);
             }
 
-            std::sort(samples.begin(), samples.end(), [](const PointSample& a, const PointSample& b) {
-                return a.angle > b.angle;
-            });
+            const float step = (zmax-zmin) / nbins;
 
-            std::vector<float> row_averages;
-
-            const float window_angle = 0.003; //radians
-            float prev_angle = samples[0].angle;
-            float row_sum = 0;
-            int row_cts = 0;
-
-            for (const auto sample : samples) {
-                if (prev_angle - sample.angle > window_angle) {
-                    if (row_cts > 0) {
-                        row_averages.push_back(row_sum/row_cts);
-                        row_sum = 0;
-                        row_cts = 0;
-                    }
-                    prev_angle = sample.angle;
-                }
-                row_sum += sample.r;
-                row_cts++;
-                prev_angle = sample.angle;
-            }
-            if (row_cts > 0) {
-                row_averages.push_back(row_sum/row_cts);
-            }
-
-            if (row_averages.size() > 2) {
-                float sum = std::accumulate(row_averages.begin(), row_averages.end(), 0.0);
-                float mean = sum / row_averages.size();
-
-                float refl_above = 0;
-                float num_above = 0;
-                float refl_below = 0;
-                float num_below = 0;
-
-                for (const auto& row : row_averages) {
-                    if (row > mean)  {
-                        refl_above += row;
-                        num_above++;
-                    } else {
-                        refl_below += row;
-                        num_below++;
+            std::array<float, nbins*2> features;
+            
+            for (std::size_t i=0; i<nbins; i++) {
+                std::vector<float> bin_reflectivities;
+                for (const auto& pt : unclassifiedCone.points) {
+                    if ((zmin + step*i) <= pt.z && pt.z < (zmin + step*(i+1)) || (i+1 == nbins && pt.z == zmax)) {
+                        bin_reflectivities.push_back(pt.r);
                     }
                 }
 
-                if (num_above > 0 && num_below > 0) {
-                    cone->set_mean_reflectivity(refl_above/num_above - refl_below/num_below);
-                }
+                features[i+nbins] = bin_reflectivities.size();
+
+                if (bin_reflectivities.empty()) {features[i] = 0; continue;}
+
+                int n = std::ceil(bin_reflectivities.size()/4.0);
+                std::nth_element(
+                    bin_reflectivities.begin(),
+                    bin_reflectivities.begin() + n,
+                    bin_reflectivities.end(),
+                    std::greater<float>()
+                );
+
+                features[i] = std::accumulate(bin_reflectivities.begin(), bin_reflectivities.begin()+n, 0.0f) / n;
             }
 
 
-            cone->set_color(dv_msgs::Cones::UNKNOWN); // TODO
-            cone->set_color_confidence(0); // TODO
-
-            auto* position = cone->mutable_position();
-            position->set_x(unclassifiedCone.position.x);
-            position->set_y(unclassifiedCone.position.y);
-            position->set_z(unclassifiedCone.position.z);
-
-        }
-
-        cones->set_timestamp_us(unclassifiedCones.timestamp_us);
-
-        return cones;
-    }
-*/
-
-    std::shared_ptr<dv_msgs::Cones> ConeClassifier::classifyWithReflectivity(const UnclassifiedCones& unclassifiedCones, const std::string& frame_id) {
-
-        auto cones = std::make_shared<dv_msgs::Cones>();
-
-        constexpr std::array<float, 10> edges = {-0.48f, -0.44888889f, -0.41777778f, -0.38666667f, -0.35555556f, -0.32444444f, -0.29333333f, -0.26222222f, -0.23111111f, -0.2f};
-
-        for (const auto& unclassifiedCone : unclassifiedCones.cones) {
-            auto* cone = cones->add_cones();
-
-            // 1. Bin the points (single pass)
-            std::array<std::vector<float>, 9> bins;
-            for (const auto& pt : unclassifiedCone.points) {
-                auto it = std::upper_bound(edges.begin(), edges.end(), pt.z);
-                int b = std::clamp(static_cast<int>(std::distance(edges.begin(), it)) - 1, 0, 8);
-                bins[b].push_back(pt.r);
-            }
-
-            // 2. Compute the 4 sets of 9 values
-            std::vector<float> values(9, 0.0f), cts(9, 0.0f), values2(9, 0.0f);
-            for (int b = 0; b < 9; ++b) {
-                auto& r_bin = bins[b];
-                cts[b] = static_cast<float>(r_bin.size());
-                if (!r_bin.empty()) {
-                    // values2: mean
-                    float sum_all = std::accumulate(r_bin.begin(), r_bin.end(), 0.0f);
-                    values2[b] = sum_all / r_bin.size();
-
-                    // values: top 25% mean
-                    std::sort(r_bin.begin(), r_bin.end(), std::greater<float>());
-                    int n = std::max(1, static_cast<int>((r_bin.size() + 3) / 4));
-                    float sum_top = std::accumulate(r_bin.begin(), r_bin.begin() + n, 0.0f);
-                    values[b] = sum_top / n;
-                }
-            }
-
-            // 3. Assemble feature vector
-            std::vector<float> features;
-            features.reserve(37);
-            features.insert(features.end(), values.begin(), values.end());
-            features.insert(features.end(), cts.begin(), cts.end());
-            features.insert(features.end(), values2.begin(), values2.end());
-            features.insert(features.end(), cts.begin(), cts.end()); // cts2 == cts
-            features.push_back(std::hypot(unclassifiedCone.position.x, unclassifiedCone.position.y));
-
-
-            float p_yellow = ReflectivityClassifierModel::predictYellow(features.data());
+            float p_yellow = ReflectivityClassifierModel::predictYellow(features);
 
             if (p_yellow >= 0.5) {
                 cone->set_color(dv_msgs::Cones::YELLOW);
@@ -390,9 +301,6 @@ namespace {
                 cone->set_color_confidence(1-p_yellow);
                 cone->set_mean_reflectivity(1-p_yellow);
             }
-
-            // cone->set_color(dv_msgs::Cones::UNKNOWN); // TODO
-            // cone->set_color_confidence(0); // TODO
 
             auto* position = cone->mutable_position();
             position->set_x(unclassifiedCone.position.x);
