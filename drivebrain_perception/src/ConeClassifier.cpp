@@ -295,11 +295,9 @@ namespace {
             if (p_yellow >= 0.5) {
                 cone->set_color(dv_msgs::Cones::YELLOW);
                 cone->set_color_confidence(p_yellow);
-                cone->set_mean_reflectivity(p_yellow);
             } else {
                 cone->set_color(dv_msgs::Cones::BLUE);
                 cone->set_color_confidence(1-p_yellow);
-                cone->set_mean_reflectivity(1-p_yellow);
             }
 
             auto* position = cone->mutable_position();
