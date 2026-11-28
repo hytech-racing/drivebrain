@@ -105,7 +105,7 @@ namespace core {
              * @param topic topic to log on, defaults to the message type name. A new topic gets its channel on first use.
              * @return 0 on success, negative err code on failure
              */
-            int log_msg(MsgType message, const std::string &topic = ""); 
+            int log_msg(MsgType message, const std::string &topic = "");
 
             /**
              * Logs the json params to the current MCAP file
@@ -124,8 +124,24 @@ namespace core {
              * Spawned by thread, loops until end of program life or error occurs. 
              * Logs all queued messages to a file. 
              */
-            void _handle_log_to_file();  
-            
+            void _handle_log_to_file();
+
+            /**
+             * Queues a message for the logging thread.
+             *
+             * @param message the message to queue
+             * @return 0 on success, negative err code on failure
+             */
+            int _enqueue_message(RawMessage_s message, bool log_when_inactive);
+
+            /**
+             * Registers a JSON schema and a channel for the topic it describes.
+             *
+             * @param name schema name, channel topic, and log topic
+             * @param schema_json the JSON schema of the messages logged on the topic
+             */
+            void _register_json_schema(const std::string &name, const nlohmann::json &schema_json);
+
             /**
              * Logs the git metadata of the running build to the GitMetadata topic
              *
@@ -162,7 +178,7 @@ namespace core {
             std::unordered_map<std::string, uint16_t> _type_to_schema_id_map;
             std::string _base_dir;
             std::string _log_name = "NONE";
-            bool _logging = false;
+            std::atomic<bool> _logging{false};
     };
 
 }
